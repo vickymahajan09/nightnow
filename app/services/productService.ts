@@ -10,134 +10,261 @@ import {
 
 import { db } from "../lib/firebase";
 
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  active: boolean;
+  category?: string;
+  image?: string;
+  description?: string;
+  [key: string]: any;
+}
+
 // ==============================
 // ADD PRODUCT
 // ==============================
 
-export const addProduct = async (product: any) => {
-  return await addDoc(collection(db, "products"), {
-    ...product,
-    name: product.name?.trim() || "",
-    price: Number(product.price || 0),
-    stock: Number(product.stock || 0),
-    active: product.active !== false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+export const addProduct = async (
+  product: any
+) => {
+  return await addDoc(
+    collection(db, "products"),
+    {
+      ...product,
+
+      name: String(
+        product.name || ""
+      ).trim(),
+
+      price: Number(
+        product.price || 0
+      ),
+
+      stock: Number(
+        product.stock || 0
+      ),
+
+      active:
+        product.active !== false,
+
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+  );
 };
 
 // ==============================
 // GET ALL PRODUCTS
 // ==============================
 
-export const getProducts = async () => {
-  const snapshot = await getDocs(collection(db, "products"));
+export const getProducts =
+  async (): Promise<Product[]> => {
+    const snapshot =
+      await getDocs(
+        collection(db, "products")
+      );
 
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  }));
-};
+    return snapshot.docs.map(
+      (item) => {
+        const data =
+          item.data();
+
+        return {
+          id: item.id,
+
+          name: String(
+            data.name || ""
+          ),
+
+          price: Number(
+            data.price || 0
+          ),
+
+          stock: Number(
+            data.stock || 0
+          ),
+
+          active:
+            data.active !== false,
+
+          ...data,
+        } as Product;
+      }
+    );
+  };
 
 // ==============================
 // GET SINGLE PRODUCT
 // ==============================
 
-export const getProductById = async (id: string) => {
-  const productRef = doc(db, "products", id);
-  const snapshot = await getDoc(productRef);
+export const getProductById =
+  async (
+    id: string
+  ): Promise<Product | null> => {
+    const productRef =
+      doc(
+        db,
+        "products",
+        id
+      );
 
-  if (!snapshot.exists()) {
-    return null;
-  }
+    const snapshot =
+      await getDoc(
+        productRef
+      );
 
-  return {
-    id: snapshot.id,
-    ...snapshot.data(),
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    const data =
+      snapshot.data();
+
+    return {
+      id: snapshot.id,
+
+      name: String(
+        data.name || ""
+      ),
+
+      price: Number(
+        data.price || 0
+      ),
+
+      stock: Number(
+        data.stock || 0
+      ),
+
+      active:
+        data.active !== false,
+
+      ...data,
+    } as Product;
   };
-};
-
-// ==============================
-// UPDATE PRODUCT STOCK
-// checkout/page.tsx sends the NEW stock value.
-// Example: 20 - 3 = 17, so this saves 17.
-// ==============================
-
-export const updateProductStock = async (
-  id: string,
-  newStock: number
-) => {
-  const safeStock = Math.max(0, Number(newStock || 0));
-
-  const productRef = doc(db, "products", id);
-  const snapshot = await getDoc(productRef);
-
-  if (!snapshot.exists()) {
-    throw new Error("Product not found");
-  }
-
-  await updateDoc(productRef, {
-    stock: safeStock,
-    updatedAt: new Date(),
-  });
-
-  return safeStock;
-};
 
 // ==============================
 // UPDATE PRODUCT
 // ==============================
 
-export const updateProduct = async (
-  id: string,
-  product: any
-) => {
-  const productRef = doc(db, "products", id);
+export const updateProduct =
+  async (
+    id: string,
+    product: any
+  ) => {
+    await updateDoc(
+      doc(
+        db,
+        "products",
+        id
+      ),
+      {
+        ...product,
 
-  const updateData = {
-    ...product,
-
-    ...(product.name !== undefined && {
-      name: String(product.name).trim(),
-    }),
-
-    ...(product.price !== undefined && {
-      price: Number(product.price || 0),
-    }),
-
-    ...(product.stock !== undefined && {
-      stock: Math.max(0, Number(product.stock || 0)),
-    }),
-
-    updatedAt: new Date(),
+        updatedAt: new Date(),
+      }
+    );
   };
 
-  await updateDoc(productRef, updateData);
+// ==============================
+// UPDATE PRODUCT STOCK
+// ==============================
 
-  return {
-    id,
-    ...updateData,
+export const updateProductStock =
+  async (
+    id: string,
+    newStock: number
+  ) => {
+    const safeStock =
+      Math.max(
+        0,
+        Number(newStock || 0)
+      );
+
+    await updateDoc(
+      doc(
+        db,
+        "products",
+        id
+      ),
+      {
+        stock: safeStock,
+        updatedAt: new Date(),
+      }
+    );
+
+    return safeStock;
   };
-};
 
 // ==============================
-// TOGGLE PRODUCT ACTIVE STATUS
+// DECREASE STOCK BY QUANTITY
 // ==============================
 
-export const toggleProduct = async (
-  id: string,
-  active: boolean
-) => {
-  await updateDoc(doc(db, "products", id), {
-    active: Boolean(active),
-    updatedAt: new Date(),
-  });
-};
+export const decreaseProductStock =
+  async (
+    id: string,
+    quantity: number
+  ) => {
+    const product =
+      await getProductById(
+        id
+      );
+
+    if (!product) {
+      throw new Error(
+        "Product not found"
+      );
+    }
+
+    const currentStock =
+      Number(
+        product.stock || 0
+      );
+
+    const qty =
+      Number(
+        quantity || 0
+      );
+
+    if (qty <= 0) {
+      throw new Error(
+        "Invalid quantity"
+      );
+    }
+
+    if (
+      currentStock < qty
+    ) {
+      throw new Error(
+        `Insufficient stock for ${product.name}`
+      );
+    }
+
+    const newStock =
+      currentStock - qty;
+
+    await updateProductStock(
+      id,
+      newStock
+    );
+
+    return newStock;
+  };
 
 // ==============================
 // DELETE PRODUCT
 // ==============================
 
-export const deleteProduct = async (id: string) => {
-  await deleteDoc(doc(db, "products", id));
-};
+export const deleteProduct =
+  async (
+    id: string
+  ) => {
+    await deleteDoc(
+      doc(
+        db,
+        "products",
+        id
+      )
+    );
+  };
