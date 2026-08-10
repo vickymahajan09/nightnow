@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   checkUser,
   loginUser,
+  googleLogin,
 } from "../../services/authService";
 
 export default function AdminLoginPage() {
@@ -187,6 +188,54 @@ if (
             ? "Logging In..."
             : "Admin Login"}
         </button>
+        <div className="my-5 flex items-center gap-3">
+  <div className="h-px flex-1 bg-zinc-700" />
+  <span className="text-sm text-zinc-500">OR</span>
+  <div className="h-px flex-1 bg-zinc-700" />
+</div>
+
+<button
+  type="button"
+  onClick={async () => {
+    try {
+      setLoading(true);
+
+      const result = await googleLogin();
+
+      const adminEmail =
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL
+          ?.trim()
+          .toLowerCase();
+
+      const loggedInEmail =
+        result.user.email
+          ?.trim()
+          .toLowerCase();
+
+      if (
+        !adminEmail ||
+        loggedInEmail !== adminEmail
+      ) {
+        alert("This Google account is not an admin account.");
+        return;
+      }
+
+      router.replace("/admin");
+    } catch (error: any) {
+      console.error(error);
+      alert(
+        error?.message ||
+        "Google Login Failed"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }}
+  disabled={loading}
+  className="w-full rounded-lg bg-white py-3 font-bold text-black disabled:opacity-50"
+>
+  🔵 Continue with Google
+</button>
 
         <p className="mt-5 text-center text-xs text-zinc-500">
           Night Now Admin Panel
