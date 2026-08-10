@@ -6,6 +6,7 @@ import {
   checkUser,
   loginUser,
   googleLogin,
+  resetPassword,
 } from "../../services/authService";
 
 export default function AdminLoginPage() {
@@ -20,13 +21,14 @@ export default function AdminLoginPage() {
       if (!user) return;
 
       const adminEmail =
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL
+          ?.trim()
+          .toLowerCase();
 
       if (
         adminEmail &&
         user.email &&
-        user.email.toLowerCase() ===
-          adminEmail.toLowerCase()
+        user.email.toLowerCase() === adminEmail
       ) {
         router.replace("/admin");
       }
@@ -67,26 +69,29 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-  const result = await loginUser(
-  cleanEmail,
-  password
-);
+      const result = await loginUser(
+        cleanEmail,
+        password
+      );
 
-if (!result?.user) {
-  throw new Error("Login failed");
-}
+      if (!result?.user) {
+        throw new Error("Login failed");
+      }
 
-if (
-  result.user.email?.toLowerCase() !==
-  adminEmail
-) {
-  alert("Admin access denied.");
-  return;
-}
+      if (
+        result.user.email?.toLowerCase() !==
+        adminEmail
+      ) {
+        alert("Admin access denied.");
+        return;
+      }
 
       router.replace("/admin");
     } catch (error: any) {
-      console.error("ADMIN LOGIN ERROR:", error);
+      console.error(
+        "ADMIN LOGIN ERROR:",
+        error
+      );
 
       switch (error?.code) {
         case "auth/invalid-credential":
@@ -99,7 +104,7 @@ if (
 
         case "auth/too-many-requests":
           alert(
-            "Bahut baar login try hua hai. Thodi der baad try karein."
+            "Bahut baar login attempts hue hain. Thodi der baad try karein."
           );
           break;
 
@@ -120,13 +125,130 @@ if (
     }
   };
 
+  // ==============================
+  // FORGOT PASSWORD
+  // ==============================
+
+  const forgotPassword = async () => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    const adminEmail =
+      process.env.NEXT_PUBLIC_ADMIN_EMAIL
+        ?.trim()
+        .toLowerCase();
+
+    if (!cleanEmail) {
+      alert("Pehle admin email enter karein.");
+      return;
+    }
+
+    if (!adminEmail) {
+      alert(
+        "Admin configuration missing. Vercel Environment Variables check karein."
+      );
+      return;
+    }
+
+    if (cleanEmail !== adminEmail) {
+      alert("Ye admin account nahi hai.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await resetPassword(cleanEmail);
+
+      alert(
+        "Password reset link aapke email par bhej diya gaya hai."
+      );
+    } catch (error: any) {
+      console.error(
+        "PASSWORD RESET ERROR:",
+        error
+      );
+
+      switch (error?.code) {
+        case "auth/user-not-found":
+          alert(
+            "Is email se Firebase account nahi mila."
+          );
+          break;
+
+        case "auth/invalid-email":
+          alert("Invalid email address.");
+          break;
+
+        case "auth/network-request-failed":
+          alert(
+            "Internet connection check karein."
+          );
+          break;
+
+        default:
+          alert(
+            error?.message ||
+              "Password reset failed."
+          );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==============================
+  // GOOGLE LOGIN
+  // ==============================
+
+  const loginWithGoogle = async () => {
+    setLoading(true);
+
+    try {
+      const result = await googleLogin();
+
+      const adminEmail =
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL
+          ?.trim()
+          .toLowerCase();
+
+      const loggedInEmail =
+        result.user.email
+          ?.trim()
+          .toLowerCase();
+
+      if (
+        !adminEmail ||
+        loggedInEmail !== adminEmail
+      ) {
+        alert(
+          "This Google account is not an admin account."
+        );
+        return;
+      }
+
+      router.replace("/admin");
+    } catch (error: any) {
+      console.error(
+        "GOOGLE LOGIN ERROR:",
+        error
+      );
+
+      alert(
+        error?.message ||
+          "Google Login Failed"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-black px-4 text-white">
       <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
 
         {/* LOGO */}
-        <div className="mb-8 text-center">
 
+        <div className="mb-8 text-center">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-yellow-400 text-4xl text-black">
             ⚡
           </div>
@@ -138,10 +260,10 @@ if (
           <p className="mt-2 text-zinc-400">
             Admin Panel
           </p>
-
         </div>
 
         {/* EMAIL */}
+
         <label className="mb-2 block text-sm font-semibold text-zinc-300">
           Admin Email
         </label>
@@ -158,6 +280,7 @@ if (
         />
 
         {/* PASSWORD */}
+
         <label className="mb-2 block text-sm font-semibold text-zinc-300">
           Password
         </label>
@@ -175,67 +298,56 @@ if (
               login();
             }
           }}
-          className="mb-5 w-full rounded-xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none transition focus:border-yellow-400"
+          className="w-full rounded-xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none transition focus:border-yellow-400"
         />
 
+        {/* FORGOT PASSWORD */}
+
+        <div className="mb-5 mt-3 text-right">
+          <button
+            type="button"
+            onClick={forgotPassword}
+            disabled={loading}
+            className="text-sm font-semibold text-yellow-400 hover:text-yellow-300 disabled:opacity-50"
+          >
+            Forgot Password?
+          </button>
+        </div>
+
         {/* LOGIN */}
+
         <button
           onClick={login}
           disabled={loading}
           className="w-full rounded-xl bg-yellow-400 py-4 font-bold text-black transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading
-            ? "Logging In..."
+            ? "Processing..."
             : "Admin Login"}
         </button>
+
+        {/* DIVIDER */}
+
         <div className="my-5 flex items-center gap-3">
-  <div className="h-px flex-1 bg-zinc-700" />
-  <span className="text-sm text-zinc-500">OR</span>
-  <div className="h-px flex-1 bg-zinc-700" />
-</div>
+          <div className="h-px flex-1 bg-zinc-700" />
 
-<button
-  type="button"
-  onClick={async () => {
-    try {
-      setLoading(true);
+          <span className="text-sm text-zinc-500">
+            OR
+          </span>
 
-      const result = await googleLogin();
+          <div className="h-px flex-1 bg-zinc-700" />
+        </div>
 
-      const adminEmail =
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL
-          ?.trim()
-          .toLowerCase();
+        {/* GOOGLE LOGIN */}
 
-      const loggedInEmail =
-        result.user.email
-          ?.trim()
-          .toLowerCase();
-
-      if (
-        !adminEmail ||
-        loggedInEmail !== adminEmail
-      ) {
-        alert("This Google account is not an admin account.");
-        return;
-      }
-
-      router.replace("/admin");
-    } catch (error: any) {
-      console.error(error);
-      alert(
-        error?.message ||
-        "Google Login Failed"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }}
-  disabled={loading}
-  className="w-full rounded-lg bg-white py-3 font-bold text-black disabled:opacity-50"
->
-  🔵 Continue with Google
-</button>
+        <button
+          type="button"
+          onClick={loginWithGoogle}
+          disabled={loading}
+          className="w-full rounded-xl bg-white py-3 font-bold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          🔵 Continue with Google
+        </button>
 
         <p className="mt-5 text-center text-xs text-zinc-500">
           Night Now Admin Panel

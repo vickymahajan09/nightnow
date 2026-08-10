@@ -25,8 +25,7 @@ export default function Categories({
 
       setCategories(
         data.filter(
-          (item: any) =>
-            item.active !== false
+          (item: any) => item.active !== false
         )
       );
     } catch (error) {
@@ -37,10 +36,10 @@ export default function Categories({
   };
 
   return (
-    <section className="px-4 py-6">
+    <section className="bg-black px-4 py-6 text-white">
       <div className="mx-auto max-w-7xl">
 
-        <h2 className="mb-4 text-2xl font-bold text-white">
+        <h2 className="mb-4 text-2xl font-bold">
           Shop by Category
         </h2>
 
@@ -49,31 +48,37 @@ export default function Categories({
             {[1, 2, 3, 4].map((item) => (
               <div
                 key={item}
-                className="h-24 min-w-[100px] animate-pulse rounded-xl bg-zinc-900"
+                className="h-28 min-w-[110px] animate-pulse rounded-2xl bg-zinc-900"
               />
             ))}
           </div>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="flex gap-3 overflow-x-auto pb-3">
+
+            {/* ALL */}
 
             <button
               onClick={() =>
                 onSelectCategory?.("")
               }
-              className={`flex min-w-[100px] flex-col items-center rounded-xl p-4 transition ${
+              className={`flex min-w-[110px] flex-col items-center rounded-2xl p-3 transition ${
                 selectedCategory === ""
                   ? "bg-yellow-400 text-black"
                   : "bg-zinc-900 text-white hover:bg-zinc-800"
               }`}
             >
-              <span className="text-3xl">
-                🛍️
-              </span>
+              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-zinc-800">
+                <span className="text-3xl">
+                  🛍️
+                </span>
+              </div>
 
               <span className="mt-2 text-sm font-bold">
                 All
               </span>
             </button>
+
+            {/* CATEGORIES */}
 
             {categories.map(
               (category: any) => (
@@ -84,20 +89,34 @@ export default function Categories({
                       category.id
                     )
                   }
-                  className={`flex min-w-[100px] flex-col items-center rounded-xl p-4 transition ${
+                  className={`flex min-w-[110px] flex-col items-center rounded-2xl p-3 transition ${
                     selectedCategory ===
                     category.id
                       ? "bg-yellow-400 text-black"
                       : "bg-zinc-900 text-white hover:bg-zinc-800"
                   }`}
                 >
-                  <span className="text-3xl">
-                    {category.icon || "📦"}
-                  </span>
 
-                  <span className="mt-2 max-w-[90px] truncate text-sm font-bold">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-zinc-800">
+
+                    {category.image ? (
+                      <img
+                        src={category.image}
+                        alt={category.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-3xl">
+                        {category.icon || "📦"}
+                      </span>
+                    )}
+
+                  </div>
+
+                  <span className="mt-2 max-w-[100px] truncate text-sm font-bold">
                     {category.name}
                   </span>
+
                 </button>
               )
             )}

@@ -1,3 +1,6 @@
+// POINT 3 — CUSTOMER PRODUCT QUANTITY
+// app/cart/page.tsx
+
 "use client";
 
 import Link from "next/link";
@@ -12,13 +15,18 @@ export default function CartPage() {
     cartTotal,
   } = useCart();
 
-  const delivery = cartTotal >= 299 || cartTotal === 0 ? 0 : 30;
-  const grandTotal = cartTotal + delivery;
+  const delivery =
+    cartTotal >= 299 || cartTotal === 0
+      ? 0
+      : 30;
+
+  const grandTotal =
+    cartTotal + delivery;
 
   if (cart.length === 0) {
     return (
       <main className="min-h-screen bg-black px-4 py-20 text-white">
-        <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+        <div className="mx-auto max-w-md text-center">
           <div className="text-7xl">🛒</div>
 
           <h1 className="mt-6 text-3xl font-black">
@@ -73,7 +81,10 @@ export default function CartPage() {
 
                 <Link href={`/product/${item.id}`}>
                   <img
-                    src={item.image || "/no-image.png"}
+                    src={
+                      item.image ||
+                      "/no-image.png"
+                    }
                     alt={item.name}
                     className="h-24 w-24 rounded-xl object-cover"
                   />
@@ -92,19 +103,24 @@ export default function CartPage() {
                   </p>
 
                   <p className="mt-1 text-sm text-zinc-500">
-                    ₹{item.price} × {item.quantity}
+                    ₹{item.price} ×{" "}
+                    {item.quantity}
                   </p>
 
-                  <div className="mt-3 flex items-center gap-3">
+                  {/* QUANTITY */}
+
+                  <div className="mt-3 inline-flex items-center overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800">
 
                     <button
-                      onClick={() => removeFromCart(item.id)}
-                      className="h-9 w-9 rounded-lg bg-zinc-800 font-bold hover:bg-red-500"
+                      onClick={() =>
+                        removeFromCart(item.id)
+                      }
+                      className="h-10 w-10 text-lg font-bold hover:bg-red-500"
                     >
                       −
                     </button>
 
-                    <span className="min-w-6 text-center font-bold">
+                    <span className="flex h-10 min-w-12 items-center justify-center border-x border-zinc-700 px-3 font-bold">
                       {item.quantity}
                     </span>
 
@@ -115,7 +131,7 @@ export default function CartPage() {
                           quantity: 1,
                         })
                       }
-                      className="h-9 w-9 rounded-lg bg-zinc-800 font-bold hover:bg-green-600"
+                      className="h-10 w-10 text-lg font-bold hover:bg-green-600"
                     >
                       +
                     </button>
@@ -125,7 +141,9 @@ export default function CartPage() {
                 </div>
 
                 <button
-                  onClick={() => deleteFromCart(item.id)}
+                  onClick={() =>
+                    deleteFromCart(item.id)
+                  }
                   className="self-start rounded-lg px-2 py-1 text-xl text-red-500 hover:bg-red-500/10"
                 >
                   🗑️
@@ -171,25 +189,38 @@ export default function CartPage() {
                   Delivery
                 </span>
 
-                <span className={delivery === 0 ? "text-green-400" : ""}>
-                  {delivery === 0 ? "FREE" : `₹${delivery}`}
+                <span
+                  className={
+                    delivery === 0
+                      ? "text-green-400"
+                      : ""
+                  }
+                >
+                  {delivery === 0
+                    ? "FREE"
+                    : `₹${delivery}`}
                 </span>
               </div>
 
-              {cartTotal > 0 && cartTotal < 299 && (
-                <div className="rounded-lg bg-yellow-400/10 p-3 text-sm text-yellow-400">
-                  Add ₹{299 - cartTotal} more for FREE delivery.
-                </div>
-              )}
+              {cartTotal > 0 &&
+                cartTotal < 299 && (
+                  <div className="rounded-lg bg-yellow-400/10 p-3 text-sm text-yellow-400">
+                    Add ₹
+                    {299 - cartTotal} more
+                    for FREE delivery.
+                  </div>
+                )}
 
               <div className="border-t border-zinc-700 pt-4">
 
                 <div className="flex justify-between text-xl font-black">
+
                   <span>Total</span>
 
                   <span className="text-yellow-400">
                     ₹{grandTotal}
                   </span>
+
                 </div>
 
               </div>
@@ -211,7 +242,6 @@ export default function CartPage() {
           </div>
 
         </div>
-
       </div>
     </main>
   );

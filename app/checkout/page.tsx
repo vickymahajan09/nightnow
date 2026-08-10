@@ -235,6 +235,26 @@ export default function CheckoutPage() {
           );
           continue;
         }
+        // ==============================
+// AUTO DELIVERY CHARGE
+// ==============================
+
+const getDeliveryCharge = (subtotal: number) => {
+  if (subtotal >= 299) return 0;
+  if (subtotal >= 199) return 20;
+  return 30;
+};
+
+const delivery = getDeliveryCharge(cartTotal);
+
+const discountAmount = Math.round(
+  (cartTotal * couponDiscount) / 100
+);
+
+const grandTotal = Math.max(
+  0,
+  cartTotal - discountAmount + delivery
+);
 
         const currentStock = Number(
           product.stock || 0
@@ -279,79 +299,80 @@ export default function CheckoutPage() {
   // ==============================
   // SAVE ORDER
   // ==============================
-
-  const saveOrder = async (
-    paymentMethod: string,
-    paymentData: any = {}
-  ) => {
-    const email = await getCurrentEmail();
-
-    const order = {
-      customer: {
-        name: name.trim(),
-        email,
-        phone,
-        address: address.trim(),
-        city: city.trim(),
-        pincode,
-      },
-
-      items: cart,
-
-      subtotal: cartTotal,
-
-      discount: discountAmount,
-
-      coupon:
-        couponDiscount > 0
-          ? couponCode.trim().toUpperCase()
-          : "",
-
-      delivery,
-
-      total: grandTotal,
-
-      paymentMethod,
-
-      payment: paymentData,
-
-      createdBy: email,
-    };
-
-    await addOrder(order);
-
-    await reduceStock();
-
-    clearCurrentCart();
-
-    window.location.href = "/orders";
-  };
-
-  // ==============================
-  // COD
-  // ==============================
-
   const placeCODOrder = async () => {
-    if (!validate()) return;
+  if (!validate()) return;
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      await saveOrder("COD");
-    } catch (error: any) {
-      console.error(
-        "COD order failed:",
-        error
-      );
+  try {
+    await saveOrder("COD");
+  } catch (error: any) {
+    console.error(
+      "COD order failed:",
+      error
+    );
 
-      alert(
-        error?.message ||
-          "Failed to place order"
-      );
+    alert(
+      error?.message ||
+        "Failed to place order"
+    );
 
-      setLoading(false);
-    }
+    setLoading(false);
+  }
+};
+
+
+  
+ const saveOrder = async (
+  paymentMethod: string,
+  paymentData: any = {}
+) => {
+  const email = await getCurrentEmail();
+
+  const currentUser = auth.currentUser;
+
+  const order = {
+    userId: currentUser?.uid || "",
+
+    customer: {
+      name: name.trim(),
+      email,
+      phone,
+      address: address.trim(),
+      city: city.trim(),
+      pincode,
+    },
+
+    items: cart,
+
+    subtotal: cartTotal,
+
+    discount: discountAmount,
+
+    coupon:
+      couponDiscount > 0
+        ? couponCode.trim().toUpperCase()
+        : "",
+
+    delivery,
+
+    total: grandTotal,
+
+    paymentMethod,
+
+    payment: paymentData,
+
+    createdBy: email,
   };
+
+  await addOrder(order);
+
+  await reduceStock();
+
+  clearCurrentCart();
+
+  window.location.href = "/orders";
+};
 
   // ==============================
   // LOAD RAZORPAY

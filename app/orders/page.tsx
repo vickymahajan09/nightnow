@@ -1,3 +1,5 @@
+// app/orders/page.tsx
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -29,18 +31,20 @@ export default function OrdersPage() {
           const userEmail =
             currentUser.email?.trim().toLowerCase();
 
-          const myOrders = data.filter((order: any) => {
-            const orderEmail =
-              order.customer?.email
-                ?.trim()
-                .toLowerCase();
+          const myOrders = data.filter(
+            (order: any) => {
+              const orderEmail =
+                order.customer?.email
+                  ?.trim()
+                  .toLowerCase();
 
-            return (
-              order.userId === currentUser.uid ||
-              (orderEmail &&
-                orderEmail === userEmail)
-            );
-          });
+              return (
+                order.userId === currentUser.uid ||
+                (orderEmail &&
+                  orderEmail === userEmail)
+              );
+            }
+          );
 
           setOrders(myOrders);
         } catch (error) {
@@ -60,7 +64,7 @@ export default function OrdersPage() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
-        <p className="text-yellow-400">
+        <p className="text-lg font-bold">
           Loading Orders...
         </p>
       </main>
@@ -69,8 +73,8 @@ export default function OrdersPage() {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-black px-4 py-20 text-center text-white">
-        <div className="mx-auto max-w-md">
+      <main className="min-h-screen bg-black px-4 py-20 text-white">
+        <div className="mx-auto max-w-md text-center">
           <div className="text-6xl">🔐</div>
 
           <h1 className="mt-5 text-3xl font-black">
@@ -97,14 +101,16 @@ export default function OrdersPage() {
 
         {/* HEADER */}
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black text-yellow-400">
               My Orders
             </h1>
 
             <p className="mt-1 text-sm text-zinc-400">
-              {user.email}
+              {user.email ||
+                user.phoneNumber ||
+                "Customer"}
             </p>
           </div>
 
@@ -119,7 +125,6 @@ export default function OrdersPage() {
 
         {orders.length === 0 ? (
           <div className="mt-8 rounded-2xl bg-zinc-900 p-10 text-center">
-
             <div className="text-6xl">
               📦
             </div>
@@ -137,7 +142,6 @@ export default function OrdersPage() {
                 Start Shopping
               </button>
             </Link>
-
           </div>
         ) : (
 
@@ -145,160 +149,175 @@ export default function OrdersPage() {
 
           <div className="mt-8 space-y-5">
 
-            {orders.map((order: any) => (
+            {orders.map(
+              (order: any) => (
+                <div
+                  key={order.id}
+                  className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
+                >
 
-              <div
-                key={order.id}
-                className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
-              >
+                  {/* ORDER HEADER */}
 
-                {/* ORDER HEADER */}
+                  <div className="flex flex-wrap items-start justify-between gap-4">
 
-                <div className="flex flex-wrap items-start justify-between gap-4">
-
-                  <div>
-                    <p className="font-bold">
-                      Order #{order.id?.slice(0, 8)}
-                    </p>
-
-                    <p className="mt-1 text-sm text-zinc-400">
-                      {order.customer?.name}
-                    </p>
-
-                    {order.createdAt && (
-                      <p className="mt-1 text-xs text-zinc-500">
-                        Order placed
+                    <div>
+                      <p className="font-bold">
+                        Order #
+                        {String(
+                          order.id || ""
+                        ).slice(0, 8)}
                       </p>
-                    )}
+
+                      <p className="mt-1 text-sm text-zinc-400">
+                        {order.customer?.name ||
+                          "Customer"}
+                      </p>
+
+                      {order.createdAt && (
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Order placed
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="text-right">
+
+                      <p className="text-xl font-black text-yellow-400">
+                        ₹
+                        {Number(
+                          order.total || 0
+                        )}
+                      </p>
+
+                      <span className="text-sm font-bold text-green-400">
+                        {order.status ||
+                          "Pending"}
+                      </span>
+
+                    </div>
+
                   </div>
 
-                  <div className="text-right">
+                  {/* ITEMS */}
 
-                    <p className="text-xl font-black text-yellow-400">
-                      ₹{Number(order.total || 0)}
-                    </p>
+                  <div className="mt-5 space-y-3">
 
-                    <span className="text-sm font-bold text-green-400">
-                      {order.status || "Pending"}
-                    </span>
+                    {Array.isArray(
+                      order.items
+                    ) &&
+                      order.items.map(
+                        (
+                          item: any,
+                          index: number
+                        ) => (
+                          <div
+                            key={
+                              item.id ||
+                              `${order.id}-${index}`
+                            }
+                            className="flex justify-between border-b border-zinc-800 pb-3"
+                          >
 
-                  </div>
+                            <div>
+                              <p className="font-semibold">
+                                {item.name ||
+                                  "Product"}
+                              </p>
 
-                </div>
+                              <p className="text-sm text-zinc-400">
+                                {Number(
+                                  item.quantity ||
+                                    1
+                                )}{" "}
+                                × ₹
+                                {Number(
+                                  item.price ||
+                                    0
+                                )}
+                              </p>
+                            </div>
 
-                {/* ITEMS */}
-
-                <div className="mt-5 space-y-3">
-
-                  {Array.isArray(order.items) &&
-                    order.items.map(
-                      (item: any, index: number) => (
-
-                        <div
-                          key={
-                            item.id ||
-                            `${order.id}-${index}`
-                          }
-                          className="flex justify-between border-b border-zinc-800 pb-3"
-                        >
-
-                          <div>
-
-                            <p className="font-semibold">
-                              {item.name ||
-                                "Product"}
-                            </p>
-
-                            <p className="text-sm text-zinc-400">
-                              {Number(
-                                item.quantity || 1
-                              )}{" "}
-                              × ₹
+                            <p className="font-bold">
+                              ₹
                               {Number(
                                 item.price || 0
-                              )}
+                              ) *
+                                Number(
+                                  item.quantity ||
+                                    1
+                                )}
                             </p>
 
                           </div>
+                        )
+                      )}
 
-                          <p className="font-bold">
-                            ₹
-                            {Number(
-                              item.price || 0
-                            ) *
-                              Number(
-                                item.quantity || 1
-                              )}
-                          </p>
+                  </div>
 
-                        </div>
+                  {/* ADDRESS */}
 
-                      )
+                  <div className="mt-5 rounded-xl bg-zinc-800 p-4">
+
+                    <p className="text-sm text-zinc-400">
+                      Delivery Address
+                    </p>
+
+                    <p className="mt-1">
+                      {order.customer?.address ||
+                        "-"}
+                    </p>
+
+                    <p className="text-sm text-zinc-400">
+                      {order.customer?.city ||
+                        ""}{" "}
+                      {order.customer?.pincode ||
+                        ""}
+                    </p>
+
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Phone:{" "}
+                      {order.customer?.phone ||
+                        "-"}
+                    </p>
+
+                  </div>
+
+                  {/* PAYMENT */}
+
+                  <div className="mt-4 flex flex-wrap justify-between gap-2 text-sm text-zinc-400">
+
+                    <span>
+                      Payment:{" "}
+                      <span className="font-bold text-white">
+                        {order.paymentMethod ||
+                          "COD"}
+                      </span>
+                    </span>
+
+                    {order.coupon && (
+                      <span className="text-green-400">
+                        Coupon:{" "}
+                        {order.coupon}
+                      </span>
                     )}
 
-                </div>
+                  </div>
 
-                {/* ADDRESS */}
+                  {/* VIEW DETAILS */}
 
-                <div className="mt-5 rounded-xl bg-zinc-800 p-4">
-
-                  <p className="text-sm text-zinc-400">
-                    Delivery Address
-                  </p>
-
-                  <p className="mt-1">
-                    {order.customer?.address ||
-                      "-"}
-                  </p>
-
-                  <p className="text-sm text-zinc-400">
-                    {order.customer?.city || ""}{" "}
-                    {order.customer?.pincode || ""}
-                  </p>
-
-                  <p className="mt-1 text-sm text-zinc-400">
-                    Phone:{" "}
-                    {order.customer?.phone || "-"}
-                  </p>
+                  <Link
+                    href={`/orders/${order.id}`}
+                  >
+                    <button className="mt-5 w-full rounded-xl bg-yellow-400 py-3 font-bold text-black hover:bg-yellow-300">
+                      View Order Details
+                    </button>
+                  </Link>
 
                 </div>
-
-                {/* PAYMENT */}
-
-                <div className="mt-4 flex flex-wrap justify-between gap-2 text-sm text-zinc-400">
-
-                  <span>
-                    Payment:{" "}
-                    <span className="font-bold text-white">
-                      {order.paymentMethod ||
-                        "COD"}
-                    </span>
-                  </span>
-
-                  {order.coupon && (
-                    <span className="text-green-400">
-                      Coupon: {order.coupon}
-                    </span>
-                  )}
-
-                </div>
-
-                {/* VIEW DETAILS */}
-
-                <Link
-                  href={`/orders/${order.id}`}
-                >
-                  <button className="mt-5 w-full rounded-xl bg-yellow-400 py-3 font-bold text-black hover:bg-yellow-300">
-                    View Order Details
-                  </button>
-                </Link>
-
-              </div>
-
-            ))}
+              )
+            )}
 
           </div>
-
         )}
 
       </div>

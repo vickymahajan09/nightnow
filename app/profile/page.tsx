@@ -24,16 +24,20 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-black p-10 text-center text-white">
-        <h1 className="text-3xl font-black">
-          Login Required
-        </h1>
+      <main className="min-h-screen bg-black px-4 py-20 text-white">
+        <div className="mx-auto max-w-md text-center">
+          <div className="text-6xl">👤</div>
 
-        <Link href="/login">
-          <button className="mt-6 rounded-xl bg-yellow-400 px-8 py-3 font-bold text-black">
-            Login
-          </button>
-        </Link>
+          <h1 className="mt-6 text-3xl font-black">
+            Login Required
+          </h1>
+
+          <Link href="/login">
+            <button className="mt-6 rounded-xl bg-yellow-400 px-8 py-3 font-bold text-black">
+              Login
+            </button>
+          </Link>
+        </div>
       </main>
     );
   }
@@ -46,39 +50,75 @@ export default function ProfilePage() {
           My Profile
         </h1>
 
-        <div className="mt-8 rounded-2xl bg-zinc-900 p-6">
+        <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
 
-          <div className="text-6xl">
-            👤
+          {/* PROFILE */}
+
+          <div className="flex items-center gap-4">
+
+            {user.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt="Profile"
+                className="h-20 w-20 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-yellow-400 text-4xl text-black">
+                👤
+              </div>
+            )}
+
+            <div className="min-w-0">
+              <h2 className="text-2xl font-bold">
+                {user.displayName || "Customer"}
+              </h2>
+
+              <p className="mt-1 truncate text-zinc-400">
+                {user.email || "Mobile User"}
+              </p>
+
+              {user.phoneNumber && (
+                <p className="mt-1 text-sm text-zinc-500">
+                  📱 {user.phoneNumber}
+                </p>
+              )}
+            </div>
+
           </div>
 
-          <h2 className="mt-5 text-2xl font-bold">
-            {user.displayName || "Customer"}
-          </h2>
+          {/* ACCOUNT */}
 
-          <p className="mt-2 text-zinc-400">
-            {user.email}
-          </p>
-
-          <div className="mt-6 grid gap-3">
+          <div className="mt-8 space-y-3">
 
             <Link href="/orders">
-              <button className="w-full rounded-xl bg-zinc-800 py-3 font-bold">
+              <button className="w-full rounded-xl bg-zinc-800 py-4 text-left px-4 font-bold hover:bg-zinc-700">
                 📦 My Orders
               </button>
             </Link>
 
             <Link href="/cart">
-              <button className="w-full rounded-xl bg-zinc-800 py-3 font-bold">
+              <button className="w-full rounded-xl bg-zinc-800 py-4 text-left px-4 font-bold hover:bg-zinc-700">
                 🛒 My Cart
+              </button>
+            </Link>
+
+            <Link href="/wishlist">
+              <button className="w-full rounded-xl bg-zinc-800 py-4 text-left px-4 font-bold hover:bg-zinc-700">
+                ❤️ My Wishlist
+              </button>
+            </Link>
+
+            <Link href="/notifications">
+              <button className="w-full rounded-xl bg-zinc-800 py-4 text-left px-4 font-bold hover:bg-zinc-700">
+                🔔 Notifications
               </button>
             </Link>
 
             <button
               onClick={logout}
-              className="w-full rounded-xl bg-red-600 py-3 font-bold"
+              className="w-full rounded-xl bg-red-600 py-4 font-bold hover:bg-red-700"
             >
-              Logout
+              🚪 Logout
             </button>
 
           </div>
