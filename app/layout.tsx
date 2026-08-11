@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
+
 import { CartProvider } from "./context/CartContext";
+import MobileNav from "./components/MobileNav";
 
 export const metadata: Metadata = {
-  title: "Night Now",
-  description: "Night Now - Online Store",
+  title: "Night Now | Fast Delivery",
+  description:
+    "Night Now - Fast delivery for medicines, groceries and daily essentials.",
 };
 
 export default function RootLayout({
@@ -17,6 +20,7 @@ export default function RootLayout({
       <body>
         <CartProvider>
           {children}
+          <MobileNav />
         </CartProvider>
       </body>
     </html>

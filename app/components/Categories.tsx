@@ -1,135 +1,203 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import { getCategories } from "../services/categoryService";
 
 interface CategoriesProps {
   selectedCategory?: string;
-  onSelectCategory?: (category: string) => void;
+  onSelectCategory: (category: string) => void;
 }
 
 export default function Categories({
   selectedCategory = "",
   onSelectCategory,
 }: CategoriesProps) {
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>(
+    []
+  );
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const data = await getCategories();
+
+        setCategories(
+          data.filter(
+            (item: any) =>
+              item.active !== false
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Category loading failed:",
+          error
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadCategories();
   }, []);
 
-  const loadCategories = async () => {
-    try {
-      const data = await getCategories();
+  const fallbackCategories = [
+    {
+      id: "medicine",
+      name: "Medicines",
+      icon: "💊",
+    },
+    {
+      id: "grocery",
+      name: "Grocery",
+      icon: "🛒",
+    },
+    {
+      id: "snacks",
+      name: "Snacks",
+      icon: "🍿",
+    },
+    {
+      id: "dairy",
+      name: "Dairy",
+      icon: "🥛",
+    },
+    {
+      id: "beverages",
+      name: "Beverages",
+      icon: "🥤",
+    },
+    {
+      id: "personal-care",
+      name: "Personal Care",
+      icon: "🧴",
+    },
+    {
+      id: "baby-care",
+      name: "Baby Care",
+      icon: "🍼",
+    },
+    {
+      id: "household",
+      name: "Household",
+      icon: "🏠",
+    },
+  ];
 
-      setCategories(
-        data.filter(
-          (item: any) => item.active !== false
-        )
-      );
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const displayCategories =
+    categories.length > 0
+      ? categories
+      : fallbackCategories;
 
   return (
-    <section className="bg-black px-4 py-6 text-white">
+    <section className="bg-white px-4 py-5 text-black">
       <div className="mx-auto max-w-7xl">
 
-        <h2 className="mb-4 text-2xl font-bold">
-          Shop by Category
-        </h2>
+        <div className="mb-4 flex items-center justify-between">
+
+          <div>
+            <h2 className="text-xl font-black sm:text-2xl">
+              Shop by Category
+            </h2>
+
+            <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
+              Everything you need, all in one place
+            </p>
+          </div>
+
+          {selectedCategory && (
+            <button
+              type="button"
+              onClick={() =>
+                onSelectCategory("")
+              }
+              className="text-xs font-bold text-yellow-600"
+            >
+              Clear
+            </button>
+          )}
+
+        </div>
 
         {loading ? (
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {[1, 2, 3, 4].map((item) => (
-              <div
-                key={item}
-                className="h-28 min-w-[110px] animate-pulse rounded-2xl bg-zinc-900"
-              />
-            ))}
+          <div className="flex gap-4 overflow-hidden">
+            {[1, 2, 3, 4, 5, 6].map(
+              (item) => (
+                <div
+                  key={item}
+                  className="h-28 w-24 shrink-0 animate-pulse rounded-2xl bg-zinc-100"
+                />
+              )
+            )}
           </div>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-3">
+          <div className="flex gap-3 overflow-x-auto pb-2">
 
-            {/* ALL */}
+            {displayCategories.map(
+              (item: any, index: number) => {
+                const name =
+                  item.name ||
+                  item.title ||
+                  "Category";
 
-            <button
-              onClick={() =>
-                onSelectCategory?.("")
+                const icon =
+                  item.icon ||
+                  item.emoji ||
+                  ["💊", "🛒", "🍿", "🥛", "🥤", "🧴", "🍼", "🏠"][
+                    index % 8
+                  ];
+
+                const categoryValue =
+                  item.name || item.title || "";
+
+                const active =
+                  selectedCategory ===
+                  categoryValue;
+
+                return (
+                  <button
+                    key={
+                      item.id ||
+                      `${name}-${index}`
+                    }
+                    type="button"
+                    onClick={() =>
+                      onSelectCategory(
+                        active
+                          ? ""
+                          : categoryValue
+                      )
+                    }
+                    className={`group flex w-24 shrink-0 flex-col items-center rounded-2xl border p-3 transition sm:w-28 ${
+                      active
+                        ? "border-yellow-400 bg-yellow-100"
+                        : "border-zinc-100 bg-zinc-50 hover:border-yellow-300 hover:bg-yellow-50"
+                    }`}
+                  >
+
+                    <div
+                      className={`flex h-14 w-14 items-center justify-center rounded-2xl text-3xl transition ${
+                        active
+                          ? "bg-yellow-400"
+                          : "bg-white shadow-sm group-hover:scale-105"
+                      }`}
+                    >
+                      {icon}
+                    </div>
+
+                    <p className="mt-2 line-clamp-2 text-center text-xs font-bold">
+                      {name}
+                    </p>
+
+                  </button>
+                );
               }
-              className={`flex min-w-[110px] flex-col items-center rounded-2xl p-3 transition ${
-                selectedCategory === ""
-                  ? "bg-yellow-400 text-black"
-                  : "bg-zinc-900 text-white hover:bg-zinc-800"
-              }`}
-            >
-              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-zinc-800">
-                <span className="text-3xl">
-                  🛍️
-                </span>
-              </div>
-
-              <span className="mt-2 text-sm font-bold">
-                All
-              </span>
-            </button>
-
-            {/* CATEGORIES */}
-
-            {categories.map(
-              (category: any) => (
-                <button
-                  key={category.id}
-                  onClick={() =>
-                    onSelectCategory?.(
-                      category.id
-                    )
-                  }
-                  className={`flex min-w-[110px] flex-col items-center rounded-2xl p-3 transition ${
-                    selectedCategory ===
-                    category.id
-                      ? "bg-yellow-400 text-black"
-                      : "bg-zinc-900 text-white hover:bg-zinc-800"
-                  }`}
-                >
-
-                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-zinc-800">
-
-                    {category.image ? (
-                      <img
-                        src={category.image}
-                        alt={category.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-3xl">
-                        {category.icon || "📦"}
-                      </span>
-                    )}
-
-                  </div>
-
-                  <span className="mt-2 max-w-[100px] truncate text-sm font-bold">
-                    {category.name}
-                  </span>
-
-                </button>
-              )
             )}
 
           </div>
         )}
-
-        {!loading &&
-          categories.length === 0 && (
-            <p className="mt-4 text-sm text-zinc-500">
-              No categories available.
-            </p>
-          )}
 
       </div>
     </section>

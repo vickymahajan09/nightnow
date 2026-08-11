@@ -1,58 +1,90 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+
 import { auth } from "../lib/firebase";
+import { logoutUser } from "../services/authService";
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (currentUser) => setUser(currentUser)
-    );
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        (currentUser) => {
+          setUser(currentUser);
+          setLoading(false);
+        }
+      );
 
     return () => unsubscribe();
   }, []);
 
-  const logout = async () => {
-    await signOut(auth);
-    window.location.href = "/";
-  };
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-50">
+        <p className="font-bold">
+          Loading...
+        </p>
+      </main>
+    );
+  }
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-black px-4 py-20 text-white">
-        <div className="mx-auto max-w-md text-center">
-          <div className="text-6xl">👤</div>
+      <main className="min-h-screen bg-zinc-50 px-4 py-16">
+        <div className="mx-auto max-w-md rounded-2xl bg-white p-8 text-center shadow-sm">
 
-          <h1 className="mt-6 text-3xl font-black">
+          <div className="text-6xl">
+            👤
+          </div>
+
+          <h1 className="mt-5 text-2xl font-black">
             Login Required
           </h1>
 
+          <p className="mt-2 text-sm text-zinc-500">
+            Login to view your profile and orders.
+          </p>
+
           <Link href="/login">
-            <button className="mt-6 rounded-xl bg-yellow-400 px-8 py-3 font-bold text-black">
+            <button className="mt-6 w-full rounded-xl bg-yellow-400 py-4 font-black">
               Login
             </button>
           </Link>
+
         </div>
       </main>
     );
   }
 
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+      window.location.href = "/";
+    } catch (error) {
+      console.error(error);
+      alert("Logout failed");
+    }
+  };
+
   return (
-    <main className="min-h-screen bg-black px-4 py-10 text-white">
-      <div className="mx-auto max-w-xl">
+    <main className="min-h-screen bg-zinc-50 px-4 py-8 pb-28 text-black">
 
-        <h1 className="text-3xl font-black text-yellow-400">
-          My Profile
-        </h1>
+      <div className="mx-auto max-w-2xl">
 
-        <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <Link
+          href="/"
+          className="text-sm font-bold text-zinc-500"
+        >
+          ← Home
+        </Link>
 
-          {/* PROFILE */}
+        <div className="mt-5 overflow-hidden rounded-3xl bg-black p-6 text-white">
 
           <div className="flex items-center gap-4">
 
@@ -60,68 +92,96 @@ export default function ProfilePage() {
               <img
                 src={user.photoURL}
                 alt="Profile"
-                className="h-20 w-20 rounded-full object-cover"
+                className="h-16 w-16 rounded-full object-cover"
               />
             ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-yellow-400 text-4xl text-black">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-yellow-400 text-2xl text-black">
                 👤
               </div>
             )}
 
             <div className="min-w-0">
-              <h2 className="text-2xl font-bold">
-                {user.displayName || "Customer"}
-              </h2>
 
-              <p className="mt-1 truncate text-zinc-400">
-                {user.email || "Mobile User"}
+              <h1 className="truncate text-2xl font-black">
+                {user.displayName ||
+                  "Night Now User"}
+              </h1>
+
+              <p className="truncate text-sm text-zinc-400">
+                {user.email ||
+                  "Mobile User"}
               </p>
 
-              {user.phoneNumber && (
-                <p className="mt-1 text-sm text-zinc-500">
-                  📱 {user.phoneNumber}
-                </p>
-              )}
             </div>
 
           </div>
 
-          {/* ACCOUNT */}
+        </div>
 
-          <div className="mt-8 space-y-3">
+        <div className="mt-5 overflow-hidden rounded-2xl bg-white shadow-sm">
 
-            <Link href="/orders">
-              <button className="w-full rounded-xl bg-zinc-800 py-4 text-left px-4 font-bold hover:bg-zinc-700">
-                📦 My Orders
-              </button>
-            </Link>
+          <Link
+            href="/orders"
+            className="flex items-center gap-4 border-b border-zinc-100 p-5 hover:bg-zinc-50"
+          >
+            <span className="text-2xl">
+              📦
+            </span>
 
-            <Link href="/cart">
-              <button className="w-full rounded-xl bg-zinc-800 py-4 text-left px-4 font-bold hover:bg-zinc-700">
-                🛒 My Cart
-              </button>
-            </Link>
+            <div className="flex-1">
+              <p className="font-black">
+                My Orders
+              </p>
 
-            <Link href="/wishlist">
-              <button className="w-full rounded-xl bg-zinc-800 py-4 text-left px-4 font-bold hover:bg-zinc-700">
-                ❤️ My Wishlist
-              </button>
-            </Link>
+              <p className="text-xs text-zinc-500">
+                Track your orders
+              </p>
+            </div>
 
-            <Link href="/notifications">
-              <button className="w-full rounded-xl bg-zinc-800 py-4 text-left px-4 font-bold hover:bg-zinc-700">
-                🔔 Notifications
-              </button>
-            </Link>
+            <span>→</span>
+          </Link>
 
-            <button
-              onClick={logout}
-              className="w-full rounded-xl bg-red-600 py-4 font-bold hover:bg-red-700"
-            >
-              🚪 Logout
-            </button>
+          <Link
+            href="/cart"
+            className="flex items-center gap-4 border-b border-zinc-100 p-5 hover:bg-zinc-50"
+          >
+            <span className="text-2xl">
+              🛒
+            </span>
 
-          </div>
+            <div className="flex-1">
+              <p className="font-black">
+                My Cart
+              </p>
+
+              <p className="text-xs text-zinc-500">
+                View your cart
+              </p>
+            </div>
+
+            <span>→</span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-4 p-5 text-left hover:bg-red-50"
+          >
+            <span className="text-2xl">
+              🚪
+            </span>
+
+            <div className="flex-1">
+              <p className="font-black text-red-600">
+                Logout
+              </p>
+
+              <p className="text-xs text-zinc-500">
+                Sign out from Night Now
+              </p>
+            </div>
+
+          </button>
 
         </div>
 

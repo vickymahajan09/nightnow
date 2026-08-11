@@ -1,311 +1,283 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
 
 import { getProductById } from "../../services/productService";
-
-import {
-  addReview,
-  getProductReviews,
-} from "../../services/reviewService";
-
 import { useCart } from "../../context/CartContext";
-import { auth } from "../../lib/firebase";
 
-export default function ProductDetailsPage() {
+export default function ProductPage() {
   const params = useParams();
 
-  const { addToCart } = useCart();
+  const { addToCart, removeFromCart, cart } =
+    useCart();
 
-  const [product, setProduct] = useState<any>(null);
-  const [reviews, setReviews] = useState<any[]>([]);
+  const [product, setProduct] =
+    useState<any>(null);
 
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
-
-  const [user, setUser] = useState<any>(null);
-
-  const [loading, setLoading] = useState(true);
-  const [reviewLoading, setReviewLoading] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (currentUser) => {
-        setUser(currentUser);
+    const loadProduct = async () => {
+      try {
+        const id = String(params.id);
+
+        const data =
+          await getProductById(id);
+
+        setProduct(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
       }
-    );
+    };
 
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    loadProduct();
+    if (params.id) {
+      loadProduct();
+    }
   }, [params.id]);
-
-  const loadProduct = async () => {
-    try {
-      const data: any = await getProductById(
-        params.id as string
-      );
-
-      setProduct(data);
-
-      if (data) {
-        const reviewData =
-          await getProductReviews(
-            params.id as string
-          );
-
-        setReviews(reviewData);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submitReview = async () => {
-    if (!user) {
-      alert("Please login to write a review");
-      return;
-    }
-
-    if (!comment.trim()) {
-      alert("Please write a review");
-      return;
-    }
-
-    setReviewLoading(true);
-
-    try {
-      await addReview(
-        params.id as string,
-        user.uid,
-        user.email || "Customer",
-        rating,
-        comment.trim()
-      );
-
-      setComment("");
-      setRating(5);
-
-      const data =
-        await getProductReviews(
-          params.id as string
-        );
-
-      setReviews(data);
-
-      alert("Review Added Successfully");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to add review");
-    } finally {
-      setReviewLoading(false);
-    }
-  };
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-black p-10 text-center text-white">
-        Loading Product...
+      <main className="min-h-screen bg-zinc-50 px-4 py-10">
+        <div className="mx-auto max-w-6xl">
+          <div className="h-96 animate-pulse rounded-3xl bg-zinc-200" />
+        </div>
       </main>
     );
   }
 
   if (!product) {
     return (
-      <main className="min-h-screen bg-black p-10 text-center text-white">
-        <h1 className="text-3xl font-bold">
-          Product Not Found
-        </h1>
+      <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
+        <div className="text-center">
+          <div className="text-6xl">🔍</div>
 
-        <Link href="/">
-          <button className="mt-6 rounded-xl bg-yellow-400 px-6 py-3 font-bold text-black">
-            Back Home
-          </button>
-        </Link>
+          <h1 className="mt-5 text-2xl font-black">
+            Product Not Found
+          </h1>
+
+          <Link href="/">
+            <button className="mt-6 rounded-xl bg-yellow-400 px-6 py-3 font-black">
+              Back to Store
+            </button>
+          </Link>
+        </div>
       </main>
     );
   }
 
+  const stock = Number(
+    product.stock || 0
+  );
+
+  const cartItem = cart.find(
+    (item: any) =>
+      item.id === product.id
+  );
+
+  const quantity = Number(
+    cartItem?.quantity || 0
+  );
+
+  const price = Number(
+    product.price || 0
+  );
+
+  const mrp = Number(
+    product.mrp || price
+  );
+
+  const discount =
+    mrp > price
+      ? Math.round(
+          ((mrp - price) / mrp) * 100
+        )
+      : 0;
+
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white">
+    <main className="min-h-screen bg-zinc-50 px-4 py-6 pb-28 text-black">
 
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
 
-        <Link href="/">
-          <button className="mb-6 rounded-lg bg-zinc-800 px-4 py-2">
-            ← Back
-          </button>
+        <Link
+          href="/"
+          className="text-sm font-bold text-zinc-500"
+        >
+          ← Back to Store
         </Link>
 
-        <div className="grid gap-10 md:grid-cols-2">
+        <div className="mt-5 grid gap-6 rounded-3xl bg-white p-4 shadow-sm md:grid-cols-2 md:p-7">
 
-          <div>
+          {/* IMAGE */}
+
+          <div className="relative overflow-hidden rounded-2xl bg-zinc-100">
+
+            {discount > 0 && (
+              <span className="absolute left-4 top-4 z-10 rounded-lg bg-green-600 px-3 py-2 text-xs font-black text-white">
+                {discount}% OFF
+              </span>
+            )}
+
             <img
-              src={product.image || "/no-image.png"}
-              alt={product.name}
-              className="w-full rounded-2xl object-cover"
+              src={
+                product.image ||
+                "/no-image.png"
+              }
+              alt={
+                product.name ||
+                "Product"
+              }
+              className="h-[360px] w-full object-contain p-5 md:h-[480px]"
             />
+
           </div>
 
-          <div>
+          {/* DETAILS */}
 
-            <h1 className="text-4xl font-black">
+          <div className="flex flex-col justify-center">
+
+            <p className="text-xs font-bold uppercase text-yellow-600">
+              {product.category ||
+                "Daily Essential"}
+            </p>
+
+            <h1 className="mt-2 text-3xl font-black leading-tight md:text-4xl">
               {product.name}
             </h1>
 
-            <p className="mt-4 text-3xl font-bold text-yellow-400">
-              ₹{product.price}
+            <p className="mt-3 text-sm text-zinc-500">
+              {product.pack ||
+                product.quantityLabel ||
+                "1 pack"}
             </p>
 
-            <p className="mt-6 text-zinc-300">
-              {product.description}
-            </p>
+            <div className="mt-5 flex items-center gap-3">
 
-            <p className="mt-6">
-              Stock:
-              <span className="ml-2 text-green-400">
-                {product.stock}
+              <span className="text-3xl font-black">
+                ₹{price}
               </span>
-            </p>
 
-            {Number(product.stock) > 0 ? (
-              <button
-                onClick={() =>
-                  addToCart({
-                    ...product,
-                    quantity: 1,
-                  })
-                }
-                className="mt-8 rounded-xl bg-yellow-400 px-8 py-4 font-bold text-black"
-              >
-                Add To Cart
-              </button>
-            ) : (
-              <button
-                disabled
-                className="mt-8 rounded-xl bg-zinc-700 px-8 py-4 font-bold text-zinc-400"
-              >
-                Out of Stock
-              </button>
-            )}
+              {mrp > price && (
+                <span className="text-lg text-zinc-400 line-through">
+                  ₹{mrp}
+                </span>
+              )}
 
-          </div>
-        </div>
-
-        <section className="mt-14">
-
-          <h2 className="text-2xl font-black">
-            Customer Reviews
-          </h2>
-
-          {reviews.length > 0 ? (
-            <div className="mt-6 space-y-4">
-
-              {reviews.map((review: any) => (
-                <div
-                  key={review.id}
-                  className="rounded-2xl bg-zinc-900 p-5"
-                >
-                  <div className="flex justify-between">
-
-                    <p className="font-bold">
-                      {review.userName}
-                    </p>
-
-                    <p className="text-yellow-400">
-                      {"★".repeat(
-                        Number(review.rating)
-                      )}
-                    </p>
-
-                  </div>
-
-                  <p className="mt-3 text-zinc-300">
-                    {review.comment}
-                  </p>
-
-                </div>
-              ))}
+              {discount > 0 && (
+                <span className="rounded-md bg-green-100 px-2 py-1 text-xs font-black text-green-700">
+                  {discount}% OFF
+                </span>
+              )}
 
             </div>
-          ) : (
-            <p className="mt-4 text-zinc-500">
-              No reviews yet.
-            </p>
-          )}
 
-          <div className="mt-8 rounded-2xl bg-zinc-900 p-5">
+            {product.description && (
+              <div className="mt-6 rounded-2xl bg-zinc-50 p-4">
+                <h2 className="font-black">
+                  Product Details
+                </h2>
 
-            <h3 className="text-lg font-bold">
-              Write a Review
-            </h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-600">
+                  {product.description}
+                </p>
+              </div>
+            )}
 
-            {!user ? (
-              <Link href="/login">
-                <button className="mt-4 rounded-lg bg-yellow-400 px-6 py-3 font-bold text-black">
-                  Login to Review
+            <div className="mt-6">
+
+              {stock <= 0 ? (
+                <button
+                  disabled
+                  className="w-full rounded-xl bg-zinc-200 py-4 font-black text-zinc-500"
+                >
+                  OUT OF STOCK
                 </button>
-              </Link>
-            ) : (
-              <>
-                <div className="mt-4 flex gap-2">
+              ) : quantity === 0 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    addToCart({
+                      ...product,
+                      quantity: 1,
+                    })
+                  }
+                  className="w-full rounded-xl bg-yellow-400 py-4 text-lg font-black hover:bg-yellow-300"
+                >
+                  ADD TO CART
+                </button>
+              ) : (
+                <div className="flex h-14 overflow-hidden rounded-xl bg-yellow-400">
 
-                  {[1, 2, 3, 4, 5].map(
-                    (star) => (
-                      <button
-                        key={star}
-                        onClick={() =>
-                          setRating(star)
-                        }
-                        className={`text-3xl ${
-                          star <= rating
-                            ? "text-yellow-400"
-                            : "text-zinc-600"
-                        }`}
-                      >
-                        ★
-                      </button>
-                    )
-                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      removeFromCart(
+                        product.id
+                      )
+                    }
+                    className="w-16 bg-black text-2xl font-black text-white"
+                  >
+                    −
+                  </button>
+
+                  <div className="flex flex-1 items-center justify-center text-xl font-black">
+                    {quantity}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={
+                      quantity >= stock
+                    }
+                    onClick={() =>
+                      addToCart({
+                        ...product,
+                        quantity: 1,
+                      })
+                    }
+                    className="w-16 bg-black text-2xl font-black text-white disabled:opacity-40"
+                  >
+                    +
+                  </button>
 
                 </div>
+              )}
 
-                <textarea
-                  value={comment}
-                  onChange={(e) =>
-                    setComment(e.target.value)
-                  }
-                  placeholder="Write your review..."
-                  rows={4}
-                  className="mt-4 w-full rounded-xl bg-zinc-800 p-4 outline-none"
-                />
+            </div>
 
-                <button
-                  onClick={submitReview}
-                  disabled={reviewLoading}
-                  className="mt-4 rounded-xl bg-yellow-400 px-6 py-3 font-bold text-black disabled:opacity-50"
-                >
-                  {reviewLoading
-                    ? "Submitting..."
-                    : "Submit Review"}
-                </button>
-              </>
-            )}
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+
+              <div className="rounded-xl bg-zinc-50 p-3">
+                ⚡
+                <p className="mt-1 font-bold">
+                  Fast Delivery
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-zinc-50 p-3">
+                🔒
+                <p className="mt-1 font-bold">
+                  Secure Payment
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-zinc-50 p-3">
+                📦
+                <p className="mt-1 font-bold">
+                  Easy Ordering
+                </p>
+              </div>
+
+            </div>
 
           </div>
 
-        </section>
-
+        </div>
       </div>
-
     </main>
   );
 }

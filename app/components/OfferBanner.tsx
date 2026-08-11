@@ -1,34 +1,83 @@
 "use client";
 
+import Link from "next/link";
+
 export default function OfferBanner() {
   return (
-    <section className="px-4 py-4">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-2xl bg-yellow-400 p-5 text-black">
-        <div className="flex items-center justify-between gap-4">
+    <section className="bg-white px-4 py-3 text-black">
+      <div className="mx-auto max-w-7xl">
 
-          <div>
-            <p className="text-sm font-black">
-              ⚡ NIGHT NOW OFFER
-            </p>
+        <div className="grid gap-3 sm:grid-cols-3">
 
-            <h2 className="mt-1 text-2xl font-black">
-              First Order FREE Delivery 🎁
-            </h2>
+          <div className="flex items-center gap-3 rounded-2xl bg-yellow-100 p-4">
+            <div className="text-3xl">
+              🎁
+            </div>
 
-            <p className="mt-1 text-sm font-semibold">
-              नए customers के लिए पहला order delivery FREE
-            </p>
+            <div>
+              <p className="text-xs font-bold text-zinc-500">
+                FIRST ORDER
+              </p>
 
-            <p className="mt-2 text-xs font-bold">
-              Regular orders above ₹299 → FREE Delivery
-            </p>
+              <p className="font-black">
+                FREE DELIVERY
+              </p>
+
+              <p className="text-xs text-zinc-600">
+                Your first order is on us
+              </p>
+            </div>
           </div>
 
-          <div className="shrink-0 text-5xl">
-            🛵
+          <div className="flex items-center gap-3 rounded-2xl bg-green-100 p-4">
+            <div className="text-3xl">
+              🚀
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-zinc-500">
+                FAST DELIVERY
+              </p>
+
+              <p className="font-black">
+                At Your Doorstep
+              </p>
+
+              <p className="text-xs text-zinc-600">
+                Quick & reliable delivery
+              </p>
+            </div>
           </div>
+
+          <Link
+            href="/#products"
+            className="flex items-center gap-3 rounded-2xl bg-zinc-100 p-4 transition hover:bg-zinc-200"
+          >
+            <div className="text-3xl">
+              🔥
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-zinc-500">
+                NIGHT NOW DEALS
+              </p>
+
+              <p className="font-black">
+                Shop Best Sellers
+              </p>
+
+              <p className="text-xs text-zinc-600">
+                Grab today's deals
+              </p>
+            </div>
+
+            <span className="ml-auto font-black">
+              →
+            </span>
+          </Link>
 
         </div>
+
       </div>
     </section>
   );

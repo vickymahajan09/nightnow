@@ -8,7 +8,6 @@ import {
   loginUser,
   googleLogin,
   sendPhoneOTP,
-  resetPassword,
 } from "../services/authService";
 
 const ADMIN_EMAIL =
@@ -17,9 +16,10 @@ const ADMIN_EMAIL =
 export default function LoginPage() {
   const router = useRouter();
 
-  const [mode, setMode] = useState<
-    "email" | "phone"
-  >("email");
+  const [mode, setMode] =
+    useState<"email" | "phone">(
+      "email"
+    );
 
   const [email, setEmail] =
     useState("");
@@ -36,40 +36,41 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] =
     useState(false);
 
-  const [confirmationResult, setConfirmationResult] =
-    useState<any>(null);
-
-  const [loading, setLoading] =
-    useState(false);
+  const [
+    confirmationResult,
+    setConfirmationResult,
+  ] = useState<any>(null);
 
   const [otpSent, setOtpSent] =
     useState(false);
 
-  const [resetLoading, setResetLoading] =
+  const [loading, setLoading] =
     useState(false);
 
-  const goAfterLogin = (user: any) => {
+  const goAfterLogin = (
+    user: any
+  ) => {
     const loggedInEmail =
-      user?.email?.trim().toLowerCase();
+      user?.email
+        ?.trim()
+        .toLowerCase();
 
     if (
       loggedInEmail ===
       ADMIN_EMAIL.toLowerCase()
     ) {
       router.replace("/admin");
-      return;
+    } else {
+      router.replace("/");
     }
-
-    router.replace("/");
   };
-
-  // =========================
-  // EMAIL LOGIN
-  // =========================
 
   const handleEmailLogin =
     async () => {
-      if (!email.trim() || !password) {
+      if (
+        !email.trim() ||
+        !password
+      ) {
         alert(
           "Please fill all fields"
         );
@@ -87,11 +88,6 @@ export default function LoginPage() {
 
         goAfterLogin(result.user);
       } catch (error: any) {
-        console.error(
-          "Email login error:",
-          error
-        );
-
         alert(
           error?.message ||
             "Login failed"
@@ -100,78 +96,6 @@ export default function LoginPage() {
         setLoading(false);
       }
     };
-
-  // =========================
-  // FORGOT PASSWORD
-  // =========================
-
-  const handleForgotPassword =
-    async () => {
-      const cleanEmail =
-        email.trim();
-
-      if (!cleanEmail) {
-        alert(
-          "Please enter your email address first."
-        );
-        return;
-      }
-
-      setResetLoading(true);
-
-      try {
-        await resetPassword(
-          cleanEmail
-        );
-
-        alert(
-          "Password reset link email par bhej diya gaya hai. Apna inbox aur spam folder check karein."
-        );
-      } catch (error: any) {
-        console.error(
-          "Password reset error:",
-          error
-        );
-
-        switch (error?.code) {
-          case "auth/user-not-found":
-            alert(
-              "Is email se koi account nahi mila."
-            );
-            break;
-
-          case "auth/invalid-email":
-            alert(
-              "Please enter a valid email address."
-            );
-            break;
-
-          case "auth/too-many-requests":
-            alert(
-              "Bahut baar request ho chuki hai. Thodi der baad try karein."
-            );
-            break;
-
-          case "auth/network-request-failed":
-            alert(
-              "Internet connection check karein."
-            );
-            break;
-
-          default:
-            alert(
-              error?.message ||
-                "Password reset failed."
-            );
-        }
-      } finally {
-        setResetLoading(false);
-      }
-    };
-
-  // =========================
-  // GOOGLE LOGIN
-  // =========================
 
   const handleGoogleLogin =
     async () => {
@@ -185,25 +109,10 @@ export default function LoginPage() {
 
         goAfterLogin(result.user);
       } catch (error: any) {
-        console.error(
-          "Google login error:",
-          error
-        );
-
         if (
           error?.code ===
           "auth/popup-closed-by-user"
         ) {
-          return;
-        }
-
-        if (
-          error?.code ===
-          "auth/popup-blocked"
-        ) {
-          alert(
-            "Google login popup was blocked. Please allow popups for this site."
-          );
           return;
         }
 
@@ -216,36 +125,20 @@ export default function LoginPage() {
       }
     };
 
-  // =========================
-  // SEND OTP
-  // =========================
-
   const handleSendOTP =
     async () => {
-      if (!phone.trim()) {
-        alert(
-          "Please enter mobile number"
-        );
-        return;
-      }
-
       const cleanPhone =
-        phone.replace(/\s/g, "");
-
-      if (
-        !cleanPhone.startsWith("+91")
-      ) {
-        alert(
-          "Enter number with +91"
+        phone.replace(
+          /\s/g,
+          ""
         );
-        return;
-      }
 
       if (
+        !cleanPhone.startsWith("+91") ||
         cleanPhone.length !== 13
       ) {
         alert(
-          "Please enter a valid Indian mobile number"
+          "Enter valid number with +91"
         );
         return;
       }
@@ -265,15 +158,8 @@ export default function LoginPage() {
 
         setOtpSent(true);
 
-        alert(
-          "OTP sent successfully"
-        );
+        alert("OTP sent");
       } catch (error: any) {
-        console.error(
-          "OTP error:",
-          error
-        );
-
         alert(
           error?.message ||
             "Failed to send OTP"
@@ -283,27 +169,14 @@ export default function LoginPage() {
       }
     };
 
-  // =========================
-  // VERIFY OTP
-  // =========================
-
   const handleVerifyOTP =
     async () => {
       if (
-        !confirmationResult
-      ) {
-        alert(
-          "Please request OTP first"
-        );
-        return;
-      }
-
-      if (
-        !otp ||
+        !confirmationResult ||
         otp.length !== 6
       ) {
         alert(
-          "Please enter 6 digit OTP"
+          "Enter valid 6 digit OTP"
         );
         return;
       }
@@ -320,11 +193,6 @@ export default function LoginPage() {
           result.user
         );
       } catch (error: any) {
-        console.error(
-          "OTP verification error:",
-          error
-        );
-
         alert(
           error?.message ||
             "Invalid OTP"
@@ -335,266 +203,229 @@ export default function LoginPage() {
     };
 
   return (
-    <main className="min-h-screen bg-black px-4 py-10 text-white">
+    <main className="min-h-screen bg-zinc-50 px-4 py-10 pb-24 text-black">
 
-      <div className="mx-auto max-w-md rounded-2xl bg-zinc-900 p-6">
+      <div className="mx-auto max-w-md">
 
-        {/* LOGO */}
+        <Link
+          href="/"
+          className="text-sm font-bold text-zinc-500"
+        >
+          ← Back to Night Now
+        </Link>
 
-        <div className="text-center">
+        <div className="mt-5 overflow-hidden rounded-3xl bg-white p-6 shadow-sm">
 
-          <h1 className="text-3xl font-black text-yellow-400">
-            Night Now
-          </h1>
+          <div className="text-center">
 
-          <p className="mt-2 text-zinc-400">
-            Login to your account
-          </p>
+            <h1 className="text-3xl font-black">
+              Night
+              <span className="text-yellow-500">
+                Now
+              </span>
+            </h1>
 
-        </div>
+            <p className="mt-2 text-sm text-zinc-500">
+              Login to continue shopping
+            </p>
 
-        {/* LOGIN TYPE */}
+          </div>
 
-        <div className="mt-8 grid grid-cols-2 gap-2 rounded-xl bg-zinc-800 p-1">
-
-          <button
-            type="button"
-            onClick={() => {
-              setMode("email");
-              setOtpSent(false);
-              setOtp("");
-            }}
-            className={`rounded-lg py-3 font-bold ${
-              mode === "email"
-                ? "bg-yellow-400 text-black"
-                : "text-zinc-400"
-            }`}
-          >
-            Email
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setMode("phone");
-              setOtpSent(false);
-              setOtp("");
-            }}
-            className={`rounded-lg py-3 font-bold ${
-              mode === "phone"
-                ? "bg-yellow-400 text-black"
-                : "text-zinc-400"
-            }`}
-          >
-            Mobile OTP
-          </button>
-
-        </div>
-
-        {/* EMAIL LOGIN */}
-
-        {mode === "email" && (
-          <div className="mt-6 space-y-4">
-
-            <input
-              type="email"
-              placeholder="Email Address"
-              value={email}
-              onChange={(e) =>
-                setEmail(
-                  e.target.value
-                )
-              }
-              className="w-full rounded-xl bg-zinc-800 p-4 outline-none"
-            />
-
-            <div className="relative">
-
-              <input
-                type={
-                  showPassword
-                    ? "text"
-                    : "password"
-                }
-                placeholder="Password"
-                value={password}
-                onChange={(e) =>
-                  setPassword(
-                    e.target.value
-                  )
-                }
-                className="w-full rounded-xl bg-zinc-800 p-4 pr-14 outline-none"
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowPassword(
-                    !showPassword
-                  )
-                }
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xl"
-              >
-                {showPassword
-                  ? "🙈"
-                  : "👁️"}
-              </button>
-
-            </div>
-
-            {/* FORGOT PASSWORD */}
-
-            <div className="text-right">
-
-              <button
-                type="button"
-                onClick={
-                  handleForgotPassword
-                }
-                disabled={resetLoading}
-                className="text-sm font-semibold text-yellow-400 hover:text-yellow-300 disabled:opacity-50"
-              >
-                {resetLoading
-                  ? "Sending..."
-                  : "Forgot Password?"}
-              </button>
-
-            </div>
+          <div className="mt-7 grid grid-cols-2 rounded-xl bg-zinc-100 p-1">
 
             <button
               type="button"
-              onClick={
-                handleEmailLogin
-              }
-              disabled={loading}
-              className="w-full rounded-xl bg-yellow-400 py-4 font-bold text-black disabled:opacity-50"
+              onClick={() => {
+                setMode("email");
+                setOtpSent(false);
+              }}
+              className={`rounded-lg py-3 text-sm font-black ${
+                mode === "email"
+                  ? "bg-black text-white"
+                  : "text-zinc-500"
+              }`}
             >
-              {loading
-                ? "Logging in..."
-                : "Login"}
+              Email
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMode("phone");
+                setOtpSent(false);
+              }}
+              className={`rounded-lg py-3 text-sm font-black ${
+                mode === "phone"
+                  ? "bg-black text-white"
+                  : "text-zinc-500"
+              }`}
+            >
+              Mobile OTP
             </button>
 
           </div>
-        )}
 
-        {/* PHONE LOGIN */}
+          {mode === "email" ? (
+            <div className="mt-6 space-y-4">
 
-        {mode === "phone" && (
-          <div className="mt-6 space-y-4">
-
-            <input
-              type="tel"
-              placeholder="+91 8989855637"
-              value={phone}
-              onChange={(e) =>
-                setPhone(
-                  e.target.value
-                )
-              }
-              className="w-full rounded-xl bg-zinc-800 p-4 outline-none"
-            />
-
-            {!otpSent ? (
-              <button
-                type="button"
-                onClick={
-                  handleSendOTP
+              <input
+                type="email"
+                placeholder="Email Address"
+                value={email}
+                onChange={(e) =>
+                  setEmail(
+                    e.target.value
+                  )
                 }
-                disabled={loading}
-                className="w-full rounded-xl bg-yellow-400 py-4 font-bold text-black disabled:opacity-50"
-              >
-                {loading
-                  ? "Sending OTP..."
-                  : "Send OTP"}
-              </button>
-            ) : (
-              <>
+                className="w-full rounded-xl bg-zinc-100 p-4 outline-none focus:ring-2 focus:ring-yellow-400"
+              />
+
+              <div className="relative">
+
                 <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="Enter 6 Digit OTP"
-                  value={otp}
+                  type={
+                    showPassword
+                      ? "text"
+                      : "password"
+                  }
+                  placeholder="Password"
+                  value={password}
                   onChange={(e) =>
-                    setOtp(
-                      e.target.value.replace(
-                        /\D/g,
-                        ""
-                      )
+                    setPassword(
+                      e.target.value
                     )
                   }
-                  className="w-full rounded-xl bg-zinc-800 p-4 text-center text-xl tracking-[0.5em] outline-none"
+                  className="w-full rounded-xl bg-zinc-100 p-4 pr-14 outline-none focus:ring-2 focus:ring-yellow-400"
                 />
 
                 <button
                   type="button"
+                  onClick={() =>
+                    setShowPassword(
+                      !showPassword
+                    )
+                  }
+                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                >
+                  {showPassword
+                    ? "🙈"
+                    : "👁️"}
+                </button>
+
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  handleEmailLogin
+                }
+                disabled={loading}
+                className="w-full rounded-xl bg-yellow-400 py-4 font-black disabled:opacity-50"
+              >
+                {loading
+                  ? "Logging in..."
+                  : "Login"}
+              </button>
+
+            </div>
+          ) : (
+            <div className="mt-6 space-y-4">
+
+              <input
+                type="tel"
+                placeholder="+91 9876543210"
+                value={phone}
+                onChange={(e) =>
+                  setPhone(
+                    e.target.value
+                  )
+                }
+                className="w-full rounded-xl bg-zinc-100 p-4 outline-none"
+              />
+
+              {!otpSent ? (
+                <button
+                  type="button"
                   onClick={
-                    handleVerifyOTP
+                    handleSendOTP
                   }
                   disabled={loading}
-                  className="w-full rounded-xl bg-yellow-400 py-4 font-bold text-black disabled:opacity-50"
+                  className="w-full rounded-xl bg-yellow-400 py-4 font-black"
                 >
                   {loading
-                    ? "Verifying..."
-                    : "Verify OTP"}
+                    ? "Sending OTP..."
+                    : "Send OTP"}
                 </button>
-              </>
-            )}
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="6 Digit OTP"
+                    value={otp}
+                    onChange={(e) =>
+                      setOtp(
+                        e.target.value.replace(
+                          /\D/g,
+                          ""
+                        )
+                      )
+                    }
+                    className="w-full rounded-xl bg-zinc-100 p-4 text-center text-xl tracking-[0.5em] outline-none"
+                  />
 
+                  <button
+                    type="button"
+                    onClick={
+                      handleVerifyOTP
+                    }
+                    disabled={loading}
+                    className="w-full rounded-xl bg-yellow-400 py-4 font-black"
+                  >
+                    Verify OTP
+                  </button>
+                </>
+              )}
+
+            </div>
+          )}
+
+          <div
+            id="recaptcha-container"
+            className="mt-3"
+          />
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-zinc-200" />
+            <span className="text-xs text-zinc-400">
+              OR
+            </span>
+            <div className="h-px flex-1 bg-zinc-200" />
           </div>
-        )}
 
-        <div
-          id="recaptcha-container"
-          className="mt-3"
-        />
-
-        {/* DIVIDER */}
-
-        <div className="my-6 flex items-center gap-3">
-
-          <div className="h-px flex-1 bg-zinc-700" />
-
-          <span className="text-sm text-zinc-500">
-            OR
-          </span>
-
-          <div className="h-px flex-1 bg-zinc-700" />
-
-        </div>
-
-        {/* GOOGLE */}
-
-        <button
-          type="button"
-          onClick={
-            handleGoogleLogin
-          }
-          disabled={loading}
-          className="flex w-full items-center justify-center gap-3 rounded-xl bg-white py-4 font-bold text-black disabled:opacity-50"
-        >
-          <span className="text-xl">
-            G
-          </span>
-
-          {loading
-            ? "Please wait..."
-            : "Continue with Google"}
-        </button>
-
-        {/* REGISTER */}
-
-        <Link href="/register">
           <button
             type="button"
-            className="mt-4 w-full rounded-xl bg-zinc-800 py-3 font-bold"
+            onClick={
+              handleGoogleLogin
+            }
+            disabled={loading}
+            className="w-full rounded-xl border border-zinc-200 bg-white py-4 font-black hover:bg-zinc-50"
           >
-            Create Account
+            🔵 Continue with Google
           </button>
-        </Link>
 
+          <Link href="/register">
+            <button
+              type="button"
+              className="mt-3 w-full rounded-xl bg-black py-4 font-black text-white"
+            >
+              Create New Account
+            </button>
+          </Link>
+
+        </div>
       </div>
-
     </main>
   );
 }

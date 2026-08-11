@@ -9,62 +9,60 @@ import { getOrders } from "../services/orderService";
 import { getProducts } from "../services/productService";
 import { getCategories } from "../services/categoryService";
 
+const ADMIN_EMAIL =
+  process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase();
+
 export default function AdminPage() {
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
 
-  const [authorized, setAuthorized] =
-    useState(false);
-
-  const [orders, setOrders] =
-    useState<any[]>([]);
-
-  const [products, setProducts] =
-    useState<any[]>([]);
-
-  const [categories, setCategories] =
-    useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
-    const unsubscribe =
-      onAuthStateChanged(
-        auth,
-        async (user) => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (user) => {
+        const userEmail =
+          user?.email?.trim().toLowerCase();
 
-          if (
-            !user ||
-            user.email?.toLowerCase() !==
-              "mahajanvicky04@gmail.com"
-          ) {
-            setAuthorized(false);
-            setLoading(false);
-            return;
-          }
-
-          setAuthorized(true);
-
-          try {
-            const [
-              orderData,
-              productData,
-              categoryData,
-            ] = await Promise.all([
-              getOrders(),
-              getProducts(),
-              getCategories(),
-            ]);
-
-            setOrders(orderData);
-            setProducts(productData);
-            setCategories(categoryData);
-
-          } catch (error) {
-            console.error(error);
-          } finally {
-            setLoading(false);
-          }
+        if (
+          !user ||
+          !ADMIN_EMAIL ||
+          userEmail !== ADMIN_EMAIL
+        ) {
+          setAuthorized(false);
+          setLoading(false);
+          return;
         }
-      );
+
+        setAuthorized(true);
+
+        try {
+          const [
+            orderData,
+            productData,
+            categoryData,
+          ] = await Promise.all([
+            getOrders(),
+            getProducts(),
+            getCategories(),
+          ]);
+
+          setOrders(orderData || []);
+          setProducts(productData || []);
+          setCategories(categoryData || []);
+        } catch (error) {
+          console.error(
+            "Admin dashboard loading failed:",
+            error
+          );
+        } finally {
+          setLoading(false);
+        }
+      }
+    );
 
     return () => unsubscribe();
   }, []);
@@ -82,9 +80,7 @@ export default function AdminPage() {
   if (!authorized) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black px-5 text-white">
-
         <div className="w-full max-w-md rounded-2xl bg-zinc-900 p-8 text-center">
-
           <div className="text-6xl">
             🔒
           </div>
@@ -102,9 +98,7 @@ export default function AdminPage() {
               Login
             </button>
           </Link>
-
         </div>
-
       </main>
     );
   }
@@ -120,6 +114,12 @@ export default function AdminPage() {
     orders.filter(
       (order) =>
         order.status === "Delivered"
+    ).length;
+
+  const cancelledOrders =
+    orders.filter(
+      (order) =>
+        order.status === "Cancelled"
     ).length;
 
   const totalSales =
@@ -142,11 +142,11 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 p-5 text-white md:p-8">
-
       <div className="mx-auto max-w-7xl">
 
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        {/* HEADER */}
 
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm text-zinc-500">
               Night Now
@@ -155,6 +155,10 @@ export default function AdminPage() {
             <h1 className="text-4xl font-black text-yellow-400">
               Admin Dashboard
             </h1>
+
+            <p className="mt-1 text-sm text-zinc-500">
+              {ADMIN_EMAIL}
+            </p>
           </div>
 
           <Link href="/">
@@ -162,8 +166,9 @@ export default function AdminPage() {
               ← Store
             </button>
           </Link>
-
         </div>
+
+        {/* STATS */}
 
         <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
 
@@ -171,6 +176,7 @@ export default function AdminPage() {
             <p className="text-sm text-zinc-400">
               Total Orders
             </p>
+
             <p className="mt-2 text-3xl font-black">
               {orders.length}
             </p>
@@ -180,6 +186,7 @@ export default function AdminPage() {
             <p className="text-sm text-zinc-400">
               Pending
             </p>
+
             <p className="mt-2 text-3xl font-black text-yellow-400">
               {pendingOrders}
             </p>
@@ -189,6 +196,7 @@ export default function AdminPage() {
             <p className="text-sm text-zinc-400">
               Products
             </p>
+
             <p className="mt-2 text-3xl font-black">
               {products.length}
             </p>
@@ -198,12 +206,15 @@ export default function AdminPage() {
             <p className="text-sm text-zinc-400">
               Sales
             </p>
+
             <p className="mt-2 text-3xl font-black text-green-400">
               ₹{totalSales}
             </p>
           </div>
 
         </div>
+
+        {/* MAIN ACTIONS */}
 
         <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
@@ -212,23 +223,27 @@ export default function AdminPage() {
               <div className="text-4xl">
                 📦
               </div>
+
               <h2 className="mt-4 text-xl font-black">
                 Manage Orders
               </h2>
+
               <p className="mt-1 text-sm text-blue-100">
                 {orders.length} total orders
               </p>
             </div>
           </Link>
 
-          <Link href="/admin/products">
+          <Link href="/admin/product">
             <div className="rounded-2xl bg-green-600 p-6 hover:bg-green-500">
               <div className="text-4xl">
                 🛍️
               </div>
+
               <h2 className="mt-4 text-xl font-black">
                 Manage Products
               </h2>
+
               <p className="mt-1 text-sm text-green-100">
                 {products.length} products
               </p>
@@ -240,9 +255,11 @@ export default function AdminPage() {
               <div className="text-4xl">
                 🗂️
               </div>
+
               <h2 className="mt-4 text-xl font-black">
                 Categories
               </h2>
+
               <p className="mt-1 text-sm text-purple-100">
                 {categories.length} categories
               </p>
@@ -254,9 +271,11 @@ export default function AdminPage() {
               <div className="text-4xl">
                 👤
               </div>
+
               <h2 className="mt-4 text-xl font-black">
                 Customer View
               </h2>
+
               <p className="mt-1 text-sm text-zinc-400">
                 View customer orders
               </p>
@@ -265,10 +284,11 @@ export default function AdminPage() {
 
         </div>
 
+        {/* SUMMARIES */}
+
         <div className="mt-8 grid gap-5 md:grid-cols-2">
 
           <div className="rounded-2xl bg-zinc-900 p-6">
-
             <h2 className="text-xl font-black">
               Order Summary
             </h2>
@@ -279,6 +299,7 @@ export default function AdminPage() {
                 <span className="text-zinc-400">
                   Pending
                 </span>
+
                 <span className="font-bold text-yellow-400">
                   {pendingOrders}
                 </span>
@@ -288,6 +309,7 @@ export default function AdminPage() {
                 <span className="text-zinc-400">
                   Delivered
                 </span>
+
                 <span className="font-bold text-green-400">
                   {deliveredOrders}
                 </span>
@@ -297,19 +319,13 @@ export default function AdminPage() {
                 <span className="text-zinc-400">
                   Cancelled
                 </span>
+
                 <span className="font-bold text-red-400">
-                  {
-                    orders.filter(
-                      (o) =>
-                        o.status ===
-                        "Cancelled"
-                    ).length
-                  }
+                  {cancelledOrders}
                 </span>
               </div>
 
             </div>
-
           </div>
 
           <div className="rounded-2xl bg-zinc-900 p-6">
@@ -324,6 +340,7 @@ export default function AdminPage() {
                 <span className="text-zinc-400">
                   Total Products
                 </span>
+
                 <span className="font-bold">
                   {products.length}
                 </span>
@@ -333,6 +350,7 @@ export default function AdminPage() {
                 <span className="text-zinc-400">
                   Low Stock
                 </span>
+
                 <span className="font-bold text-red-400">
                   {lowStock}
                 </span>
@@ -342,19 +360,18 @@ export default function AdminPage() {
                 <span className="text-zinc-400">
                   Categories
                 </span>
+
                 <span className="font-bold">
                   {categories.length}
                 </span>
               </div>
 
             </div>
-
           </div>
 
         </div>
 
       </div>
-
     </main>
   );
 }
