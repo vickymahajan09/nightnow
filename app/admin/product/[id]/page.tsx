@@ -52,7 +52,7 @@ export default function AddProductPage() {
   // =========================================
   // IMAGES
   // =========================================
-
+//test
   const [images, setImages] =
     useState<string[]>([]);
 
