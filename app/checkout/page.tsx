@@ -39,7 +39,21 @@ export default function CheckoutPage() {
   const [coupons, setCoupons] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const delivery = cartTotal >= 299 ? 0 : 30;
+  // ==============================
+  // DELIVERY CHARGE
+  // ==============================
+
+  const getDeliveryCharge = (subtotal: number) => {
+    if (subtotal >= 299) return 0;
+    if (subtotal >= 199) return 20;
+    return 30;
+  };
+
+  const delivery = getDeliveryCharge(cartTotal);
+
+  // ==============================
+  // DISCOUNT + TOTAL
+  // ==============================
 
   const discountAmount = Math.round(
     (cartTotal * couponDiscount) / 100
@@ -60,7 +74,10 @@ export default function CheckoutPage() {
         const data = await getCoupons();
         setCoupons(data);
       } catch (error) {
-        console.error("Coupon loading failed:", error);
+        console.error(
+          "Coupon loading failed:",
+          error
+        );
       }
     };
 
@@ -72,27 +89,33 @@ export default function CheckoutPage() {
   // ==============================
 
   const applyCoupon = () => {
-    const code = couponCode.trim().toUpperCase();
+    const code = couponCode
+      .trim()
+      .toUpperCase();
 
     if (!code) {
-      setCouponMessage("Enter coupon code");
+      setCouponMessage(
+        "Enter coupon code"
+      );
       setCouponDiscount(0);
       return;
     }
 
     const coupon = coupons.find(
       (item: any) =>
-        String(item.code || "").toUpperCase() === code &&
+        String(item.code || "")
+          .toUpperCase() === code &&
         item.active !== false
     );
 
     if (!coupon) {
       setCouponDiscount(0);
-      setCouponMessage("Invalid coupon");
+      setCouponMessage(
+        "Invalid coupon"
+      );
       return;
     }
 
-    // Minimum order
     const minimumOrder = Number(
       coupon.minOrder || 0
     );
@@ -105,23 +128,25 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Expiry
     if (coupon.expiresAt) {
       try {
-        const expiry = coupon.expiresAt?.toDate
-          ? coupon.expiresAt.toDate()
-          : new Date(coupon.expiresAt);
+        const expiry =
+          coupon.expiresAt?.toDate
+            ? coupon.expiresAt.toDate()
+            : new Date(coupon.expiresAt);
 
         if (
           !isNaN(expiry.getTime()) &&
           expiry.getTime() < Date.now()
         ) {
           setCouponDiscount(0);
-          setCouponMessage("Coupon has expired");
+          setCouponMessage(
+            "Coupon has expired"
+          );
           return;
         }
       } catch {
-        // Ignore invalid expiry format
+        // Ignore invalid expiry
       }
     }
 
@@ -129,9 +154,14 @@ export default function CheckoutPage() {
       coupon.discount || 0
     );
 
-    if (discount <= 0 || discount > 100) {
+    if (
+      discount <= 0 ||
+      discount > 100
+    ) {
       setCouponDiscount(0);
-      setCouponMessage("Invalid discount");
+      setCouponMessage(
+        "Invalid discount"
+      );
       return;
     }
 
@@ -162,13 +192,20 @@ export default function CheckoutPage() {
       return false;
     }
 
-    if (!phone || phone.length !== 10) {
-      alert("Enter valid 10 digit phone number");
+    if (
+      !phone ||
+      phone.length !== 10
+    ) {
+      alert(
+        "Enter valid 10 digit phone number"
+      );
       return false;
     }
 
     if (!address.trim()) {
-      alert("Please enter delivery address");
+      alert(
+        "Please enter delivery address"
+      );
       return false;
     }
 
@@ -177,12 +214,20 @@ export default function CheckoutPage() {
       return false;
     }
 
-    if (!pincode || pincode.length !== 6) {
-      alert("Enter valid 6 digit pincode");
+    if (
+      !pincode ||
+      pincode.length !== 6
+    ) {
+      alert(
+        "Enter valid 6 digit pincode"
+      );
       return false;
     }
 
-    if (!cart || cart.length === 0) {
+    if (
+      !cart ||
+      cart.length === 0
+    ) {
       alert("Cart is empty");
       return false;
     }
@@ -199,21 +244,27 @@ export default function CheckoutPage() {
   // GET CURRENT USER EMAIL
   // ==============================
 
-  const getCurrentEmail = async (): Promise<string> => {
-    if (auth.currentUser?.email) {
-      return auth.currentUser.email;
-    }
+  const getCurrentEmail =
+    async (): Promise<string> => {
+      if (auth.currentUser?.email) {
+        return auth.currentUser.email;
+      }
 
-    return new Promise((resolve) => {
-      const unsubscribe = onAuthStateChanged(
-        auth,
-        (user) => {
-          unsubscribe();
-          resolve(user?.email || "");
+      return new Promise(
+        (resolve) => {
+          const unsubscribe =
+            onAuthStateChanged(
+              auth,
+              (user) => {
+                unsubscribe();
+                resolve(
+                  user?.email || ""
+                );
+              }
+            );
         }
       );
-    });
-  };
+    };
 
   // ==============================
   // UPDATE STOCK
@@ -222,11 +273,10 @@ export default function CheckoutPage() {
   const reduceStock = async () => {
     for (const item of cart) {
       try {
-        const product = await getProductById(
-          
-          item.id
-          
-        );
+        const product =
+          await getProductById(
+            item.id
+          );
 
         if (!product) {
           console.warn(
@@ -235,41 +285,25 @@ export default function CheckoutPage() {
           );
           continue;
         }
-        // ==============================
-// AUTO DELIVERY CHARGE
-// ==============================
 
-const getDeliveryCharge = (subtotal: number) => {
-  if (subtotal >= 299) return 0;
-  if (subtotal >= 199) return 20;
-  return 30;
-};
+        const currentStock =
+          Number(
+            product.stock || 0
+          );
 
-const delivery = getDeliveryCharge(cartTotal);
-
-const discountAmount = Math.round(
-  (cartTotal * couponDiscount) / 100
-);
-
-const grandTotal = Math.max(
-  0,
-  cartTotal - discountAmount + delivery
-);
-
-        const currentStock = Number(
-          product.stock || 0
-        );
-
-        const quantity = Number(
-          item.quantity || 1
-        );
+        const quantity =
+          Number(
+            item.quantity || 1
+          );
 
         const newStock =
           currentStock - quantity;
 
         if (newStock < 0) {
           throw new Error(
-            `${item.name || "Product"} is out of stock`
+            `${
+              item.name || "Product"
+            } is out of stock`
           );
         }
 
@@ -291,121 +325,141 @@ const grandTotal = Math.max(
   // ==============================
 
   const clearCurrentCart = () => {
-    cart.forEach((item: any) => {
-      deleteFromCart(item.id);
-    });
+    cart.forEach(
+      (item: any) => {
+        deleteFromCart(item.id);
+      }
+    );
   };
 
   // ==============================
   // SAVE ORDER
   // ==============================
-  const placeCODOrder = async () => {
-  if (!validate()) return;
 
-  setLoading(true);
+  const saveOrder = async (
+    paymentMethod: string,
+    paymentData: any = {}
+  ) => {
+    const email =
+      await getCurrentEmail();
 
-  try {
-    await saveOrder("COD");
-  } catch (error: any) {
-    console.error(
-      "COD order failed:",
-      error
-    );
+    const currentUser =
+      auth.currentUser;
 
-    alert(
-      error?.message ||
-        "Failed to place order"
-    );
+    const order = {
+      userId:
+        currentUser?.uid || "",
 
-    setLoading(false);
-  }
-};
+      customer: {
+        name: name.trim(),
+        email,
+        phone,
+        address:
+          address.trim(),
+        city: city.trim(),
+        pincode,
+      },
 
+      items: cart,
 
-  
- const saveOrder = async (
-  paymentMethod: string,
-  paymentData: any = {}
-) => {
-  const email = await getCurrentEmail();
+      subtotal: cartTotal,
 
-  const currentUser = auth.currentUser;
+      discount:
+        discountAmount,
 
-  const order = {
-    userId: currentUser?.uid || "",
+      coupon:
+        couponDiscount > 0
+          ? couponCode
+              .trim()
+              .toUpperCase()
+          : "",
 
-    customer: {
-      name: name.trim(),
-      email,
-      phone,
-      address: address.trim(),
-      city: city.trim(),
-      pincode,
-    },
+      delivery,
 
-    items: cart,
+      total: grandTotal,
 
-    subtotal: cartTotal,
+      paymentMethod,
 
-    discount: discountAmount,
+      payment: paymentData,
 
-    coupon:
-      couponDiscount > 0
-        ? couponCode.trim().toUpperCase()
-        : "",
+      createdBy: email,
+    };
 
-    delivery,
+    await addOrder(order);
 
-    total: grandTotal,
+    await reduceStock();
 
-    paymentMethod,
+    clearCurrentCart();
 
-    payment: paymentData,
-
-    createdBy: email,
+    window.location.href =
+      "/orders";
   };
 
-  await addOrder(order);
+  // ==============================
+  // COD
+  // ==============================
 
-  await reduceStock();
+  const placeCODOrder =
+    async () => {
+      if (!validate()) return;
 
-  clearCurrentCart();
+      setLoading(true);
 
-  window.location.href = "/orders";
-};
+      try {
+        await saveOrder("COD");
+      } catch (error: any) {
+        console.error(
+          "COD order failed:",
+          error
+        );
+
+        alert(
+          error?.message ||
+            "Failed to place order"
+        );
+
+        setLoading(false);
+      }
+    };
 
   // ==============================
   // LOAD RAZORPAY
   // ==============================
 
-  const loadRazorpay = async () => {
-    if (
-      document.querySelector(
-        'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
-      )
-    ) {
-      return true;
-    }
-
-    return new Promise<boolean>(
-      (resolve) => {
-        const script =
-          document.createElement("script");
-
-        script.src =
-          "https://checkout.razorpay.com/v1/checkout.js";
-
-        script.async = true;
-
-        script.onload = () => resolve(true);
-
-        script.onerror = () =>
-          resolve(false);
-
-        document.body.appendChild(script);
+  const loadRazorpay =
+    async () => {
+      if (
+        document.querySelector(
+          'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+        )
+      ) {
+        return true;
       }
-    );
-  };
+
+      return new Promise<boolean>(
+        (resolve) => {
+          const script =
+            document.createElement(
+              "script"
+            );
+
+          script.src =
+            "https://checkout.razorpay.com/v1/checkout.js";
+
+          script.async = true;
+
+          script.onload = () =>
+            resolve(true);
+
+          script.onerror = () =>
+            resolve(false);
+
+          document.body.appendChild(
+            script
+          );
+        }
+      );
+    };
 
   // ==============================
   // ONLINE PAYMENT
@@ -426,22 +480,22 @@ const grandTotal = Math.max(
         );
       }
 
-      // Create Razorpay order
-      const orderResponse = await fetch(
-        "/api/razorpay/create-order",
-        {
-          method: "POST",
+      const orderResponse =
+        await fetch(
+          "/api/razorpay/create-order",
+          {
+            method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          body: JSON.stringify({
-            amount: grandTotal,
-          }),
-        }
-      );
+            body: JSON.stringify({
+              amount: grandTotal,
+            }),
+          }
+        );
 
       const responseText =
         await orderResponse.text();
@@ -450,7 +504,9 @@ const grandTotal = Math.max(
 
       try {
         razorpayOrder =
-          JSON.parse(responseText);
+          JSON.parse(
+            responseText
+          );
       } catch {
         console.error(
           "Invalid Razorpay API response:",
@@ -526,7 +582,9 @@ const grandTotal = Math.max(
         },
 
         handler:
-          async (response: any) => {
+          async (
+            response: any
+          ) => {
             try {
               const verifyResponse =
                 await fetch(
@@ -584,7 +642,9 @@ const grandTotal = Math.max(
                     response.razorpay_signature,
                 }
               );
-            } catch (error: any) {
+            } catch (
+              error: any
+            ) {
               console.error(
                 "Payment verification failed:",
                 error
@@ -631,10 +691,14 @@ const grandTotal = Math.max(
   // EMPTY CART
   // ==============================
 
-  if (!cart || cart.length === 0) {
+  if (
+    !cart ||
+    cart.length === 0
+  ) {
     return (
       <main className="min-h-screen bg-black px-4 py-20 text-white">
         <div className="mx-auto max-w-md text-center">
+
           <div className="text-7xl">
             🛒
           </div>
@@ -652,6 +716,7 @@ const grandTotal = Math.max(
               Start Shopping
             </button>
           </Link>
+
         </div>
       </main>
     );
@@ -663,6 +728,7 @@ const grandTotal = Math.max(
 
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white">
+
       <div className="mx-auto max-w-6xl">
 
         <Link href="/cart">
@@ -692,7 +758,9 @@ const grandTotal = Math.max(
                 placeholder="Full Name"
                 value={name}
                 onChange={(e) =>
-                  setName(e.target.value)
+                  setName(
+                    e.target.value
+                  )
                 }
                 className="w-full rounded-xl bg-zinc-800 p-4 outline-none"
               />
@@ -732,7 +800,9 @@ const grandTotal = Math.max(
                   placeholder="City"
                   value={city}
                   onChange={(e) =>
-                    setCity(e.target.value)
+                    setCity(
+                      e.target.value
+                    )
                   }
                   className="w-full rounded-xl bg-zinc-800 p-4 outline-none"
                 />
@@ -783,7 +853,8 @@ const grandTotal = Math.max(
                       </p>
 
                       <p className="text-sm text-zinc-400">
-                        {item.quantity || 1}
+                        {item.quantity ||
+                          1}
                         {" × "}
                         ₹{item.price}
                       </p>
@@ -796,7 +867,8 @@ const grandTotal = Math.max(
                         item.price || 0
                       ) *
                         Number(
-                          item.quantity || 1
+                          item.quantity ||
+                            1
                         )}
                     </p>
 
@@ -828,16 +900,21 @@ const grandTotal = Math.max(
                     className="min-w-0 flex-1 rounded-lg bg-zinc-800 px-3 py-3 outline-none"
                   />
 
-                  {couponDiscount > 0 ? (
+                  {couponDiscount >
+                  0 ? (
                     <button
-                      onClick={removeCoupon}
+                      onClick={
+                        removeCoupon
+                      }
                       className="rounded-lg bg-red-600 px-4 font-bold"
                     >
                       Remove
                     </button>
                   ) : (
                     <button
-                      onClick={applyCoupon}
+                      onClick={
+                        applyCoupon
+                      }
                       className="rounded-lg bg-yellow-400 px-4 font-bold text-black"
                     >
                       Apply
@@ -849,7 +926,8 @@ const grandTotal = Math.max(
                 {couponMessage && (
                   <p
                     className={`mt-2 text-sm ${
-                      couponDiscount > 0
+                      couponDiscount >
+                      0
                         ? "text-green-400"
                         : "text-red-400"
                     }`}
@@ -872,19 +950,24 @@ const grandTotal = Math.max(
                 </span>
               </div>
 
-              {discountAmount > 0 && (
+              {discountAmount >
+                0 && (
                 <div className="flex justify-between text-green-400">
+
                   <span>
                     Coupon Discount
                   </span>
 
                   <span>
-                    -₹{discountAmount}
+                    -₹
+                    {discountAmount}
                   </span>
+
                 </div>
               )}
 
               <div className="flex justify-between">
+
                 <span className="text-zinc-400">
                   Delivery
                 </span>
@@ -894,6 +977,7 @@ const grandTotal = Math.max(
                     ? "FREE"
                     : `₹${delivery}`}
                 </span>
+
               </div>
 
               <div className="border-t border-zinc-700 pt-4">
@@ -929,7 +1013,9 @@ const grandTotal = Math.max(
             {/* COD */}
 
             <button
-              onClick={placeCODOrder}
+              onClick={
+                placeCODOrder
+              }
               disabled={loading}
               className="mt-3 w-full rounded-xl bg-zinc-800 py-4 font-bold disabled:opacity-50"
             >
@@ -941,6 +1027,7 @@ const grandTotal = Math.max(
         </div>
 
       </div>
+
     </main>
   );
 }

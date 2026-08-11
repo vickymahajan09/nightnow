@@ -18,7 +18,7 @@ export default function Footer() {
               Fast delivery, right when you need it.
             </p>
 
-            <p className="mt-3 text-sm font-semibold text-yellow-400">
+            <p className="mt-3 text-sm font-semibold text-pink-400">
               आपकी जरूरत, हमारी जिम्मेदारी।
             </p>
           </div>
@@ -54,10 +54,10 @@ export default function Footer() {
               </Link>
 
               <Link
-                href="/login"
+                href="/profile"
                 className="block hover:text-yellow-400"
               >
-                Login
+                My Profile
               </Link>
 
             </div>
@@ -77,7 +77,7 @@ export default function Footer() {
             <div className="mt-4 flex flex-col gap-3">
 
               <a
-                href="https://wa.me/91XXXXXXXXXX"
+                href="https://wa.me/918989855637"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-xl bg-green-600 px-4 py-3 text-center font-bold text-white hover:bg-green-700"
@@ -86,7 +86,7 @@ export default function Footer() {
               </a>
 
               <a
-                href="tel:+91XXXXXXXXXX"
+                href="tel:+918989855637"
                 className="rounded-xl bg-zinc-800 px-4 py-3 text-center font-bold hover:bg-zinc-700"
               >
                 📞 Call Now

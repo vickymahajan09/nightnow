@@ -8,6 +8,7 @@ import {
   loginUser,
   googleLogin,
   sendPhoneOTP,
+  resetPassword,
 } from "../services/authService";
 
 const ADMIN_EMAIL =
@@ -42,6 +43,9 @@ export default function LoginPage() {
     useState(false);
 
   const [otpSent, setOtpSent] =
+    useState(false);
+
+  const [resetLoading, setResetLoading] =
     useState(false);
 
   const goAfterLogin = (user: any) => {
@@ -82,7 +86,6 @@ export default function LoginPage() {
           );
 
         goAfterLogin(result.user);
-
       } catch (error: any) {
         console.error(
           "Email login error:",
@@ -93,9 +96,76 @@ export default function LoginPage() {
           error?.message ||
             "Login failed"
         );
-
       } finally {
         setLoading(false);
+      }
+    };
+
+  // =========================
+  // FORGOT PASSWORD
+  // =========================
+
+  const handleForgotPassword =
+    async () => {
+      const cleanEmail =
+        email.trim();
+
+      if (!cleanEmail) {
+        alert(
+          "Please enter your email address first."
+        );
+        return;
+      }
+
+      setResetLoading(true);
+
+      try {
+        await resetPassword(
+          cleanEmail
+        );
+
+        alert(
+          "Password reset link email par bhej diya gaya hai. Apna inbox aur spam folder check karein."
+        );
+      } catch (error: any) {
+        console.error(
+          "Password reset error:",
+          error
+        );
+
+        switch (error?.code) {
+          case "auth/user-not-found":
+            alert(
+              "Is email se koi account nahi mila."
+            );
+            break;
+
+          case "auth/invalid-email":
+            alert(
+              "Please enter a valid email address."
+            );
+            break;
+
+          case "auth/too-many-requests":
+            alert(
+              "Bahut baar request ho chuki hai. Thodi der baad try karein."
+            );
+            break;
+
+          case "auth/network-request-failed":
+            alert(
+              "Internet connection check karein."
+            );
+            break;
+
+          default:
+            alert(
+              error?.message ||
+                "Password reset failed."
+            );
+        }
+      } finally {
+        setResetLoading(false);
       }
     };
 
@@ -113,13 +183,7 @@ export default function LoginPage() {
         const result =
           await googleLogin();
 
-        console.log(
-          "Google login successful:",
-          result.user.email
-        );
-
         goAfterLogin(result.user);
-
       } catch (error: any) {
         console.error(
           "Google login error:",
@@ -147,7 +211,6 @@ export default function LoginPage() {
           error?.message ||
             "Google login failed"
         );
-
       } finally {
         setLoading(false);
       }
@@ -167,15 +230,10 @@ export default function LoginPage() {
       }
 
       const cleanPhone =
-        phone.replace(
-          /\s/g,
-          ""
-        );
+        phone.replace(/\s/g, "");
 
       if (
-        !cleanPhone.startsWith(
-          "+91"
-        )
+        !cleanPhone.startsWith("+91")
       ) {
         alert(
           "Enter number with +91"
@@ -210,7 +268,6 @@ export default function LoginPage() {
         alert(
           "OTP sent successfully"
         );
-
       } catch (error: any) {
         console.error(
           "OTP error:",
@@ -221,7 +278,6 @@ export default function LoginPage() {
           error?.message ||
             "Failed to send OTP"
         );
-
       } finally {
         setLoading(false);
       }
@@ -263,7 +319,6 @@ export default function LoginPage() {
         goAfterLogin(
           result.user
         );
-
       } catch (error: any) {
         console.error(
           "OTP verification error:",
@@ -274,7 +329,6 @@ export default function LoginPage() {
           error?.message ||
             "Invalid OTP"
         );
-
       } finally {
         setLoading(false);
       }
@@ -384,6 +438,25 @@ export default function LoginPage() {
                 {showPassword
                   ? "🙈"
                   : "👁️"}
+              </button>
+
+            </div>
+
+            {/* FORGOT PASSWORD */}
+
+            <div className="text-right">
+
+              <button
+                type="button"
+                onClick={
+                  handleForgotPassword
+                }
+                disabled={resetLoading}
+                className="text-sm font-semibold text-yellow-400 hover:text-yellow-300 disabled:opacity-50"
+              >
+                {resetLoading
+                  ? "Sending..."
+                  : "Forgot Password?"}
               </button>
 
             </div>
