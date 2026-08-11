@@ -5,38 +5,334 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 
 import { auth } from "../lib/firebase";
-import { useCart } from "../context/CartContext";
+
+interface LocationData {
+  name: string;
+  address: string;
+  lat?: number;
+  lon?: number;
+}
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
 
-  const { cartCount } = useCart();
+  const [showLocation, setShowLocation] =
+    useState(false);
+
+  const [location, setLocation] =
+    useState<LocationData | null>(null);
+
+  const [search, setSearch] = useState("");
+
+  const [suggestions, setSuggestions] =
+    useState<any[]>([]);
+
+  const [loadingLocation, setLoadingLocation] =
+    useState(false);
+
+  const [searching, setSearching] =
+    useState(false);
+
+  const [locationError, setLocationError] =
+    useState("");
+
+  // ==============================
+  // AUTH
+  // ==============================
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (currentUser) => {
-        setUser(currentUser);
-      }
-    );
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        (currentUser) => {
+          setUser(currentUser);
+        }
+      );
 
     return () => unsubscribe();
   }, []);
 
+  // ==============================
+  // LOAD SAVED LOCATION
+  // ==============================
+
+  useEffect(() => {
+    try {
+      const saved =
+        localStorage.getItem(
+          "nightnow-location"
+        );
+
+      if (saved) {
+        const parsed =
+          JSON.parse(saved);
+
+        if (parsed?.name) {
+          setLocation(parsed);
+        }
+      }
+    } catch (error) {
+      console.error(
+        "Location loading failed:",
+        error
+      );
+    }
+  }, []);
+
+  // ==============================
+  // SAVE LOCATION
+  // ==============================
+
+  const saveLocation = (
+    data: LocationData
+  ) => {
+    setLocation(data);
+
+    try {
+      localStorage.setItem(
+        "nightnow-location",
+        JSON.stringify(data)
+      );
+    } catch (error) {
+      console.error(
+        "Location saving failed:",
+        error
+      );
+    }
+
+    setShowLocation(false);
+    setSearch("");
+    setSuggestions([]);
+    setLocationError("");
+  };
+
+  // ==============================
+  // CURRENT GPS LOCATION
+  // ==============================
+
+  const useCurrentLocation = () => {
+    setLocationError("");
+
+    if (!navigator.geolocation) {
+      setLocationError(
+        "Location is not supported by this browser."
+      );
+      return;
+    }
+
+    setLoadingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat =
+          position.coords.latitude;
+
+        const lon =
+          position.coords.longitude;
+
+        try {
+          const response =
+            await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
+              {
+                headers: {
+                  Accept:
+                    "application/json",
+                },
+              }
+            );
+
+          const data =
+            await response.json();
+
+          const address =
+            data?.address || {};
+
+          const area =
+            address.suburb ||
+            address.neighbourhood ||
+            address.village ||
+            address.town ||
+            address.city ||
+            "Current Location";
+
+          const fullAddress =
+            data?.display_name ||
+            `${lat}, ${lon}`;
+
+          saveLocation({
+            name: area,
+            address: fullAddress,
+            lat,
+            lon,
+          });
+        } catch (error) {
+          console.error(
+            "Reverse geocoding failed:",
+            error
+          );
+
+          saveLocation({
+            name: "Current Location",
+            address: `${lat.toFixed(
+              6
+            )}, ${lon.toFixed(6)}`,
+            lat,
+            lon,
+          });
+        } finally {
+          setLoadingLocation(false);
+        }
+      },
+
+      (error) => {
+        console.error(
+          "GPS error:",
+          error
+        );
+
+        setLoadingLocation(false);
+
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setLocationError(
+              "Location permission denied. Please allow location access."
+            );
+            break;
+
+          case error.POSITION_UNAVAILABLE:
+            setLocationError(
+              "Your location could not be found."
+            );
+            break;
+
+          case error.TIMEOUT:
+            setLocationError(
+              "Location request timed out. Please try again."
+            );
+            break;
+
+          default:
+            setLocationError(
+              "Unable to get your location."
+            );
+        }
+      },
+
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  // ==============================
+  // SEARCH LOCATION
+  // ==============================
+
+  const searchLocation = async (
+    value: string
+  ) => {
+    setSearch(value);
+    setLocationError("");
+
+    if (value.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
+
+    setSearching(true);
+
+    try {
+      const response =
+        await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(
+            value
+          )}`,
+          {
+            headers: {
+              Accept:
+                "application/json",
+            },
+          }
+        );
+
+      const data =
+        await response.json();
+
+      setSuggestions(
+        Array.isArray(data)
+          ? data
+          : []
+      );
+    } catch (error) {
+      console.error(
+        "Location search failed:",
+        error
+      );
+
+      setSuggestions([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // ==============================
+  // SELECT SEARCH RESULT
+  // ==============================
+
+  const selectLocation = (
+    item: any
+  ) => {
+    const address =
+      item.address || {};
+
+    const name =
+      address.suburb ||
+      address.neighbourhood ||
+      address.village ||
+      address.town ||
+      address.city ||
+      item.display_name
+        ?.split(",")[0] ||
+      "Selected Location";
+
+    saveLocation({
+      name,
+      address:
+        item.display_name ||
+        name,
+      lat: Number(item.lat),
+      lon: Number(item.lon),
+    });
+  };
+
+  // ==============================
+  // CLEAR LOCATION
+  // ==============================
+
+  const clearLocation = () => {
+    setLocation(null);
+
+    try {
+      localStorage.removeItem(
+        "nightnow-location"
+      );
+    } catch {}
+
+    setShowLocation(false);
+  };
+
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white text-black shadow-sm">
+    <>
+      {/* ============================== */}
+      {/* NAVBAR */}
+      {/* ============================== */}
 
-      {/* TOP BAR */}
+      <nav className="sticky top-0 z-50 border-b border-zinc-200 bg-white">
 
-      <div className="bg-black px-4 py-2 text-center text-xs font-semibold text-white">
-        ⚡ Night Now — Fast Delivery at Your Doorstep
-      </div>
-
-      {/* MAIN NAVBAR */}
-
-      <div className="mx-auto max-w-7xl px-4">
-
-        <div className="flex h-16 items-center gap-3">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
 
           {/* LOGO */}
 
@@ -44,99 +340,92 @@ export default function Navbar() {
             href="/"
             className="shrink-0"
           >
-            <div className="leading-none">
-
-              <h1 className="text-2xl font-black tracking-tight text-black">
+            <div>
+              <h1 className="text-2xl font-black text-black">
                 Night
-                <span className="text-yellow-500">
+                <span className="text-yellow-400">
                   Now
                 </span>
               </h1>
 
-              <p className="mt-1 text-[10px] font-semibold text-zinc-500">
+              <p className="text-[10px] font-semibold text-zinc-500">
                 FAST DELIVERY
               </p>
-
             </div>
           </Link>
 
+          {/* ============================== */}
           {/* LOCATION */}
+          {/* ============================== */}
 
           <button
             type="button"
-            className="hidden min-w-[170px] rounded-xl px-3 py-2 text-left hover:bg-zinc-100 md:block"
+            onClick={() =>
+              setShowLocation(true)
+            }
+            className="hidden max-w-[230px] items-center px-4 text-left md:flex"
           >
+            <div className="min-w-0">
 
-            <p className="text-[10px] font-semibold uppercase text-zinc-500">
-              Deliver to
-            </p>
+              <p className="text-[9px] font-medium text-zinc-500">
+                DELIVER TO
+              </p>
 
-            <p className="truncate text-sm font-bold">
-              📍 Your Location
-              <span className="ml-1 text-xs">
+              <p className="truncate text-xs font-bold text-black">
+                📍{" "}
+                {location?.name ||
+                  "Your Location"}{" "}
                 ▼
-              </span>
-            </p>
-
-          </button>
-
-          {/* SEARCH */}
-
-          <Link
-            href="/#products"
-            className="flex min-w-0 flex-1"
-          >
-            <div className="flex h-11 w-full items-center gap-3 rounded-xl bg-zinc-100 px-4 text-zinc-500 hover:bg-zinc-200">
-
-              <span className="text-lg">
-                🔍
-              </span>
-
-              <span className="truncate text-sm">
-                Search medicines, groceries & more
-              </span>
+              </p>
 
             </div>
-          </Link>
+          </button>
 
-          {/* DESKTOP ACTIONS */}
+          {/* MOBILE LOCATION */}
 
-          <div className="hidden items-center gap-2 md:flex">
+          <button
+            type="button"
+            onClick={() =>
+              setShowLocation(true)
+            }
+            className="ml-2 flex max-w-[130px] items-center md:hidden"
+          >
+            <span className="truncate text-xs font-bold text-black">
+              📍{" "}
+              {location?.name ||
+                "Location"}
+            </span>
+          </button>
+
+          {/* RIGHT BUTTONS */}
+
+          <div className="flex items-center gap-2">
 
             <Link
               href="/orders"
-              className="rounded-xl px-3 py-2 text-sm font-bold hover:bg-zinc-100"
+              className="hidden rounded-lg bg-zinc-100 px-3 py-2 text-sm font-bold text-black sm:block"
             >
               📦 Orders
             </Link>
 
             <Link
               href="/cart"
-              className="relative flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-bold text-white hover:bg-zinc-800"
+              className="rounded-lg bg-black px-3 py-2 text-sm font-bold text-white"
             >
-
               🛒 Cart
-
-              {cartCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-400 px-1 text-[10px] font-black text-black">
-                  {cartCount}
-                </span>
-              )}
-
             </Link>
 
             {user ? (
               <Link
                 href="/profile"
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-400 text-lg"
-                title="Profile"
+                className="rounded-lg bg-yellow-400 px-3 py-2 text-sm font-bold text-black"
               >
-                👤
+                👤 Profile
               </Link>
             ) : (
               <Link
                 href="/login"
-                className="rounded-xl bg-yellow-400 px-4 py-2.5 text-sm font-black hover:bg-yellow-500"
+                className="rounded-lg bg-yellow-400 px-3 py-2 text-sm font-bold text-black"
               >
                 Login
               </Link>
@@ -144,59 +433,234 @@ export default function Navbar() {
 
           </div>
 
-          {/* MOBILE CART */}
-
-          <Link
-            href="/cart"
-            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-lg text-white md:hidden"
-          >
-            🛒
-
-            {cartCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-400 px-1 text-[10px] font-black text-black">
-                {cartCount}
-              </span>
-            )}
-
-          </Link>
-
         </div>
 
-        {/* MOBILE LOCATION */}
+      </nav>
 
-        <div className="border-t border-zinc-100 py-2 md:hidden">
+      {/* ============================== */}
+      {/* LOCATION POPUP */}
+      {/* ============================== */}
 
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 text-left"
-          >
+      {showLocation && (
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/50 px-4 pt-20 backdrop-blur-sm">
 
-            <span>
-              📍
-            </span>
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
 
-            <div className="min-w-0">
+            {/* HEADER */}
 
-              <p className="text-[9px] font-semibold uppercase text-zinc-500">
-                Deliver to
-              </p>
+            <div className="flex items-center justify-between border-b border-zinc-200 p-4">
 
-              <p className="truncate text-xs font-bold">
-                Your Location
-              </p>
+              <div>
+                <h2 className="text-xl font-black text-black">
+                  Select Location
+                </h2>
+
+                <p className="mt-1 text-xs text-zinc-500">
+                  Where should we deliver?
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowLocation(false)
+                }
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl font-bold text-black"
+              >
+                ×
+              </button>
 
             </div>
 
-            <span className="ml-auto text-xs">
-              ▼
-            </span>
+            <div className="p-4">
 
-          </button>
+              {/* CURRENT LOCATION */}
+
+              <button
+                type="button"
+                onClick={
+                  useCurrentLocation
+                }
+                disabled={
+                  loadingLocation
+                }
+                className="flex w-full items-center gap-3 rounded-xl border border-yellow-300 bg-yellow-50 p-4 text-left hover:bg-yellow-100 disabled:opacity-60"
+              >
+
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-xl">
+                  📍
+                </div>
+
+                <div className="min-w-0 flex-1">
+
+                  <p className="font-black text-black">
+                    {loadingLocation
+                      ? "Getting your location..."
+                      : "Use Current Location"}
+                  </p>
+
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Use your phone/browser GPS
+                  </p>
+
+                </div>
+
+                {!loadingLocation && (
+                  <span className="text-xl">
+                    →
+                  </span>
+                )}
+
+              </button>
+
+              {/* ERROR */}
+
+              {locationError && (
+                <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+                  {locationError}
+                </div>
+              )}
+
+              {/* DIVIDER */}
+
+              <div className="my-5 flex items-center gap-3">
+
+                <div className="h-px flex-1 bg-zinc-200" />
+
+                <span className="text-xs text-zinc-400">
+                  OR
+                </span>
+
+                <div className="h-px flex-1 bg-zinc-200" />
+
+              </div>
+
+              {/* SEARCH */}
+
+              <div className="relative">
+
+                <div className="flex items-center rounded-xl border border-zinc-300 bg-zinc-50 px-3">
+
+                  <span className="text-lg">
+                    🔎
+                  </span>
+
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) =>
+                      searchLocation(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Search area, city, pincode..."
+                    className="w-full bg-transparent p-3 text-sm text-black outline-none"
+                  />
+
+                  {searching && (
+                    <span className="text-xs text-zinc-400">
+                      ...
+                    </span>
+                  )}
+
+                </div>
+
+                {/* SEARCH RESULTS */}
+
+                {suggestions.length >
+                  0 && (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-64 overflow-y-auto rounded-xl border border-zinc-200 bg-white shadow-xl">
+
+                    {suggestions.map(
+                      (
+                        item: any,
+                        index: number
+                      ) => (
+                        <button
+                          type="button"
+                          key={`${item.place_id}-${index}`}
+                          onClick={() =>
+                            selectLocation(
+                              item
+                            )
+                          }
+                          className="flex w-full items-start gap-3 border-b border-zinc-100 p-3 text-left last:border-0 hover:bg-zinc-50"
+                        >
+
+                          <span className="mt-1">
+                            📍
+                          </span>
+
+                          <span className="min-w-0">
+
+                            <span className="block text-sm font-bold text-black">
+                              {item.display_name
+                                ?.split(
+                                  ","
+                                )
+                                .slice(
+                                  0,
+                                  2
+                                )
+                                .join(
+                                  ","
+                                )}
+                            </span>
+
+                            <span className="mt-1 block text-xs text-zinc-500">
+                              {
+                                item.display_name
+                              }
+                            </span>
+
+                          </span>
+
+                        </button>
+                      )
+                    )}
+
+                  </div>
+                )}
+
+              </div>
+
+              {/* SAVED LOCATION */}
+
+              {location && (
+                <div className="mt-5 rounded-xl bg-zinc-50 p-4">
+
+                  <p className="text-xs font-bold uppercase text-zinc-400">
+                    Selected Location
+                  </p>
+
+                  <p className="mt-2 font-black text-black">
+                    📍{" "}
+                    {location.name}
+                  </p>
+
+                  <p className="mt-1 line-clamp-2 text-xs text-zinc-500">
+                    {location.address}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={
+                      clearLocation
+                    }
+                    className="mt-3 text-xs font-bold text-red-500"
+                  >
+                    Remove Location
+                  </button>
+
+                </div>
+              )}
+
+            </div>
+
+          </div>
 
         </div>
-
-      </div>
-
-    </header>
+      )}
+    </>
   );
 }

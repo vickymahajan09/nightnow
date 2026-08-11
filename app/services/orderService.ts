@@ -1,136 +1,272 @@
 import {
-  addDoc,
   collection,
+  addDoc,
+  getDocs,
+  updateDoc,
   deleteDoc,
   doc,
-  getDoc,
-  getDocs,
-  query,
-  updateDoc,
-  where,
 } from "firebase/firestore";
 
 import { db } from "../lib/firebase";
 
-export const addOrder = async (order: any) => {
-  return await addDoc(collection(db, "orders"), {
-    ...order,
-    status: order.status || "Pending",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+// ==========================================
+// CREATE CUSTOMER NOTIFICATION
+// ==========================================
+
+const createOrderNotification = async (
+  order: any,
+  title: string,
+  message: string,
+  status: string
+) => {
+  try {
+    const userId =
+      order?.userId ||
+      order?.customer?.uid ||
+      order?.customer?.userId ||
+      "";
+
+    // If old order has no user ID,
+    // don't break the order process.
+    if (!userId) {
+      console.warn(
+        "No userId found for notification"
+      );
+      return;
+    }
+
+    await addDoc(
+      collection(db, "notifications"),
+      {
+        userId,
+
+        orderId:
+          order?.orderId ||
+          order?.id ||
+          "",
+
+        type: "order",
+
+        title,
+
+        message,
+
+        status,
+
+        read: false,
+
+        createdAt: new Date(),
+      }
+    );
+  } catch (error) {
+    // Notification failure should NOT
+    // cancel the actual order operation.
+    console.error(
+      "Notification creation failed:",
+      error
+    );
+  }
 };
+
+// ==========================================
+// ADD ORDER
+// ==========================================
+
+export const addOrder = async (
+  order: any
+) => {
+  const orderData = {
+    ...order,
+
+    status: "Pending",
+
+    createdAt: new Date(),
+  };
+
+  const orderRef = await addDoc(
+    collection(db, "orders"),
+    orderData
+  );
+
+  // ========================================
+  // CUSTOMER ORDER CONFIRMATION
+  // ========================================
+
+  await createOrderNotification(
+    {
+      ...orderData,
+      id: orderRef.id,
+    },
+
+    "Order Confirmed 🎉",
+
+    `Your order #${orderRef.id.slice(
+      0,
+      8
+    )} has been placed successfully. We will start processing it shortly.`,
+
+    "Pending"
+  );
+
+  return orderRef;
+};
+
+// ==========================================
+// GET ALL ORDERS
+// ==========================================
 
 export const getOrders = async () => {
-  const snapshot = await getDocs(collection(db, "orders"));
-
-  return snapshot.docs
-    .map((item) => ({
-      id: item.id,
-      ...item.data(),
-    }))
-    .sort((a: any, b: any) => {
-      const at = a.createdAt?.toDate
-        ? a.createdAt.toDate().getTime()
-        : 0;
-      const bt = b.createdAt?.toDate
-        ? b.createdAt.toDate().getTime()
-        : 0;
-      return bt - at;
-    });
-};
-
-export const getMyOrders = async (userId: string) => {
-  if (!userId) return [];
-
-  const q = query(
-    collection(db, "orders"),
-    where("userId", "==", userId)
+  const snapshot = await getDocs(
+    collection(db, "orders")
   );
 
-  const snapshot = await getDocs(q);
-
-  return snapshot.docs
-    .map((item) => ({
+  return snapshot.docs.map(
+    (item) => ({
       id: item.id,
       ...item.data(),
-    }))
-    .sort((a: any, b: any) => {
-      const at = a.createdAt?.toDate
-        ? a.createdAt.toDate().getTime()
-        : 0;
-      const bt = b.createdAt?.toDate
-        ? b.createdAt.toDate().getTime()
-        : 0;
-      return bt - at;
-    });
-};
-
-export const getOrderById = async (id: string) => {
-  if (!id) return null;
-
-  const snapshot = await getDoc(
-    doc(db, "orders", id)
+    })
   );
-
-  if (!snapshot.exists()) return null;
-
-  return {
-    id: snapshot.id,
-    ...snapshot.data(),
-  };
 };
+
+// ==========================================
+// UPDATE ORDER STATUS
+// ==========================================
 
 export const updateOrderStatus = async (
   id: string,
   status: string
 ) => {
-  const allowed = [
-    "Pending",
-    "Confirmed",
-    "Processing",
-    "Out for Delivery",
-    "Delivered",
-    "Cancelled",
-  ];
+  // ----------------------------------------
+  // GET EXISTING ORDER
+  // ----------------------------------------
 
-  if (!allowed.includes(status)) {
-    throw new Error("Invalid order status");
+  const orders =
+    await getDocs(
+      collection(db, "orders")
+    );
+
+  const existingDoc =
+    orders.docs.find(
+      (item) =>
+        item.id === id
+    );
+
+  if (!existingDoc) {
+    throw new Error(
+      "Order not found"
+    );
   }
 
-  const order = await getOrderById(id);
+  const existingOrder = {
+    id: existingDoc.id,
+    ...existingDoc.data(),
+  };
 
-  if (!order) {
-    throw new Error("Order not found");
-  }
+  // ----------------------------------------
+  // UPDATE ORDER
+  // ----------------------------------------
 
-  await updateDoc(doc(db, "orders", id), {
-    status,
-    updatedAt: new Date(),
-  });
+  await updateDoc(
+    doc(db, "orders", id),
+    {
+      status,
 
-  const data: any = order;
+      updatedAt:
+        new Date(),
+    }
+  );
 
-  if (data.userId) {
-    await addDoc(collection(db, "notifications"), {
-      title: `Order ${status}`,
-      message: `Your Night Now order #${id.slice(
+  // ========================================
+  // CUSTOMER NOTIFICATIONS
+  // ========================================
+
+  // ADMIN ACCEPTED / PACKED
+  if (
+    status === "Packed" ||
+    status === "Confirmed"
+  ) {
+    await createOrderNotification(
+      existingOrder,
+
+      "Order Packed 📦",
+
+      `Your order #${id.slice(
         0,
         8
-      )} is now ${status}.`,
-      userId: data.userId,
-      orderId: id,
-      read: false,
-      createdAt: new Date(),
-    }).catch((error) => {
-      console.error(
-        "Notification creation failed:",
-        error
-      );
-    });
+      )} has been accepted and packed. It will be dispatched soon.`,
+
+      "Packed"
+    );
+  }
+
+  // OUT FOR DELIVERY
+  else if (
+    status ===
+    "Out for Delivery"
+  ) {
+    await createOrderNotification(
+      existingOrder,
+
+      "Out for Delivery 🚚",
+
+      `Your order #${id.slice(
+        0,
+        8
+      )} is out for delivery. It will reach you soon.`,
+
+      "Out for Delivery"
+    );
+  }
+
+  // DELIVERED
+  else if (
+    status === "Delivered"
+  ) {
+    await createOrderNotification(
+      existingOrder,
+
+      "Order Delivered ✅",
+
+      `Your order #${id.slice(
+        0,
+        8
+      )} has been delivered successfully. Thank you for shopping with Night Now!`,
+
+      "Delivered"
+    );
+  }
+
+  // CANCELLED
+  else if (
+    status === "Cancelled"
+  ) {
+    await createOrderNotification(
+      existingOrder,
+
+      "Order Cancelled ❌",
+
+      `Your order #${id.slice(
+        0,
+        8
+      )} has been cancelled.`,
+
+      "Cancelled"
+    );
   }
 };
 
-export const deleteOrder = async (id: string) => {
-  await deleteDoc(doc(db, "orders", id));
+// ==========================================
+// DELETE ORDER
+// ==========================================
+
+export const deleteOrder = async (
+  id: string
+) => {
+  await deleteDoc(
+    doc(
+      db,
+      "orders",
+      id
+    )
+  );
 };

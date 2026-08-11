@@ -17,11 +17,11 @@ export default function AddProductPage() {
   const [category, setCategory] = useState("");
   const [stock, setStock] = useState("");
   const [description, setDescription] = useState("");
-  const [image, setImage] = useState("");
+
+  // OLD + NEW IMAGE SYSTEM
+  const [images, setImages] = useState<string[]>([]);
 
   const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -29,96 +29,133 @@ export default function AddProductPage() {
   const [editingId, setEditingId] = useState("");
 
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  // ==============================
+  // LOAD DATA
+  // ==============================
 
   useEffect(() => {
     loadCategories();
     loadProducts();
   }, []);
 
-  // ==============================
-  // LOAD PRODUCTS
-  // ==============================
-
   const loadProducts = async () => {
     try {
       const data = await getProducts();
-
-      setProducts(
-        Array.isArray(data) ? data : []
-      );
+      setProducts(data);
     } catch (error) {
       console.error(error);
-      alert("Failed to load products");
     }
   };
-
-  // ==============================
-  // LOAD CATEGORIES
-  // ==============================
 
   const loadCategories = async () => {
     try {
       const data = await getCategories();
-
-      setCategories(
-        Array.isArray(data) ? data : []
-      );
+      setCategories(data);
     } catch (error) {
       console.error(error);
     }
   };
 
   // ==============================
-  // REFRESH
+  // UPLOAD MULTIPLE IMAGES
   // ==============================
 
-  const refreshProducts = async () => {
-    setRefreshing(true);
-
-    try {
-      await Promise.all([
-        loadProducts(),
-        loadCategories(),
-      ]);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // ==============================
-  // IMAGE UPLOAD
-  // ==============================
-
-  const uploadImage = async (
+  const uploadImages = async (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    if (!e.target.files?.[0]) return;
+    const files = Array.from(e.target.files || []);
 
-    const file = e.target.files[0];
+    if (files.length === 0) return;
 
-    const data = new FormData();
+    const remainingSlots = 5 - images.length;
 
-    data.append("file", file);
-    data.append("upload_preset", "nightnow");
+    if (remainingSlots <= 0) {
+      alert("Maximum 5 images allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    const selectedFiles = files.slice(
+      0,
+      remainingSlots
+    );
+
+    if (files.length > remainingSlots) {
+      alert(
+        `Only ${remainingSlots} more image${
+          remainingSlots > 1 ? "s" : ""
+        } can be added. Maximum 5 images allowed.`
+      );
+    }
 
     setUploading(true);
 
     try {
-      const res = await axios.post(
-        "https://api.cloudinary.com/v1_1/td3xwd7p/image/upload",
-        data
+      const uploadedUrls: string[] = [];
+
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+
+        formData.append("file", file);
+
+        formData.append(
+          "upload_preset",
+          "nightnow"
+        );
+
+        const response = await axios.post(
+          "https://api.cloudinary.com/v1_1/td3xwd7p/image/upload",
+          formData
+        );
+
+        if (response.data?.secure_url) {
+          uploadedUrls.push(
+            response.data.secure_url
+          );
+        }
+      }
+
+      setImages((prev) => [
+        ...prev,
+        ...uploadedUrls,
+      ]);
+
+      if (uploadedUrls.length > 0) {
+        alert(
+          `${uploadedUrls.length} image${
+            uploadedUrls.length > 1 ? "s" : ""
+          } uploaded successfully`
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Multiple image upload error:",
+        error
       );
 
-      setImage(res.data.secure_url);
-
-      alert("Image Uploaded Successfully");
-    } catch (error) {
-      console.error(error);
-      alert("Image Upload Failed");
+      alert(
+        "Image upload failed. Please try again."
+      );
     } finally {
       setUploading(false);
+
+      // Allow selecting same file again
+      e.target.value = "";
     }
+  };
+
+  // ==============================
+  // REMOVE IMAGE
+  // ==============================
+
+  const removeImage = (index: number) => {
+    setImages((prev) =>
+      prev.filter(
+        (_, imageIndex) =>
+          imageIndex !== index
+      )
+    );
   };
 
   // ==============================
@@ -131,7 +168,7 @@ export default function AddProductPage() {
     setCategory("");
     setStock("");
     setDescription("");
-    setImage("");
+    setImages([]);
     setEditingId("");
   };
 
@@ -144,36 +181,37 @@ export default function AddProductPage() {
       !name.trim() ||
       !price ||
       !category ||
-      !image
+      images.length === 0
     ) {
-      alert("Please fill all required fields");
+      alert(
+        "Please fill all required fields and upload at least 1 image."
+      );
       return;
     }
 
-    const numericPrice = Number(price);
-    const numericStock = Number(stock || 0);
-
-    if (numericPrice <= 0) {
-      alert("Enter a valid price");
+    if (images.length > 5) {
+      alert("Maximum 5 images allowed.");
       return;
     }
-
-    if (numericStock < 0) {
-      alert("Stock cannot be negative");
-      return;
-    }
-
-    setSaving(true);
 
     try {
       const product = {
         name: name.trim(),
-        price: numericPrice,
+
+        price: Number(price),
+
         category,
-        stock: numericStock,
+
+        stock: Number(stock || 0),
+
         description: description.trim(),
-        image,
-        active: true,
+
+        // NEW IMAGE ARRAY
+        images,
+
+        // MAIN IMAGE
+        // Keeps compatibility with existing product cards
+        image: images[0],
       };
 
       if (editingId) {
@@ -182,21 +220,29 @@ export default function AddProductPage() {
           product
         );
 
-        alert("Product Updated Successfully");
+        alert(
+          "Product Updated Successfully"
+        );
       } else {
         await addProduct(product);
 
-        alert("Product Added Successfully");
+        alert(
+          "Product Added Successfully"
+        );
       }
 
       clearForm();
 
       await loadProducts();
     } catch (error) {
-      console.error(error);
-      alert("Failed to Save Product");
-    } finally {
-      setSaving(false);
+      console.error(
+        "Save product error:",
+        error
+      );
+
+      alert(
+        "Failed to Save Product"
+      );
     }
   };
 
@@ -207,27 +253,28 @@ export default function AddProductPage() {
   const removeProduct = async (
     id: string
   ) => {
-    if (!confirm("Delete this product?")) {
+    if (
+      !confirm(
+        "Delete this product?"
+      )
+    ) {
       return;
     }
 
     try {
       await deleteProduct(id);
 
-      setProducts((old) =>
-        old.filter(
-          (item) => item.id !== id
-        )
+      await loadProducts();
+
+      alert(
+        "Product Deleted Successfully"
       );
-
-      if (editingId === id) {
-        clearForm();
-      }
-
-      alert("Product Deleted");
     } catch (error) {
       console.error(error);
-      alert("Failed to delete product");
+
+      alert(
+        "Failed to delete product"
+      );
     }
   };
 
@@ -235,17 +282,58 @@ export default function AddProductPage() {
   // EDIT PRODUCT
   // ==============================
 
-  const editProduct = (item: any) => {
+  const editProduct = (
+    item: any
+  ) => {
     setEditingId(item.id);
 
     setName(item.name || "");
-    setPrice(String(item.price || ""));
-    setCategory(item.category || "");
-    setStock(String(item.stock || ""));
+
+    setPrice(
+      String(item.price || "")
+    );
+
+    setCategory(
+      item.category || ""
+    );
+
+    setStock(
+      String(item.stock || "")
+    );
+
     setDescription(
       item.description || ""
     );
-    setImage(item.image || "");
+
+    // SUPPORT BOTH:
+    // new products -> images[]
+    // old products -> image
+
+    let existingImages: string[] = [];
+
+    if (
+      Array.isArray(item.images)
+    ) {
+      existingImages =
+        item.images.filter(
+          (url: any) =>
+            typeof url === "string" &&
+            url.trim()
+        );
+    }
+
+    if (
+      existingImages.length === 0 &&
+      item.image
+    ) {
+      existingImages = [
+        item.image,
+      ];
+    }
+
+    setImages(
+      existingImages.slice(0, 5)
+    );
 
     window.scrollTo({
       top: 0,
@@ -254,687 +342,413 @@ export default function AddProductPage() {
   };
 
   // ==============================
-  // TOGGLE ACTIVE / INACTIVE
-  // ==============================
-
-  const toggleProduct = async (
-    item: any
-  ) => {
-    const newActive =
-      item.active === false;
-
-    try {
-      await updateProduct(
-        item.id,
-        {
-          active: newActive,
-        }
-      );
-
-      setProducts((old) =>
-        old.map((product) =>
-          product.id === item.id
-            ? {
-                ...product,
-                active: newActive,
-              }
-            : product
-        )
-      );
-    } catch (error) {
-      console.error(error);
-      alert(
-        "Failed to update product status"
-      );
-    }
-  };
-
-  // ==============================
-  // CATEGORY NAME
-  // ==============================
-
-  const getCategoryName = (
-    categoryId: string
-  ) => {
-    const categoryItem =
-      categories.find(
-        (cat: any) =>
-          cat.id === categoryId
-      );
-
-    if (!categoryItem) {
-      return categoryId || "Uncategorized";
-    }
-
-    return `${categoryItem.icon || ""} ${
-      categoryItem.name || ""
-    }`;
-  };
-
-  // ==============================
-  // STOCK STATUS
-  // ==============================
-
-  const getStockStatus = (
-    stockValue: number
-  ) => {
-    if (stockValue <= 0) {
-      return {
-        text: "Out of Stock",
-        className:
-          "bg-red-500/15 text-red-400",
-      };
-    }
-
-    if (stockValue <= 5) {
-      return {
-        text: "Low Stock",
-        className:
-          "bg-yellow-400/15 text-yellow-400",
-      };
-    }
-
-    return {
-      text: "In Stock",
-      className:
-        "bg-green-500/15 text-green-400",
-    };
-  };
-
-  // ==============================
-  // FILTER PRODUCTS
+  // SEARCH PRODUCTS
   // ==============================
 
   const filteredProducts =
-    products.filter((item: any) => {
-      const searchText =
-        search.trim().toLowerCase();
-
-      const matchesSearch =
-        searchText === "" ||
+    products.filter(
+      (item: any) =>
         item.name
           ?.toLowerCase()
-          .includes(searchText) ||
-        item.description
-          ?.toLowerCase()
-          .includes(searchText);
-
-      const matchesCategory =
-        categoryFilter === "all" ||
-        item.category === categoryFilter;
-
-      return (
-        matchesSearch &&
-        matchesCategory
-      );
-    });
+          .includes(
+            search.toLowerCase()
+          )
+    );
 
   // ==============================
-  // COUNTS
+  // PAGE
   // ==============================
-
-  const totalProducts =
-    products.length;
-
-  const activeProducts =
-    products.filter(
-      (item) => item.active !== false
-    ).length;
-
-  const inactiveProducts =
-    products.filter(
-      (item) => item.active === false
-    ).length;
-
-  const lowStockProducts =
-    products.filter(
-      (item) =>
-        Number(item.stock || 0) > 0 &&
-        Number(item.stock || 0) <= 5
-    ).length;
-
-  const outOfStockProducts =
-    products.filter(
-      (item) =>
-        Number(item.stock || 0) <= 0
-    ).length;
 
   return (
-    <main className="min-h-screen bg-zinc-950 p-4 text-white md:p-8">
+    <main className="min-h-screen bg-zinc-950 p-5 text-white md:p-8">
+
       <div className="mx-auto max-w-7xl">
 
-        {/* ==============================
-            HEADER
-        ============================== */}
+        {/* ============================== */}
+        {/* TITLE */}
+        {/* ============================== */}
 
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <h1 className="text-4xl font-bold text-yellow-400">
+          {editingId
+            ? "Edit Product"
+            : "Add Product"}
+        </h1>
 
-          <div>
-            <p className="text-sm font-semibold text-zinc-500">
-              Night Now Admin
-            </p>
+        <p className="mt-2 text-zinc-500">
+          Add up to 5 images for each product.
+        </p>
 
-            <h1 className="mt-1 text-3xl font-black text-yellow-400 md:text-4xl">
-              {editingId
-                ? "Edit Product"
-                : "Products"}
-            </h1>
+        {/* ============================== */}
+        {/* PRODUCT FORM */}
+        {/* ============================== */}
 
-            <p className="mt-2 text-sm text-zinc-500">
-              Manage your store inventory
-            </p>
-          </div>
+        <div className="mt-8 max-w-xl rounded-2xl bg-zinc-900 p-5">
 
-          <button
-            type="button"
-            onClick={refreshProducts}
-            disabled={refreshing}
-            className="rounded-xl bg-zinc-800 px-5 py-3 font-bold hover:bg-zinc-700 disabled:opacity-50"
+          {/* PRODUCT NAME */}
+
+          <input
+            placeholder="Product Name"
+            value={name}
+            onChange={(e) =>
+              setName(e.target.value)
+            }
+            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
+          />
+
+          {/* PRICE */}
+
+          <input
+            type="number"
+            placeholder="Price"
+            value={price}
+            onChange={(e) =>
+              setPrice(e.target.value)
+            }
+            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
+          />
+
+          {/* CATEGORY */}
+
+          <select
+            value={category}
+            onChange={(e) =>
+              setCategory(e.target.value)
+            }
+            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
           >
-            {refreshing
-              ? "Refreshing..."
-              : "↻ Refresh"}
-          </button>
+            <option value="">
+              Select Category
+            </option>
 
-        </div>
-
-        {/* ==============================
-            STATISTICS
-        ============================== */}
-
-        <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-
-          <div className="rounded-2xl bg-zinc-900 p-4">
-            <p className="text-xs text-zinc-500">
-              Total
-            </p>
-
-            <p className="mt-1 text-2xl font-black">
-              {totalProducts}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-zinc-900 p-4">
-            <p className="text-xs text-zinc-500">
-              Active
-            </p>
-
-            <p className="mt-1 text-2xl font-black text-green-400">
-              {activeProducts}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-zinc-900 p-4">
-            <p className="text-xs text-zinc-500">
-              Inactive
-            </p>
-
-            <p className="mt-1 text-2xl font-black text-zinc-400">
-              {inactiveProducts}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-zinc-900 p-4">
-            <p className="text-xs text-zinc-500">
-              Low Stock
-            </p>
-
-            <p className="mt-1 text-2xl font-black text-yellow-400">
-              {lowStockProducts}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-zinc-900 p-4">
-            <p className="text-xs text-zinc-500">
-              Out of Stock
-            </p>
-
-            <p className="mt-1 text-2xl font-black text-red-400">
-              {outOfStockProducts}
-            </p>
-          </div>
-
-        </div>
-
-        {/* ==============================
-            ADD / EDIT FORM
-        ============================== */}
-
-        <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
-
-          <div className="mb-5 flex items-center justify-between">
-
-            <div>
-              <h2 className="text-xl font-black">
-                {editingId
-                  ? "Edit Product"
-                  : "Add New Product"}
-              </h2>
-
-              <p className="mt-1 text-xs text-zinc-500">
-                Required fields: name, price,
-                category and image
-              </p>
-            </div>
-
-            {editingId && (
-              <button
-                type="button"
-                onClick={clearForm}
-                className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-bold hover:bg-zinc-700"
-              >
-                Cancel
-              </button>
-            )}
-
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-
-            {/* NAME */}
-
-            <div>
-              <label className="mb-2 block text-sm font-bold text-zinc-300">
-                Product Name *
-              </label>
-
-              <input
-                placeholder="e.g. Maggi 70g"
-                value={name}
-                onChange={(e) =>
-                  setName(e.target.value)
-                }
-                className="w-full rounded-xl bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-              />
-            </div>
-
-            {/* PRICE */}
-
-            <div>
-              <label className="mb-2 block text-sm font-bold text-zinc-300">
-                Price *
-              </label>
-
-              <input
-                type="number"
-                min="0"
-                placeholder="Price"
-                value={price}
-                onChange={(e) =>
-                  setPrice(e.target.value)
-                }
-                className="w-full rounded-xl bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-              />
-            </div>
-
-            {/* CATEGORY */}
-
-            <div>
-              <label className="mb-2 block text-sm font-bold text-zinc-300">
-                Category *
-              </label>
-
-              <select
-                value={category}
-                onChange={(e) =>
-                  setCategory(e.target.value)
-                }
-                className="w-full rounded-xl bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-              >
-                <option value="">
-                  Select Category
+            {categories.map(
+              (cat: any) => (
+                <option
+                  key={cat.id}
+                  value={cat.id}
+                >
+                  {cat.icon}{" "}
+                  {cat.name}
                 </option>
+              )
+            )}
+          </select>
 
-                {categories.map(
-                  (cat: any) => (
-                    <option
-                      key={cat.id}
-                      value={cat.id}
-                    >
-                      {cat.icon || ""}{" "}
-                      {cat.name}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
+          {/* STOCK */}
 
-            {/* STOCK */}
-
-            <div>
-              <label className="mb-2 block text-sm font-bold text-zinc-300">
-                Stock
-              </label>
-
-              <input
-                type="number"
-                min="0"
-                placeholder="Stock quantity"
-                value={stock}
-                onChange={(e) =>
-                  setStock(e.target.value)
-                }
-                className="w-full rounded-xl bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-              />
-            </div>
-
-          </div>
+          <input
+            type="number"
+            placeholder="Stock"
+            value={stock}
+            onChange={(e) =>
+              setStock(e.target.value)
+            }
+            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
+          />
 
           {/* DESCRIPTION */}
 
-          <div className="mt-4">
-            <label className="mb-2 block text-sm font-bold text-zinc-300">
-              Description
-            </label>
+          <textarea
+            placeholder="Description"
+            value={description}
+            onChange={(e) =>
+              setDescription(
+                e.target.value
+              )
+            }
+            rows={4}
+            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
+          />
 
-            <textarea
-              placeholder="Product description"
-              value={description}
-              onChange={(e) =>
-                setDescription(
-                  e.target.value
-                )
-              }
-              rows={4}
-              className="w-full rounded-xl bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-            />
-          </div>
+          {/* ============================== */}
+          {/* MULTIPLE IMAGE UPLOAD */}
+          {/* ============================== */}
 
-          {/* IMAGE */}
+          <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-800/50 p-4">
 
-          <div className="mt-4">
-            <label className="mb-2 block text-sm font-bold text-zinc-300">
-              Product Image *
-            </label>
+            <div className="flex items-center justify-between">
+
+              <div>
+                <p className="font-bold">
+                  Product Images
+                </p>
+
+                <p className="mt-1 text-xs text-zinc-500">
+                  Upload maximum 5 images
+                </p>
+              </div>
+
+              <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-black">
+                {images.length}/5
+              </span>
+
+            </div>
 
             <input
               type="file"
               accept="image/*"
-              onChange={uploadImage}
-              className="w-full rounded-xl bg-zinc-800 p-3 text-sm"
+              multiple
+              disabled={
+                uploading ||
+                images.length >= 5
+              }
+              onChange={uploadImages}
+              className="mt-4 w-full cursor-pointer rounded-lg bg-zinc-800 p-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             />
 
             {uploading && (
-              <p className="mt-3 text-sm font-bold text-yellow-400">
-                ⏳ Uploading Image...
+              <p className="mt-3 font-semibold text-yellow-400">
+                Uploading images...
               </p>
             )}
 
-            {image && (
-              <div className="mt-4 flex items-start gap-4">
+            {/* IMAGE PREVIEW */}
 
-                <img
-                  src={image}
-                  alt="Product Preview"
-                  className="h-32 w-32 rounded-xl object-cover"
-                />
+            {images.length > 0 && (
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setImage("")
-                  }
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold"
-                >
-                  Remove Image
-                </button>
+                {images.map(
+                  (
+                    image,
+                    index
+                  ) => (
+                    <div
+                      key={`${image}-${index}`}
+                      className="relative overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900"
+                    >
+
+                      <img
+                        src={image}
+                        alt={`Product image ${
+                          index + 1
+                        }`}
+                        className="h-32 w-full object-cover"
+                      />
+
+                      {/* MAIN IMAGE LABEL */}
+
+                      {index === 0 && (
+                        <div className="absolute left-2 top-2 rounded-md bg-yellow-400 px-2 py-1 text-[10px] font-black text-black">
+                          MAIN
+                        </div>
+                      )}
+
+                      {/* REMOVE */}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeImage(
+                            index
+                          )
+                        }
+                        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 font-black text-white shadow-lg hover:bg-red-500"
+                      >
+                        ×
+                      </button>
+
+                      <div className="p-2 text-center text-xs text-zinc-400">
+                        Image{" "}
+                        {index + 1}
+                      </div>
+
+                    </div>
+                  )
+                )}
 
               </div>
             )}
+
           </div>
 
+          {/* ============================== */}
           {/* SAVE */}
+          {/* ============================== */}
 
           <button
             type="button"
             onClick={saveProduct}
             disabled={
-              uploading || saving
+              uploading
             }
-            className="mt-5 w-full rounded-xl bg-yellow-400 py-4 font-black text-black hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 w-full rounded-lg bg-yellow-400 py-3 font-bold text-black disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving
-              ? "Saving..."
+            {uploading
+              ? "Uploading..."
               : editingId
               ? "Update Product"
               : "Save Product"}
           </button>
 
-        </div>
+          {/* CANCEL EDIT */}
 
-        {/* ==============================
-            PRODUCT LIST HEADER
-        ============================== */}
-
-        <div className="mt-10">
-
-          <div className="mb-5">
-
-            <h2 className="text-2xl font-black">
-              Product Inventory
-            </h2>
-
-            <p className="mt-1 text-sm text-zinc-500">
-              Showing {filteredProducts.length} of{" "}
-              {products.length} products
-            </p>
-
-          </div>
-
-          {/* FILTERS */}
-
-          <div className="grid gap-3 md:grid-cols-[1fr_220px]">
-
-            <input
-              value={search}
-              onChange={(e) =>
-                setSearch(e.target.value)
+          {editingId && (
+            <button
+              type="button"
+              onClick={
+                clearForm
               }
-              placeholder="🔎 Search product..."
-              className="rounded-xl bg-zinc-900 p-4 outline-none focus:ring-2 focus:ring-yellow-400"
-            />
-
-            <select
-              value={categoryFilter}
-              onChange={(e) =>
-                setCategoryFilter(
-                  e.target.value
-                )
-              }
-              className="rounded-xl bg-zinc-900 p-4 outline-none"
+              className="mt-3 w-full rounded-lg bg-zinc-800 py-3 font-bold hover:bg-zinc-700"
             >
-              <option value="all">
-                All Categories
-              </option>
-
-              {categories.map(
-                (cat: any) => (
-                  <option
-                    key={cat.id}
-                    value={cat.id}
-                  >
-                    {cat.name}
-                  </option>
-                )
-              )}
-            </select>
-
-          </div>
-
-        </div>
-
-        {/* ==============================
-            PRODUCTS
-        ============================== */}
-
-        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5">
-
-          {filteredProducts.map(
-            (item: any) => {
-              const stockValue =
-                Number(item.stock || 0);
-
-              const stockStatus =
-                getStockStatus(
-                  stockValue
-                );
-
-              const isActive =
-                item.active !== false;
-
-              return (
-                <div
-                  key={item.id}
-                  className={`overflow-hidden rounded-2xl border bg-zinc-900 ${
-                    isActive
-                      ? "border-zinc-800"
-                      : "border-zinc-700 opacity-70"
-                  }`}
-                >
-
-                  {/* IMAGE */}
-
-                  <div className="relative">
-
-                    <img
-                      src={
-                        item.image ||
-                        "/no-image.png"
-                      }
-                      alt={item.name}
-                      className="h-40 w-full object-cover"
-                    />
-
-                    <span
-                      className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[10px] font-black ${stockStatus.className}`}
-                    >
-                      {stockStatus.text}
-                    </span>
-
-                  </div>
-
-                  {/* CONTENT */}
-
-                  <div className="p-3">
-
-                    <h3 className="line-clamp-2 min-h-10 text-sm font-black">
-                      {item.name}
-                    </h3>
-
-                    <p className="mt-1 text-xs text-zinc-500">
-                      {getCategoryName(
-                        item.category
-                      )}
-                    </p>
-
-                    <p className="mt-2 text-xl font-black text-yellow-400">
-                      ₹{item.price}
-                    </p>
-
-                    <div className="mt-1 flex items-center justify-between">
-
-                      <p className="text-sm text-zinc-400">
-                        Stock:{" "}
-                        <span className="font-bold text-white">
-                          {stockValue}
-                        </span>
-                      </p>
-
-                      <span
-                        className={`text-xs font-bold ${
-                          isActive
-                            ? "text-green-400"
-                            : "text-zinc-500"
-                        }`}
-                      >
-                        {isActive
-                          ? "● Active"
-                          : "● Inactive"}
-                      </span>
-
-                    </div>
-
-                    {/* ACTIVE TOGGLE */}
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        toggleProduct(
-                          item
-                        )
-                      }
-                      className={`mt-3 w-full rounded-lg py-2 text-xs font-black ${
-                        isActive
-                          ? "bg-green-600 hover:bg-green-500"
-                          : "bg-zinc-700 hover:bg-zinc-600"
-                      }`}
-                    >
-                      {isActive
-                        ? "✓ Active — Disable"
-                        : "○ Inactive — Enable"}
-                    </button>
-
-                    {/* EDIT DELETE */}
-
-                    <div className="mt-2 flex gap-2">
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          editProduct(
-                            item
-                          )
-                        }
-                        className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-bold hover:bg-blue-500"
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          removeProduct(
-                            item.id
-                          )
-                        }
-                        className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-bold hover:bg-red-500"
-                      >
-                        Delete
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </div>
-              );
-            }
+              Cancel Edit
+            </button>
           )}
 
         </div>
 
-        {/* EMPTY */}
+        {/* ============================== */}
+        {/* PRODUCT LIST */}
+        {/* ============================== */}
 
-        {filteredProducts.length === 0 && (
-          <div className="mt-5 rounded-2xl bg-zinc-900 py-16 text-center">
+        <div className="mt-10">
 
-            <div className="text-5xl">
-              🔍
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+
+            <div>
+              <h2 className="text-2xl font-bold">
+                Products
+              </h2>
+
+              <p className="mt-1 text-sm text-zinc-500">
+                {products.length} total products
+              </p>
             </div>
 
-            <p className="mt-4 text-xl font-bold">
-              No Products Found
-            </p>
-
-            <p className="mt-2 text-sm text-zinc-500">
-              Try another product name or
-              category.
-            </p>
+            <input
+              value={search}
+              onChange={(e) =>
+                setSearch(
+                  e.target.value
+                )
+              }
+              placeholder="Search products..."
+              className="rounded-lg bg-zinc-900 p-3 outline-none focus:ring-2 focus:ring-yellow-400 md:w-80"
+            />
 
           </div>
-        )}
+
+          {/* PRODUCT GRID */}
+
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+
+            {filteredProducts.map(
+              (item: any) => {
+
+                const productImages =
+                  Array.isArray(
+                    item.images
+                  ) &&
+                  item.images.length > 0
+                    ? item.images
+                    : item.image
+                    ? [item.image]
+                    : [];
+
+                return (
+                  <div
+                    key={item.id}
+                    className="overflow-hidden rounded-xl bg-zinc-900"
+                  >
+
+                    {/* IMAGE */}
+
+                    <div className="relative">
+
+                      <img
+                        src={
+                          productImages[0] ||
+                          "/no-image.png"
+                        }
+                        alt={item.name}
+                        className="h-40 w-full object-cover"
+                      />
+
+                      {/* IMAGE COUNT */}
+
+                      {productImages.length >
+                        1 && (
+                        <div className="absolute right-2 top-2 rounded-full bg-black/80 px-2 py-1 text-xs font-bold text-white">
+                          📷{" "}
+                          {
+                            productImages.length
+                          }
+                        </div>
+                      )}
+
+                    </div>
+
+                    <div className="p-3">
+
+                      <h3 className="line-clamp-2 min-h-10 font-bold">
+                        {item.name}
+                      </h3>
+
+                      <p className="mt-2 text-lg font-bold text-yellow-400">
+                        ₹{item.price}
+                      </p>
+
+                      <p className="mt-1 text-sm text-zinc-400">
+                        Stock:{" "}
+                        {item.stock ||
+                          0}
+                      </p>
+
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {productImages.length}{" "}
+                        image
+                        {productImages.length !==
+                        1
+                          ? "s"
+                          : ""}
+                      </p>
+
+                      <div className="mt-3 flex gap-2">
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            editProduct(
+                              item
+                            )
+                          }
+                          className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-bold hover:bg-blue-500"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeProduct(
+                              item.id
+                            )
+                          }
+                          className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-bold hover:bg-red-500"
+                        >
+                          Delete
+                        </button>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+                );
+              }
+            )}
+
+          </div>
+
+          {filteredProducts.length ===
+            0 && (
+            <div className="py-10 text-center text-zinc-400">
+              No Products Found
+            </div>
+          )}
+
+        </div>
 
       </div>
+
     </main>
   );
 }
