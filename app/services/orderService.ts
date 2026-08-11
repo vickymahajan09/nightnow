@@ -2,6 +2,7 @@ import {
   collection,
   addDoc,
   getDocs,
+  getDoc,
   updateDoc,
   deleteDoc,
   doc,
@@ -29,9 +30,7 @@ const createOrderNotification = async (
     // If old order has no user ID,
     // don't break the order process.
     if (!userId) {
-      console.warn(
-        "No userId found for notification"
-      );
+      console.warn("No userId found for notification");
       return;
     }
 
@@ -72,14 +71,10 @@ const createOrderNotification = async (
 // ADD ORDER
 // ==========================================
 
-export const addOrder = async (
-  order: any
-) => {
+export const addOrder = async (order: any) => {
   const orderData = {
     ...order,
-
     status: "Pending",
-
     createdAt: new Date(),
   };
 
@@ -120,12 +115,29 @@ export const getOrders = async () => {
     collection(db, "orders")
   );
 
-  return snapshot.docs.map(
-    (item) => ({
-      id: item.id,
-      ...item.data(),
-    })
-  );
+  return snapshot.docs.map((item) => ({
+    id: item.id,
+    ...item.data(),
+  }));
+};
+
+// ==========================================
+// GET ORDER BY ID
+// ==========================================
+
+export const getOrderById = async (id: string) => {
+  const orderRef = doc(db, "orders", id);
+
+  const orderSnapshot = await getDoc(orderRef);
+
+  if (!orderSnapshot.exists()) {
+    return null;
+  }
+
+  return {
+    id: orderSnapshot.id,
+    ...orderSnapshot.data(),
+  };
 };
 
 // ==========================================
@@ -140,21 +152,16 @@ export const updateOrderStatus = async (
   // GET EXISTING ORDER
   // ----------------------------------------
 
-  const orders =
-    await getDocs(
-      collection(db, "orders")
-    );
+  const orders = await getDocs(
+    collection(db, "orders")
+  );
 
-  const existingDoc =
-    orders.docs.find(
-      (item) =>
-        item.id === id
-    );
+  const existingDoc = orders.docs.find(
+    (item) => item.id === id
+  );
 
   if (!existingDoc) {
-    throw new Error(
-      "Order not found"
-    );
+    throw new Error("Order not found");
   }
 
   const existingOrder = {
@@ -170,9 +177,7 @@ export const updateOrderStatus = async (
     doc(db, "orders", id),
     {
       status,
-
-      updatedAt:
-        new Date(),
+      updatedAt: new Date(),
     }
   );
 
@@ -200,10 +205,7 @@ export const updateOrderStatus = async (
   }
 
   // OUT FOR DELIVERY
-  else if (
-    status ===
-    "Out for Delivery"
-  ) {
+  else if (status === "Out for Delivery") {
     await createOrderNotification(
       existingOrder,
 
@@ -219,9 +221,7 @@ export const updateOrderStatus = async (
   }
 
   // DELIVERED
-  else if (
-    status === "Delivered"
-  ) {
+  else if (status === "Delivered") {
     await createOrderNotification(
       existingOrder,
 
@@ -237,9 +237,7 @@ export const updateOrderStatus = async (
   }
 
   // CANCELLED
-  else if (
-    status === "Cancelled"
-  ) {
+  else if (status === "Cancelled") {
     await createOrderNotification(
       existingOrder,
 
@@ -259,14 +257,8 @@ export const updateOrderStatus = async (
 // DELETE ORDER
 // ==========================================
 
-export const deleteOrder = async (
-  id: string
-) => {
+export const deleteOrder = async (id: string) => {
   await deleteDoc(
-    doc(
-      db,
-      "orders",
-      id
-    )
+    doc(db, "orders", id)
   );
 };
