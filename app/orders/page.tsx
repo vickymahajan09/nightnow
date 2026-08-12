@@ -15,46 +15,129 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    let unsubscribeOrders: (() => void) | null = null;
 
-      if (!currentUser) {
-        setOrders([]);
-        setLoading(false);
-        return;
+    const unsubscribeAuth = onAuthStateChanged(
+      auth,
+      (currentUser) => {
+        setUser(currentUser);
+
+        // ----------------------------------------
+        // USER NOT LOGGED IN
+        // ----------------------------------------
+
+        if (!currentUser) {
+          setOrders([]);
+          setLoading(false);
+
+          if (unsubscribeOrders) {
+            unsubscribeOrders();
+            unsubscribeOrders = null;
+          }
+
+          return;
+        }
+
+        // ----------------------------------------
+        // USER LOGGED IN
+        // ----------------------------------------
+
+        setLoading(true);
+
+        // Remove old order listener if any
+        if (unsubscribeOrders) {
+          unsubscribeOrders();
+          unsubscribeOrders = null;
+        }
+
+        // Subscribe to orders in real-time
+        unsubscribeOrders = subscribeToOrders(
+          (data) => {
+            const userEmail =
+              currentUser.email
+                ?.trim()
+                .toLowerCase();
+
+            const userPhone =
+              currentUser.phoneNumber?.replace(
+                /\D/g,
+                ""
+              );
+
+            const myOrders = data
+              .filter((order: any) => {
+                const orderEmail =
+                  order.customer?.email
+                    ?.trim()
+                    .toLowerCase();
+
+                const orderPhone =
+                  String(
+                    order.customer?.phone || ""
+                  ).replace(/\D/g, "");
+
+                return (
+                  order.userId ===
+                    currentUser.uid ||
+                  order.customer?.uid ===
+                    currentUser.uid ||
+                  (userEmail &&
+                    orderEmail ===
+                      userEmail) ||
+                  (userPhone &&
+                    orderPhone &&
+                    orderPhone ===
+                      userPhone)
+                );
+              })
+              .sort(
+                (
+                  a: any,
+                  b: any
+                ) => {
+                  const aTime =
+                    a.createdAt?.toMillis?.() ||
+                    (a.createdAt
+                      ? new Date(
+                          a.createdAt
+                        ).getTime()
+                      : 0);
+
+                  const bTime =
+                    b.createdAt?.toMillis?.() ||
+                    (b.createdAt
+                      ? new Date(
+                          b.createdAt
+                        ).getTime()
+                      : 0);
+
+                  return bTime - aTime;
+                }
+              );
+
+            setOrders(myOrders);
+            setLoading(false);
+          }
+        );
       }
+    );
 
-      setLoading(true);
-      const unsubscribeOrders = subscribeToOrders((data) => {
-        const userEmail = currentUser.email?.trim().toLowerCase();
-        const userPhone = currentUser.phoneNumber?.replace(/\D/g, "");
+    // ----------------------------------------
+    // CLEANUP
+    // ----------------------------------------
 
-        const myOrders = data
-          .filter((order: any) => {
-            const orderEmail = order.customer?.email?.trim().toLowerCase();
-            const orderPhone = String(order.customer?.phone || "").replace(/\D/g, "");
-            return (
-              order.userId === currentUser.uid ||
-              order.customer?.uid === currentUser.uid ||
-              (userEmail && orderEmail === userEmail) ||
-              (userPhone && orderPhone && orderPhone === userPhone)
-            );
-          })
-          .sort((a: any, b: any) => {
-            const aTime = a.createdAt?.toMillis?.() || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-            const bTime = b.createdAt?.toMillis?.() || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-            return bTime - aTime;
-          });
+    return () => {
+      unsubscribeAuth();
 
-        setOrders(myOrders);
-        setLoading(false);
-      });
-
-      return unsubscribeOrders;
-    });
-
-    return () => unsubscribeAuth();
+      if (unsubscribeOrders) {
+        unsubscribeOrders();
+      }
+    };
   }, []);
+
+  // ==========================================
+  // LOADING
+  // ==========================================
 
   if (loading) {
     return (
@@ -66,11 +149,17 @@ export default function OrdersPage() {
     );
   }
 
+  // ==========================================
+  // LOGIN REQUIRED
+  // ==========================================
+
   if (!user) {
     return (
       <main className="min-h-screen bg-black px-4 py-20 text-white">
         <div className="mx-auto max-w-md text-center">
-          <div className="text-6xl">🔐</div>
+          <div className="text-6xl">
+            🔐
+          </div>
 
           <h1 className="mt-5 text-3xl font-black">
             Login Required
@@ -89,6 +178,10 @@ export default function OrdersPage() {
       </main>
     );
   }
+
+  // ==========================================
+  // ORDERS PAGE
+  // ==========================================
 
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white">
@@ -139,7 +232,6 @@ export default function OrdersPage() {
             </Link>
           </div>
         ) : (
-
           /* ORDERS */
 
           <div className="mt-8 space-y-5">
@@ -188,7 +280,6 @@ export default function OrdersPage() {
                         {order.status ||
                           "Pending"}
                       </span>
-
                     </div>
 
                   </div>
@@ -235,7 +326,8 @@ export default function OrdersPage() {
                             <p className="font-bold">
                               ₹
                               {Number(
-                                item.price || 0
+                                item.price ||
+                                  0
                               ) *
                                 Number(
                                   item.quantity ||
