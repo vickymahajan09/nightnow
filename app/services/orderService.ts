@@ -84,6 +84,26 @@ export const addOrder = async (order: any) => {
   );
 
   // ========================================
+  // ADMIN NEW ORDER NOTIFICATION
+  // ========================================
+
+  try {
+    await addDoc(collection(db, "notifications"), {
+      audience: "admin",
+      type: "new-order",
+      title: "New Order Received 🔔",
+      message: `New order #${orderRef.id.slice(0, 8)} received from ${orderData?.customer?.name || "Customer"} for ₹${Number(orderData?.total || 0)}.`,
+      orderId: orderRef.id,
+      userId: orderData.userId || "",
+      customer: orderData.customer || {},
+      read: false,
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    console.error("Admin notification creation failed:", error);
+  }
+
+  // ========================================
   // CUSTOMER ORDER CONFIRMATION
   // ========================================
 

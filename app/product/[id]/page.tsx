@@ -19,6 +19,9 @@ export default function ProductPage() {
   const [loading, setLoading] =
     useState(true);
 
+  const [selectedImage, setSelectedImage] =
+    useState("");
+
   useEffect(() => {
     const loadProduct = async () => {
       try {
@@ -28,6 +31,13 @@ export default function ProductPage() {
           await getProductById(id);
 
         setProduct(data);
+
+        const firstImage =
+          Array.isArray(data?.images) && data.images.length > 0
+            ? data.images[0]
+            : data?.image || "";
+
+        setSelectedImage(firstImage);
       } catch (error) {
         console.error(error);
       } finally {
@@ -114,26 +124,36 @@ export default function ProductPage() {
 
           {/* IMAGE */}
 
-          <div className="relative overflow-hidden rounded-2xl bg-zinc-100">
+          <div>
+            <div className="relative overflow-hidden rounded-2xl bg-zinc-100">
 
-            {discount > 0 && (
-              <span className="absolute left-4 top-4 z-10 rounded-lg bg-green-600 px-3 py-2 text-xs font-black text-white">
-                {discount}% OFF
-              </span>
+              {discount > 0 && (
+                <span className="absolute left-4 top-4 z-10 rounded-lg bg-green-600 px-3 py-2 text-xs font-black text-white">
+                  {discount}% OFF
+                </span>
+              )}
+
+              <img
+                src={selectedImage || product.image || "/no-image.png"}
+                alt={product.name || "Product"}
+                className="h-[360px] w-full object-contain p-5 md:h-[480px]"
+              />
+            </div>
+
+            {Array.isArray(product.images) && product.images.length > 1 && (
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                {product.images.slice(0, 5).map((image: string, index: number) => (
+                  <button
+                    type="button"
+                    key={`${image}-${index}`}
+                    onClick={() => setSelectedImage(image)}
+                    className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 bg-white p-1 ${selectedImage === image ? "border-yellow-400" : "border-zinc-200"}`}
+                  >
+                    <img src={image} alt={`${product.name || "Product"} ${index + 1}`} className="h-full w-full object-contain" />
+                  </button>
+                ))}
+              </div>
             )}
-
-            <img
-              src={
-                product.image ||
-                "/no-image.png"
-              }
-              alt={
-                product.name ||
-                "Product"
-              }
-              className="h-[360px] w-full object-contain p-5 md:h-[480px]"
-            />
-
           </div>
 
           {/* DETAILS */}

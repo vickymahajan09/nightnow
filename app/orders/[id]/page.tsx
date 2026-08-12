@@ -1,97 +1,71 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
-import { auth } from "../../lib/firebase";
-import { getOrderById } from "../../services/orderService";
+import { getProductById } from "../../services/productService";
+import { useCart } from "../../context/CartContext";
 
-export default function OrderDetailsPage() {
+export default function ProductPage() {
   const params = useParams();
-  const router = useRouter();
 
-  const id = Array.isArray(params?.id)
-    ? params.id[0]
-    : params?.id;
+  const { addToCart, removeFromCart, cart } =
+    useCart();
 
-  const [user, setUser] = useState<any>(null);
-  const [order, setOrder] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [product, setProduct] =
+    useState<any>(null);
 
-  useEffect(() => {
-    return onAuthStateChanged(auth, setUser);
-  }, []);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [activeImage, setActiveImage] =
+    useState(0);
 
   useEffect(() => {
-    if (!id) return;
-
-    const load = async () => {
+    const loadProduct = async () => {
       try {
-        setLoading(true);
-        const data = await getOrderById(String(id));
+        const id = String(params.id);
 
-        if (!data) {
-          setError("Order not found");
-          return;
-        }
+        const data =
+          await getProductById(id);
 
-        setOrder(data);
-      } catch (e) {
-        console.error(e);
-        setError("Unable to load order");
+        setProduct(data);
+      } catch (error) {
+        console.error(error);
       } finally {
         setLoading(false);
       }
     };
 
-    load();
-  }, [id]);
-
-  useEffect(() => {
-    if (!loading && order && user) {
-      const isAdmin =
-        user.email?.toLowerCase() ===
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase();
-
-      if (!isAdmin && order.userId !== user.uid) {
-        router.replace("/orders");
-      }
+    if (params.id) {
+      loadProduct();
     }
-  }, [loading, order, user, router]);
-
-  const dateText = (value: any) => {
-    if (!value) return "";
-    const d = value?.toDate
-      ? value.toDate()
-      : new Date(value);
-
-    return Number.isNaN(d.getTime())
-      ? ""
-      : d.toLocaleString("en-IN");
-  };
+  }, [params.id]);
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-black p-10 text-center text-yellow-400">
-        Loading Order...
+      <main className="min-h-screen bg-zinc-50 px-4 py-10">
+        <div className="mx-auto max-w-6xl">
+          <div className="h-96 animate-pulse rounded-3xl bg-zinc-200" />
+        </div>
       </main>
     );
   }
 
-  if (error || !order) {
+  if (!product) {
     return (
-      <main className="min-h-screen bg-black p-6 text-white">
-        <div className="mx-auto mt-16 max-w-md rounded-2xl bg-zinc-900 p-8 text-center">
-          <div className="text-6xl">📦</div>
+      <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
+        <div className="text-center">
+          <div className="text-6xl">🔍</div>
+
           <h1 className="mt-5 text-2xl font-black">
-            {error || "Order not found"}
+            Product Not Found
           </h1>
-          <Link href="/orders">
-            <button className="mt-7 rounded-xl bg-yellow-400 px-6 py-3 font-bold text-black">
-              Back to Orders
+
+          <Link href="/">
+            <button className="mt-6 rounded-xl bg-yellow-400 px-6 py-3 font-black">
+              Back to Store
             </button>
           </Link>
         </div>
@@ -99,120 +73,263 @@ export default function OrderDetailsPage() {
     );
   }
 
+  const stock = Number(
+    product.stock || 0
+  );
+
+  const cartItem = cart.find(
+    (item: any) =>
+      item.id === product.id
+  );
+
+  const quantity = Number(
+    cartItem?.quantity || 0
+  );
+
+  const price = Number(
+    product.price || 0
+  );
+
+  const mrp = Number(
+    product.mrp || price
+  );
+
+  const discount =
+    mrp > price
+      ? Math.round(
+          ((mrp - price) / mrp) * 100
+        )
+      : 0;
+
+  const images = Array.from(
+    new Set(
+      [
+        product.image,
+        ...(Array.isArray(product.images)
+          ? product.images
+          : []),
+      ].filter(
+        (image): image is string =>
+          typeof image === "string" &&
+          image.trim().length > 0
+      )
+    )
+  );
+
+  const gallery =
+    images.length > 0
+      ? images
+      : ["/no-image.png"];
+
+  const safeActiveImage = Math.min(
+    activeImage,
+    gallery.length - 1
+  );
+
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white">
-      <div className="mx-auto max-w-3xl">
-        <Link href="/orders">
-          <button className="rounded-lg bg-zinc-800 px-4 py-2 font-bold">
-            ← My Orders
-          </button>
+    <main className="min-h-screen bg-zinc-50 px-4 py-6 pb-28 text-black">
+
+      <div className="mx-auto max-w-6xl">
+
+        <Link
+          href="/"
+          className="text-sm font-bold text-zinc-500"
+        >
+          ← Back to Store
         </Link>
 
-        <div className="mt-6 rounded-2xl bg-zinc-900 p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-black text-yellow-400">
-                Order #{String(order.id).slice(0, 8)}
-              </h1>
-              <p className="mt-2 text-sm text-zinc-500">
-                {dateText(order.createdAt)}
-              </p>
+        <div className="mt-5 grid gap-6 rounded-3xl bg-white p-4 shadow-sm md:grid-cols-2 md:p-7">
+
+          {/* IMAGE */}
+
+          <div className="relative overflow-hidden rounded-2xl bg-zinc-100">
+
+            {discount > 0 && (
+              <span className="absolute left-4 top-4 z-10 rounded-lg bg-green-600 px-3 py-2 text-xs font-black text-white">
+                {discount}% OFF
+              </span>
+            )}
+
+            <div className="flex h-[360px] items-center justify-center md:h-[480px]">
+              <img
+                src={gallery[safeActiveImage]}
+                alt={
+                  product.name ||
+                  "Product"
+                }
+                className="h-full w-full object-contain p-5 transition-all duration-200"
+              />
             </div>
 
-            <span className="rounded-full bg-yellow-400 px-4 py-2 text-sm font-black text-black">
-              {order.status || "Pending"}
-            </span>
+            {gallery.length > 1 && (
+              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 px-3">
+                {gallery.slice(0, 5).map(
+                  (image: string, index: number) => (
+                    <button
+                      type="button"
+                      key={`${image}-${index}`}
+                      onClick={() =>
+                        setActiveImage(index)
+                      }
+                      className={`h-14 w-14 overflow-hidden rounded-lg border-2 bg-white ${
+                        safeActiveImage === index
+                          ? "border-yellow-400"
+                          : "border-transparent"
+                      }`}
+                    >
+                      <img
+                        src={image}
+                        alt={`${product.name || "Product"} ${index + 1}`}
+                        className="h-full w-full object-contain"
+                      />
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+
           </div>
-        </div>
 
-        <div className="mt-5 rounded-2xl bg-zinc-900 p-6">
-          <h2 className="text-xl font-black">Items</h2>
+          {/* DETAILS */}
 
-          <div className="mt-5 space-y-4">
-            {(order.items || []).map(
-              (item: any, index: number) => (
-                <div
-                  key={item.id || index}
-                  className="flex justify-between gap-4 border-b border-zinc-800 pb-4 last:border-0"
+          <div className="flex flex-col justify-center">
+
+            <p className="text-xs font-bold uppercase text-yellow-600">
+              {product.category ||
+                "Daily Essential"}
+            </p>
+
+            <h1 className="mt-2 text-3xl font-black leading-tight md:text-4xl">
+              {product.name}
+            </h1>
+
+            <p className="mt-3 text-sm text-zinc-500">
+              {product.pack ||
+                product.quantityLabel ||
+                "1 pack"}
+            </p>
+
+            <div className="mt-5 flex items-center gap-3">
+
+              <span className="text-3xl font-black">
+                ₹{price}
+              </span>
+
+              {mrp > price && (
+                <span className="text-lg text-zinc-400 line-through">
+                  ₹{mrp}
+                </span>
+              )}
+
+              {discount > 0 && (
+                <span className="rounded-md bg-green-100 px-2 py-1 text-xs font-black text-green-700">
+                  {discount}% OFF
+                </span>
+              )}
+
+            </div>
+
+            {product.description && (
+              <div className="mt-6 rounded-2xl bg-zinc-50 p-4">
+                <h2 className="font-black">
+                  Product Details
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-zinc-600">
+                  {product.description}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-6">
+
+              {stock <= 0 ? (
+                <button
+                  disabled
+                  className="w-full rounded-xl bg-zinc-200 py-4 font-black text-zinc-500"
                 >
-                  <div>
-                    <p className="font-bold">
-                      {item.name || "Product"}
-                    </p>
-                    <p className="mt-1 text-sm text-zinc-500">
-                      Qty: {Number(item.quantity || 1)}
-                    </p>
+                  OUT OF STOCK
+                </button>
+              ) : quantity === 0 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    addToCart({
+                      ...product,
+                      quantity: 1,
+                    })
+                  }
+                  className="w-full rounded-xl bg-yellow-400 py-4 text-lg font-black hover:bg-yellow-300"
+                >
+                  ADD TO CART
+                </button>
+              ) : (
+                <div className="flex h-14 overflow-hidden rounded-xl bg-yellow-400">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      removeFromCart(
+                        product.id
+                      )
+                    }
+                    className="w-16 bg-black text-2xl font-black text-white"
+                  >
+                    −
+                  </button>
+
+                  <div className="flex flex-1 items-center justify-center text-xl font-black">
+                    {quantity}
                   </div>
 
-                  <p className="font-bold">
-                    ₹
-                    {Number(item.price || 0) *
-                      Number(item.quantity || 1)}
-                  </p>
+                  <button
+                    type="button"
+                    disabled={
+                      quantity >= stock
+                    }
+                    onClick={() =>
+                      addToCart({
+                        ...product,
+                        quantity: 1,
+                      })
+                    }
+                    className="w-16 bg-black text-2xl font-black text-white disabled:opacity-40"
+                  >
+                    +
+                  </button>
+
                 </div>
-              )
-            )}
+              )}
+
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+
+              <div className="rounded-xl bg-zinc-50 p-3">
+                ⚡
+                <p className="mt-1 font-bold">
+                  Fast Delivery
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-zinc-50 p-3">
+                🔒
+                <p className="mt-1 font-bold">
+                  Secure Payment
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-zinc-50 p-3">
+                📦
+                <p className="mt-1 font-bold">
+                  Easy Ordering
+                </p>
+              </div>
+
+            </div>
+
           </div>
-        </div>
 
-        <div className="mt-5 rounded-2xl bg-zinc-900 p-6">
-          <h2 className="text-xl font-black">
-            Delivery
-          </h2>
-
-          <div className="mt-4 space-y-2 text-zinc-300">
-            <p>Name: {order.customer?.name || "-"}</p>
-            <p>Phone: {order.customer?.phone || "-"}</p>
-            <p>
-              Address: {order.customer?.address || "-"}
-            </p>
-            <p>City: {order.customer?.city || "-"}</p>
-            <p>
-              Pincode: {order.customer?.pincode || "-"}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-2xl bg-zinc-900 p-6">
-          <h2 className="text-xl font-black">
-            Payment Summary
-          </h2>
-
-          <div className="mt-4 space-y-3">
-            <div className="flex justify-between">
-              <span className="text-zinc-500">
-                Subtotal
-              </span>
-              <span>₹{Number(order.subtotal || 0)}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-zinc-500">
-                Discount
-              </span>
-              <span className="text-green-400">
-                -₹{Number(order.discount || 0)}
-              </span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-zinc-500">
-                Delivery
-              </span>
-              <span>₹{Number(order.delivery || 0)}</span>
-            </div>
-
-            <div className="flex justify-between border-t border-zinc-800 pt-4 text-xl font-black">
-              <span>Total</span>
-              <span className="text-yellow-400">
-                ₹{Number(order.total || 0)}
-              </span>
-            </div>
-
-            <p className="text-sm text-zinc-500">
-              Payment: {order.paymentMethod || "-"}
-            </p>
-          </div>
         </div>
       </div>
     </main>

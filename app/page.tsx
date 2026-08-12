@@ -10,6 +10,7 @@ import Categories from "./components/Categories";
 import CartPopup from "./components/CartPopup";
 import ProductCard from "./components/ProductCard";
 import Footer from "./components/Footer";
+import SmartNeeds from "./components/SmartNeeds";
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] =
@@ -158,6 +159,9 @@ export default function Home() {
           {/* ============================== */}
 
           <OfferBanner />
+
+          {/* SMART NEEDS */}
+          <SmartNeeds />
 
           {/* ============================== */}
           {/* CATEGORIES */}

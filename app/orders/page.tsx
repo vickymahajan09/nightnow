@@ -7,7 +7,7 @@ import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
 
 import { auth } from "../lib/firebase";
-import { getOrders } from "../services/orderService";
+import { subscribeToOrders } from "../services/orderService";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -15,50 +15,45 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (currentUser) => {
-        setUser(currentUser);
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
 
-        if (!currentUser) {
-          setLoading(false);
-          return;
-        }
-
-        try {
-          const data = await getOrders();
-
-          const userEmail =
-            currentUser.email?.trim().toLowerCase();
-
-          const myOrders = data.filter(
-            (order: any) => {
-              const orderEmail =
-                order.customer?.email
-                  ?.trim()
-                  .toLowerCase();
-
-              return (
-                order.userId === currentUser.uid ||
-                (orderEmail &&
-                  orderEmail === userEmail)
-              );
-            }
-          );
-
-          setOrders(myOrders);
-        } catch (error) {
-          console.error(
-            "Failed to load orders:",
-            error
-          );
-        } finally {
-          setLoading(false);
-        }
+      if (!currentUser) {
+        setOrders([]);
+        setLoading(false);
+        return;
       }
-    );
 
-    return () => unsubscribe();
+      setLoading(true);
+      const unsubscribeOrders = subscribeToOrders((data) => {
+        const userEmail = currentUser.email?.trim().toLowerCase();
+        const userPhone = currentUser.phoneNumber?.replace(/\D/g, "");
+
+        const myOrders = data
+          .filter((order: any) => {
+            const orderEmail = order.customer?.email?.trim().toLowerCase();
+            const orderPhone = String(order.customer?.phone || "").replace(/\D/g, "");
+            return (
+              order.userId === currentUser.uid ||
+              order.customer?.uid === currentUser.uid ||
+              (userEmail && orderEmail === userEmail) ||
+              (userPhone && orderPhone && orderPhone === userPhone)
+            );
+          })
+          .sort((a: any, b: any) => {
+            const aTime = a.createdAt?.toMillis?.() || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+            const bTime = b.createdAt?.toMillis?.() || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+            return bTime - aTime;
+          });
+
+        setOrders(myOrders);
+        setLoading(false);
+      });
+
+      return unsubscribeOrders;
+    });
+
+    return () => unsubscribeAuth();
   }, []);
 
   if (loading) {

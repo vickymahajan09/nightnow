@@ -328,9 +328,9 @@ export default function ProductCard({
                             quantity: 1,
                           })
                         }
-                        className="mt-3 w-full rounded-lg border-2 border-yellow-400 bg-yellow-400 py-2 text-sm font-black text-black transition hover:bg-yellow-300"
+                        className="mt-3 ml-auto block min-w-20 rounded-lg border-2 border-yellow-400 bg-yellow-400 px-5 py-2 text-sm font-black text-black transition hover:bg-yellow-300"
                       >
-                        ADD
+                        + ADD
                       </button>
 
                     ) : (
