@@ -7,13 +7,15 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
+  query,
+  orderBy,
 } from "firebase/firestore";
 
 import { db } from "../lib/firebase";
 
-// ==========================================
-// CREATE CUSTOMER NOTIFICATION
-// ==========================================
+// =====================================================
+// CUSTOMER NOTIFICATION
+// =====================================================
 
 const createOrderNotification = async (
   order: any,
@@ -28,36 +30,39 @@ const createOrderNotification = async (
       order?.customer?.userId ||
       "";
 
-    // If old order has no user ID,
-    // don't break the order process.
+    // Old orders may not have userId.
+    // Notification failure should never break order process.
     if (!userId) {
-      console.warn("No userId found for notification");
+      console.warn(
+        "No userId found for customer notification"
+      );
       return;
     }
 
-    await addDoc(collection(db, "notifications"), {
-      userId,
+    await addDoc(
+      collection(db, "notifications"),
+      {
+        userId,
 
-      orderId:
-        order?.orderId ||
-        order?.id ||
-        "",
+        orderId:
+          order?.orderId ||
+          order?.id ||
+          "",
 
-      type: "order",
+        type: "order",
 
-      title,
+        title,
 
-      message,
+        message,
 
-      status,
+        status,
 
-      read: false,
+        read: false,
 
-      createdAt: new Date(),
-    });
+        createdAt: new Date(),
+      }
+    );
   } catch (error) {
-    // Notification failure should NOT
-    // cancel the actual order operation.
     console.error(
       "Notification creation failed:",
       error
@@ -65,51 +70,68 @@ const createOrderNotification = async (
   }
 };
 
-// ==========================================
+// =====================================================
 // ADD ORDER
-// ==========================================
+// =====================================================
 
 export const addOrder = async (order: any) => {
   const orderData = {
     ...order,
+
     status: "Pending",
-    createdAt: new Date(),
+
+    createdAt:
+      order?.createdAt || new Date(),
   };
+
+  // -------------------------------
+  // CREATE ORDER
+  // -------------------------------
 
   const orderRef = await addDoc(
     collection(db, "orders"),
     orderData
   );
 
-  // ========================================
+  // ===================================================
   // ADMIN NEW ORDER NOTIFICATION
-  // ========================================
+  // ===================================================
 
   try {
-    await addDoc(collection(db, "notifications"), {
-      audience: "admin",
+    await addDoc(
+      collection(db, "notifications"),
+      {
+        audience: "admin",
 
-      type: "new-order",
+        type: "new-order",
 
-      title: "New Order Received 🔔",
+        title:
+          "New Order Received 🔔",
 
-      message: `New order #${orderRef.id.slice(
-        0,
-        8
-      )} received from ${
-        orderData?.customer?.name || "Customer"
-      } for ₹${Number(orderData?.total || 0)}.`,
+        message:
+          `New order #${orderRef.id.slice(
+            0,
+            8
+          )} received from ${
+            orderData?.customer?.name ||
+            "Customer"
+          } for ₹${Number(
+            orderData?.total || 0
+          )}.`,
 
-      orderId: orderRef.id,
+        orderId: orderRef.id,
 
-      userId: orderData.userId || "",
+        userId:
+          orderData?.userId || "",
 
-      customer: orderData.customer || {},
+        customer:
+          orderData?.customer || {},
 
-      read: false,
+        read: false,
 
-      createdAt: new Date(),
-    });
+        createdAt: new Date(),
+      }
+    );
   } catch (error) {
     console.error(
       "Admin notification creation failed:",
@@ -117,9 +139,9 @@ export const addOrder = async (order: any) => {
     );
   }
 
-  // ========================================
+  // ===================================================
   // CUSTOMER ORDER CONFIRMATION
-  // ========================================
+  // ===================================================
 
   await createOrderNotification(
     {
@@ -140,9 +162,9 @@ export const addOrder = async (order: any) => {
   return orderRef;
 };
 
-// ==========================================
+// =====================================================
 // GET ALL ORDERS
-// ==========================================
+// =====================================================
 
 export const getOrders = async () => {
   const snapshot = await getDocs(
@@ -155,46 +177,66 @@ export const getOrders = async () => {
   }));
 };
 
-// ==========================================
-// REAL-TIME ORDERS SUBSCRIPTION
-// ==========================================
+// =====================================================
+// REAL-TIME ORDERS
+// IMPORTANT:
+// Orders page uses this function.
+// =====================================================
 
 export const subscribeToOrders = (
   callback: (orders: any[]) => void
 ) => {
-  const ordersRef = collection(db, "orders");
+  const ordersRef =
+    collection(db, "orders");
+
+  const ordersQuery = query(
+    ordersRef,
+    orderBy("createdAt", "desc")
+  );
 
   const unsubscribe = onSnapshot(
-    ordersRef,
+    ordersQuery,
+
     (snapshot) => {
-      const orders = snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }));
+      const orders = snapshot.docs.map(
+        (item) => ({
+          id: item.id,
+          ...item.data(),
+        })
+      );
 
       callback(orders);
     },
+
     (error) => {
       console.error(
-        "Orders subscription failed:",
+        "Orders subscription error:",
         error
       );
+
+      // Don't crash the page.
+      callback([]);
     }
   );
 
   return unsubscribe;
 };
 
-// ==========================================
+// =====================================================
 // GET ORDER BY ID
-// ==========================================
+// =====================================================
 
 export const getOrderById = async (
   id: string
 ) => {
-  const orderRef = doc(db, "orders", id);
+  const orderRef = doc(
+    db,
+    "orders",
+    id
+  );
 
-  const orderSnapshot = await getDoc(orderRef);
+  const orderSnapshot =
+    await getDoc(orderRef);
 
   if (!orderSnapshot.exists()) {
     return null;
@@ -206,52 +248,59 @@ export const getOrderById = async (
   };
 };
 
-// ==========================================
+// =====================================================
 // UPDATE ORDER STATUS
-// ==========================================
+// =====================================================
 
 export const updateOrderStatus = async (
   id: string,
   status: string
 ) => {
-  // ----------------------------------------
+  // -----------------------------------------------
   // GET EXISTING ORDER
-  // ----------------------------------------
+  // -----------------------------------------------
 
-  const orders = await getDocs(
-    collection(db, "orders")
+  const orderRef = doc(
+    db,
+    "orders",
+    id
   );
 
-  const existingDoc = orders.docs.find(
-    (item) => item.id === id
-  );
+  const orderSnapshot =
+    await getDoc(orderRef);
 
-  if (!existingDoc) {
-    throw new Error("Order not found");
+  if (!orderSnapshot.exists()) {
+    throw new Error(
+      "Order not found"
+    );
   }
 
   const existingOrder = {
-    id: existingDoc.id,
-    ...existingDoc.data(),
+    id: orderSnapshot.id,
+    ...orderSnapshot.data(),
   };
 
-  // ----------------------------------------
+  // -----------------------------------------------
   // UPDATE ORDER
-  // ----------------------------------------
+  // -----------------------------------------------
 
   await updateDoc(
-    doc(db, "orders", id),
+    orderRef,
     {
       status,
+
       updatedAt: new Date(),
     }
   );
 
-  // ========================================
+  // =================================================
   // CUSTOMER NOTIFICATIONS
-  // ========================================
+  // =================================================
 
-  // ADMIN ACCEPTED / PACKED
+  // -------------------------------
+  // CONFIRMED / PACKED
+  // -------------------------------
+
   if (
     status === "Packed" ||
     status === "Confirmed"
@@ -270,7 +319,10 @@ export const updateOrderStatus = async (
     );
   }
 
+  // -------------------------------
   // OUT FOR DELIVERY
+  // -------------------------------
+
   else if (
     status === "Out for Delivery"
   ) {
@@ -288,8 +340,13 @@ export const updateOrderStatus = async (
     );
   }
 
+  // -------------------------------
   // DELIVERED
-  else if (status === "Delivered") {
+  // -------------------------------
+
+  else if (
+    status === "Delivered"
+  ) {
     await createOrderNotification(
       existingOrder,
 
@@ -304,8 +361,13 @@ export const updateOrderStatus = async (
     );
   }
 
+  // -------------------------------
   // CANCELLED
-  else if (status === "Cancelled") {
+  // -------------------------------
+
+  else if (
+    status === "Cancelled"
+  ) {
     await createOrderNotification(
       existingOrder,
 
@@ -319,11 +381,13 @@ export const updateOrderStatus = async (
       "Cancelled"
     );
   }
+
+  return true;
 };
 
-// ==========================================
+// =====================================================
 // DELETE ORDER
-// ==========================================
+// =====================================================
 
 export const deleteOrder = async (
   id: string
@@ -331,4 +395,6 @@ export const deleteOrder = async (
   await deleteDoc(
     doc(db, "orders", id)
   );
+
+  return true;
 };

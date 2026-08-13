@@ -1,751 +1,1076 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  addProduct,
-  getProducts,
-  deleteProduct,
-  updateProduct,
-} from "../../services/productService";
+  addDoc,
+  collection,
+  getDocs,
+  serverTimestamp,
+} from "firebase/firestore";
 
-import axios from "axios";
-import { useEffect, useState } from "react";
-import { getCategories } from "../../services/categoryService";
+import { db } from "../../lib/firebase";
 
-export default function AddProductPage() {
+type Brand = {
+  id: string;
+  name: string;
+};
+
+type Category = {
+  id: string;
+  name: string;
+  icon?: string;
+};
+
+type Variant = {
+  id: string;
+  name: string;
+  price: string;
+  mrp: string;
+  stock: string;
+};
+
+export default function ProductMasterPage() {
+  const router = useRouter();
+
+  // =====================================================
+  // BASIC
+  // =====================================================
+
   const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
   const [category, setCategory] = useState("");
-  const [stock, setStock] = useState("");
+  const [brand, setBrand] = useState("");
   const [description, setDescription] = useState("");
 
-  // OLD + NEW IMAGE SYSTEM
-  const [images, setImages] = useState<string[]>([]);
+  // =====================================================
+  // PRICE
+  // =====================================================
 
-  const [uploading, setUploading] = useState(false);
+  const [price, setPrice] = useState("");
+  const [mrp, setMrp] = useState("");
+  const [stock, setStock] = useState("");
 
-  const [categories, setCategories] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  // =====================================================
+  // IMAGES
+  // =====================================================
 
-  const [editingId, setEditingId] = useState("");
+  const [images, setImages] = useState([
+    "",
+    "",
+    "",
+    "",
+    "",
+  ]);
 
-  const [search, setSearch] = useState("");
+  // =====================================================
+  // STATUS
+  // =====================================================
 
-  // ==============================
-  // LOAD DATA
-  // ==============================
+  const [active, setActive] = useState(true);
+
+  // =====================================================
+  // BRAND / CATEGORY
+  // =====================================================
+
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [categories, setCategories] =
+    useState<Category[]>([]);
+
+  const [brandsLoading, setBrandsLoading] =
+    useState(true);
+
+  const [categoriesLoading, setCategoriesLoading] =
+    useState(true);
+
+  // =====================================================
+  // VARIANTS
+  // =====================================================
+
+  const [variants, setVariants] =
+    useState<Variant[]>([]);
+
+  // =====================================================
+  // SAVE
+  // =====================================================
+
+  const [saving, setSaving] = useState(false);
+
+  // =====================================================
+  // LOAD BRANDS
+  // =====================================================
 
   useEffect(() => {
-    loadCategories();
-    loadProducts();
+    const loadBrands = async () => {
+      try {
+        setBrandsLoading(true);
+
+        const snapshot = await getDocs(
+          collection(db, "brands")
+        );
+
+        const data: Brand[] =
+          snapshot.docs
+            .map((item) => ({
+              id: item.id,
+              name: String(
+                item.data().name || ""
+              ).trim(),
+            }))
+            .filter(
+              (item) =>
+                item.name.length > 0
+            )
+            .sort((a, b) =>
+              a.name.localeCompare(
+                b.name
+              )
+            );
+
+        setBrands(data);
+      } catch (error) {
+        console.error(
+          "Brand loading error:",
+          error
+        );
+      } finally {
+        setBrandsLoading(false);
+      }
+    };
+
+    loadBrands();
   }, []);
 
-  const loadProducts = async () => {
-    try {
-      const data = await getProducts();
-      setProducts(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  // =====================================================
+  // LOAD CATEGORIES
+  // =====================================================
 
-  const loadCategories = async () => {
-    try {
-      const data = await getCategories();
-      setCategories(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        setCategoriesLoading(true);
 
-  // ==============================
-  // UPLOAD MULTIPLE IMAGES
-  // ==============================
-
-  const uploadImages = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = Array.from(e.target.files || []);
-
-    if (files.length === 0) return;
-
-    const remainingSlots = 5 - images.length;
-
-    if (remainingSlots <= 0) {
-      alert("Maximum 5 images allowed.");
-      e.target.value = "";
-      return;
-    }
-
-    const selectedFiles = files.slice(
-      0,
-      remainingSlots
-    );
-
-    if (files.length > remainingSlots) {
-      alert(
-        `Only ${remainingSlots} more image${
-          remainingSlots > 1 ? "s" : ""
-        } can be added. Maximum 5 images allowed.`
-      );
-    }
-
-    setUploading(true);
-
-    try {
-      const uploadedUrls: string[] = [];
-
-      for (const file of selectedFiles) {
-        const formData = new FormData();
-
-        formData.append("file", file);
-
-        formData.append(
-          "upload_preset",
-          "nightnow"
+        const snapshot = await getDocs(
+          collection(db, "categories")
         );
 
-        const response = await axios.post(
-          "https://api.cloudinary.com/v1_1/td3xwd7p/image/upload",
-          formData
-        );
+        const data: Category[] =
+          snapshot.docs
+            .map((item) => ({
+              id: item.id,
+              name: String(
+                item.data().name || ""
+              ).trim(),
+              icon: String(
+                item.data().icon || ""
+              ),
+            }))
+            .filter(
+              (item) =>
+                item.name.length > 0
+            )
+            .sort((a, b) =>
+              a.name.localeCompare(
+                b.name
+              )
+            );
 
-        if (response.data?.secure_url) {
-          uploadedUrls.push(
-            response.data.secure_url
-          );
-        }
+        setCategories(data);
+      } catch (error) {
+        console.error(
+          "Category loading error:",
+          error
+        );
+      } finally {
+        setCategoriesLoading(false);
       }
+    };
 
-      setImages((prev) => [
-        ...prev,
-        ...uploadedUrls,
-      ]);
+    loadCategories();
+  }, []);
 
-      if (uploadedUrls.length > 0) {
-        alert(
-          `${uploadedUrls.length} image${
-            uploadedUrls.length > 1 ? "s" : ""
-          } uploaded successfully`
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Multiple image upload error:",
-        error
-      );
+  // =====================================================
+  // DISCOUNT
+  // =====================================================
 
-      alert(
-        "Image upload failed. Please try again."
-      );
-    } finally {
-      setUploading(false);
+  const discount = useMemo(() => {
+    const sellingPrice =
+      Number(price) || 0;
 
-      // Allow selecting same file again
-      e.target.value = "";
-    }
-  };
+    const originalMrp =
+      Number(mrp) || 0;
 
-  // ==============================
-  // REMOVE IMAGE
-  // ==============================
-
-  const removeImage = (index: number) => {
-    setImages((prev) =>
-      prev.filter(
-        (_, imageIndex) =>
-          imageIndex !== index
-      )
-    );
-  };
-
-  // ==============================
-  // CLEAR FORM
-  // ==============================
-
-  const clearForm = () => {
-    setName("");
-    setPrice("");
-    setCategory("");
-    setStock("");
-    setDescription("");
-    setImages([]);
-    setEditingId("");
-  };
-
-  // ==============================
-  // SAVE PRODUCT
-  // ==============================
-
-  const saveProduct = async () => {
     if (
-      !name.trim() ||
-      !price ||
-      !category ||
-      images.length === 0
+      originalMrp <= 0 ||
+      sellingPrice <= 0 ||
+      sellingPrice >= originalMrp
     ) {
-      alert(
-        "Please fill all required fields and upload at least 1 image."
-      );
-      return;
+      return 0;
     }
 
-    if (images.length > 5) {
-      alert("Maximum 5 images allowed.");
-      return;
-    }
+    return Math.round(
+      ((originalMrp - sellingPrice) /
+        originalMrp) *
+        100
+    );
+  }, [price, mrp]);
 
-    try {
-      const product = {
-        name: name.trim(),
+  // =====================================================
+  // IMAGE UPDATE
+  // =====================================================
 
-        price: Number(price),
-
-        category,
-
-        stock: Number(stock || 0),
-
-        description: description.trim(),
-
-        // NEW IMAGE ARRAY
-        images,
-
-        // MAIN IMAGE
-        // Keeps compatibility with existing product cards
-        image: images[0],
-      };
-
-      if (editingId) {
-        await updateProduct(
-          editingId,
-          product
-        );
-
-        alert(
-          "Product Updated Successfully"
-        );
-      } else {
-        await addProduct(product);
-
-        alert(
-          "Product Added Successfully"
-        );
-      }
-
-      clearForm();
-
-      await loadProducts();
-    } catch (error) {
-      console.error(
-        "Save product error:",
-        error
-      );
-
-      alert(
-        "Failed to Save Product"
-      );
-    }
-  };
-
-  // ==============================
-  // DELETE PRODUCT
-  // ==============================
-
-  const removeProduct = async (
-    id: string
+  const updateImage = (
+    index: number,
+    value: string
   ) => {
-    if (
-      !confirm(
-        "Delete this product?"
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await deleteProduct(id);
-
-      await loadProducts();
-
-      alert(
-        "Product Deleted Successfully"
-      );
-    } catch (error) {
-      console.error(error);
-
-      alert(
-        "Failed to delete product"
-      );
-    }
-  };
-
-  // ==============================
-  // EDIT PRODUCT
-  // ==============================
-
-  const editProduct = (
-    item: any
-  ) => {
-    setEditingId(item.id);
-
-    setName(item.name || "");
-
-    setPrice(
-      String(item.price || "")
-    );
-
-    setCategory(
-      item.category || ""
-    );
-
-    setStock(
-      String(item.stock || "")
-    );
-
-    setDescription(
-      item.description || ""
-    );
-
-    // SUPPORT BOTH:
-    // new products -> images[]
-    // old products -> image
-
-    let existingImages: string[] = [];
-
-    if (
-      Array.isArray(item.images)
-    ) {
-      existingImages =
-        item.images.filter(
-          (url: any) =>
-            typeof url === "string" &&
-            url.trim()
-        );
-    }
-
-    if (
-      existingImages.length === 0 &&
-      item.image
-    ) {
-      existingImages = [
-        item.image,
-      ];
-    }
-
-    setImages(
-      existingImages.slice(0, 5)
-    );
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
+    setImages((current) => {
+      const updated = [...current];
+      updated[index] = value;
+      return updated;
     });
   };
 
-  // ==============================
-  // SEARCH PRODUCTS
-  // ==============================
+  // =====================================================
+  // ADD VARIANT
+  // =====================================================
 
-  const filteredProducts =
-    products.filter(
-      (item: any) =>
-        item.name
-          ?.toLowerCase()
-          .includes(
-            search.toLowerCase()
-          )
+  const addVariant = () => {
+    setVariants((current) => [
+      ...current,
+      {
+        id:
+          Date.now().toString() +
+          Math.random()
+            .toString(36)
+            .slice(2),
+
+        name: "",
+        price: "",
+        mrp: "",
+        stock: "",
+      },
+    ]);
+  };
+
+  // =====================================================
+  // UPDATE VARIANT
+  // =====================================================
+
+  const updateVariant = (
+    index: number,
+    field: keyof Variant,
+    value: string
+  ) => {
+    setVariants((current) => {
+      const updated = [...current];
+
+      updated[index] = {
+        ...updated[index],
+        [field]: value,
+      };
+
+      return updated;
+    });
+  };
+
+  // =====================================================
+  // DELETE VARIANT
+  // =====================================================
+
+  const deleteVariant = (
+    index: number
+  ) => {
+    setVariants((current) =>
+      current.filter(
+        (_, i) => i !== index
+      )
     );
+  };
 
-  // ==============================
-  // PAGE
-  // ==============================
+  // =====================================================
+  // RESET
+  // =====================================================
+
+  const resetForm = () => {
+    setName("");
+    setCategory("");
+    setBrand("");
+    setDescription("");
+
+    setPrice("");
+    setMrp("");
+    setStock("");
+
+    setImages([
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
+
+    setActive(true);
+    setVariants([]);
+  };
+
+  // =====================================================
+  // SAVE PRODUCT
+  // =====================================================
+
+  const saveProduct = async () => {
+    const cleanName = name.trim();
+    const cleanCategory =
+      category.trim();
+    const cleanBrand =
+      brand.trim();
+
+    const sellingPrice =
+      Number(price) || 0;
+
+    const originalMrp =
+      Number(mrp) || 0;
+
+    const productStock =
+      Number(stock) || 0;
+
+    // -----------------------------
+    // VALIDATION
+    // -----------------------------
+
+    if (!cleanName) {
+      alert(
+        "Product name required"
+      );
+      return;
+    }
+
+    if (!cleanCategory) {
+      alert(
+        "Please select category"
+      );
+      return;
+    }
+
+    if (!cleanBrand) {
+      alert(
+        "Please select brand"
+      );
+      return;
+    }
+
+    if (sellingPrice <= 0) {
+      alert(
+        "Selling price required"
+      );
+      return;
+    }
+
+    if (originalMrp <= 0) {
+      alert(
+        "MRP required"
+      );
+      return;
+    }
+
+    if (
+      sellingPrice >
+      originalMrp
+    ) {
+      alert(
+        "Selling price MRP se zyada nahi ho sakta"
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const cleanImages =
+        images.filter(
+          (item) =>
+            item.trim().length > 0
+        );
+
+      const cleanVariants =
+        variants
+          .filter(
+            (item) =>
+              item.name.trim().length >
+              0
+          )
+          .map((item) => ({
+            id: item.id,
+            name: item.name.trim(),
+            price:
+              Number(item.price) || 0,
+            mrp:
+              Number(item.mrp) || 0,
+            stock:
+              Number(item.stock) || 0,
+          }));
+
+      await addDoc(
+        collection(
+          db,
+          "products"
+        ),
+        {
+          name: cleanName,
+
+          category:
+            cleanCategory,
+
+          brand:
+            cleanBrand,
+
+          description:
+            description.trim(),
+
+          price:
+            sellingPrice,
+
+          mrp:
+            originalMrp,
+
+          discount,
+
+          stock:
+            productStock,
+
+          image:
+            cleanImages[0] || "",
+
+          images:
+            cleanImages,
+
+          image1:
+            cleanImages[0] || "",
+
+          image2:
+            cleanImages[1] || "",
+
+          image3:
+            cleanImages[2] || "",
+
+          image4:
+            cleanImages[3] || "",
+
+          image5:
+            cleanImages[4] || "",
+
+          variants:
+            cleanVariants,
+
+          active,
+
+          createdAt:
+            serverTimestamp(),
+
+          updatedAt:
+            serverTimestamp(),
+        }
+      );
+
+      alert(
+        "✅ Product successfully added"
+      );
+
+      resetForm();
+
+      router.push(
+        "/admin/product"
+      );
+    } catch (error) {
+      console.error(
+        "Product save error:",
+        error
+      );
+
+      alert(
+        "❌ Product save failed"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // =====================================================
+  // UI
+  // =====================================================
 
   return (
-    <main className="min-h-screen bg-zinc-950 p-5 text-white md:p-8">
+    <main className="min-h-screen bg-slate-100 p-4 text-slate-900 md:p-8">
 
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-6xl">
 
-        {/* ============================== */}
-        {/* TITLE */}
-        {/* ============================== */}
+        {/* HEADER */}
 
-        <h1 className="text-4xl font-bold text-yellow-400">
-          {editingId
-            ? "Edit Product"
-            : "Add Product"}
-        </h1>
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
 
-        <p className="mt-2 text-zinc-500">
-          Add up to 5 images for each product.
-        </p>
+          <p className="text-xs font-black uppercase tracking-widest text-yellow-600">
+            NIGHT NOW ADMIN
+          </p>
 
-        {/* ============================== */}
-        {/* PRODUCT FORM */}
-        {/* ============================== */}
+          <h1 className="mt-1 text-3xl font-black">
+            Product Master
+          </h1>
 
-        <div className="mt-8 max-w-xl rounded-2xl bg-zinc-900 p-5">
+          <p className="mt-2 text-sm text-slate-500">
+            Product add karne ke liye complete details fill karein.
+          </p>
 
-          {/* PRODUCT NAME */}
+        </div>
 
-          <input
-            placeholder="Product Name"
-            value={name}
-            onChange={(e) =>
-              setName(e.target.value)
-            }
-            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-          />
+        {/* =================================================
+            PRODUCT INFORMATION
+        ================================================= */}
 
-          {/* PRICE */}
+        <section className="mt-5 rounded-3xl bg-white p-6 shadow-sm">
 
-          <input
-            type="number"
-            placeholder="Price"
-            value={price}
-            onChange={(e) =>
-              setPrice(e.target.value)
-            }
-            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-          />
+          <h2 className="text-xl font-black">
+            1. Product Information
+          </h2>
 
-          {/* CATEGORY */}
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
 
-          <select
-            value={category}
-            onChange={(e) =>
-              setCategory(e.target.value)
-            }
-            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-          >
-            <option value="">
-              Select Category
-            </option>
+            {/* PRODUCT NAME */}
 
-            {categories.map(
-              (cat: any) => (
-                <option
-                  key={cat.id}
-                  value={cat.id}
-                >
-                  {cat.icon}{" "}
-                  {cat.name}
-                </option>
-              )
-            )}
-          </select>
+            <div className="md:col-span-2">
 
-          {/* STOCK */}
+              <label className="mb-2 block text-sm font-black">
+                Product Name *
+              </label>
 
-          <input
-            type="number"
-            placeholder="Stock"
-            value={stock}
-            onChange={(e) =>
-              setStock(e.target.value)
-            }
-            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-          />
-
-          {/* DESCRIPTION */}
-
-          <textarea
-            placeholder="Description"
-            value={description}
-            onChange={(e) =>
-              setDescription(
-                e.target.value
-              )
-            }
-            rows={4}
-            className="mb-4 w-full rounded-lg bg-zinc-800 p-3 outline-none focus:ring-2 focus:ring-yellow-400"
-          />
-
-          {/* ============================== */}
-          {/* MULTIPLE IMAGE UPLOAD */}
-          {/* ============================== */}
-
-          <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-800/50 p-4">
-
-            <div className="flex items-center justify-between">
-
-              <div>
-                <p className="font-bold">
-                  Product Images
-                </p>
-
-                <p className="mt-1 text-xs text-zinc-500">
-                  Upload maximum 5 images
-                </p>
-              </div>
-
-              <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-black">
-                {images.length}/5
-              </span>
+              <input
+                value={name}
+                onChange={(e) =>
+                  setName(
+                    e.target.value
+                  )
+                }
+                placeholder="Example: Amul Gold Milk"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-yellow-400 focus:bg-white"
+              />
 
             </div>
 
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              disabled={
-                uploading ||
-                images.length >= 5
-              }
-              onChange={uploadImages}
-              className="mt-4 w-full cursor-pointer rounded-lg bg-zinc-800 p-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-            />
+            {/* CATEGORY */}
 
-            {uploading && (
-              <p className="mt-3 font-semibold text-yellow-400">
-                Uploading images...
-              </p>
-            )}
+            <div>
 
-            {/* IMAGE PREVIEW */}
+              <label className="mb-2 block text-sm font-black">
+                Category *
+              </label>
 
-            {images.length > 0 && (
-              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <select
+                value={category}
+                onChange={(e) =>
+                  setCategory(
+                    e.target.value
+                  )
+                }
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-yellow-400 focus:bg-white"
+              >
 
-                {images.map(
-                  (
-                    image,
-                    index
-                  ) => (
-                    <div
-                      key={`${image}-${index}`}
-                      className="relative overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900"
+                <option value="">
+                  {categoriesLoading
+                    ? "Loading categories..."
+                    : "Select Category"}
+                </option>
+
+                {categories.map(
+                  (item) => (
+                    <option
+                      key={item.id}
+                      value={item.name}
                     >
-
-                      <img
-                        src={image}
-                        alt={`Product image ${
-                          index + 1
-                        }`}
-                        className="h-32 w-full object-cover"
-                      />
-
-                      {/* MAIN IMAGE LABEL */}
-
-                      {index === 0 && (
-                        <div className="absolute left-2 top-2 rounded-md bg-yellow-400 px-2 py-1 text-[10px] font-black text-black">
-                          MAIN
-                        </div>
-                      )}
-
-                      {/* REMOVE */}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          removeImage(
-                            index
-                          )
-                        }
-                        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 font-black text-white shadow-lg hover:bg-red-500"
-                      >
-                        ×
-                      </button>
-
-                      <div className="p-2 text-center text-xs text-zinc-400">
-                        Image{" "}
-                        {index + 1}
-                      </div>
-
-                    </div>
+                      {item.icon
+                        ? `${item.icon} `
+                        : ""}
+                      {item.name}
+                    </option>
                   )
                 )}
 
+              </select>
+
+              {!categoriesLoading &&
+                categories.length ===
+                  0 && (
+                  <p className="mt-2 text-xs font-bold text-red-500">
+                    ⚠️ Category Master me category add karein.
+                  </p>
+                )}
+
+            </div>
+
+            {/* BRAND DROPDOWN */}
+
+            <div>
+
+              <label className="mb-2 block text-sm font-black">
+                Brand *
+              </label>
+
+              <select
+                value={brand}
+                onChange={(e) =>
+                  setBrand(
+                    e.target.value
+                  )
+                }
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-yellow-400 focus:bg-white"
+              >
+
+                <option value="">
+                  {brandsLoading
+                    ? "Loading brands..."
+                    : "Select Brand"}
+                </option>
+
+                {brands.map(
+                  (item) => (
+                    <option
+                      key={item.id}
+                      value={item.name}
+                    >
+                      {item.name}
+                    </option>
+                  )
+                )}
+
+              </select>
+
+              {!brandsLoading &&
+                brands.length ===
+                  0 && (
+                  <p className="mt-2 text-xs font-bold text-red-500">
+                    ⚠️ Brand Master me brand add karein.
+                  </p>
+                )}
+
+            </div>
+
+            {/* DESCRIPTION */}
+
+            <div className="md:col-span-2">
+
+              <label className="mb-2 block text-sm font-black">
+                Description
+              </label>
+
+              <textarea
+                value={description}
+                onChange={(e) =>
+                  setDescription(
+                    e.target.value
+                  )
+                }
+                rows={4}
+                placeholder="Product description..."
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none focus:border-yellow-400 focus:bg-white"
+              />
+
+            </div>
+
+          </div>
+
+        </section>
+
+        {/* =================================================
+            PRICE
+        ================================================= */}
+
+        <section className="mt-5 rounded-3xl bg-white p-6 shadow-sm">
+
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+
+            <div>
+
+              <h2 className="text-xl font-black">
+                2. Price & Stock
+              </h2>
+
+              <p className="mt-1 text-xs text-slate-500">
+                MRP aur selling price se discount automatically calculate hoga.
+              </p>
+
+            </div>
+
+            {discount > 0 && (
+              <div className="rounded-2xl bg-green-100 px-5 py-3 text-center">
+
+                <div className="text-2xl font-black text-green-700">
+                  {discount}% OFF
+                </div>
+
+                <div className="text-xs font-bold text-green-600">
+                  Customer Saving
+                </div>
+
               </div>
             )}
 
           </div>
 
-          {/* ============================== */}
-          {/* SAVE */}
-          {/* ============================== */}
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
 
-          <button
-            type="button"
-            onClick={saveProduct}
-            disabled={
-              uploading
-            }
-            className="mt-5 w-full rounded-lg bg-yellow-400 py-3 font-bold text-black disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {uploading
-              ? "Uploading..."
-              : editingId
-              ? "Update Product"
-              : "Save Product"}
-          </button>
-
-          {/* CANCEL EDIT */}
-
-          {editingId && (
-            <button
-              type="button"
-              onClick={
-                clearForm
-              }
-              className="mt-3 w-full rounded-lg bg-zinc-800 py-3 font-bold hover:bg-zinc-700"
-            >
-              Cancel Edit
-            </button>
-          )}
-
-        </div>
-
-        {/* ============================== */}
-        {/* PRODUCT LIST */}
-        {/* ============================== */}
-
-        <div className="mt-10">
-
-          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            {/* MRP */}
 
             <div>
-              <h2 className="text-2xl font-bold">
-                Products
-              </h2>
 
-              <p className="mt-1 text-sm text-zinc-500">
-                {products.length} total products
-              </p>
+              <label className="mb-2 block text-sm font-black">
+                MRP *
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                value={mrp}
+                onChange={(e) =>
+                  setMrp(
+                    e.target.value
+                  )
+                }
+                placeholder="100"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-yellow-400"
+              />
+
             </div>
 
-            <input
-              value={search}
-              onChange={(e) =>
-                setSearch(
-                  e.target.value
-                )
-              }
-              placeholder="Search products..."
-              className="rounded-lg bg-zinc-900 p-3 outline-none focus:ring-2 focus:ring-yellow-400 md:w-80"
-            />
+            {/* SELLING */}
+
+            <div>
+
+              <label className="mb-2 block text-sm font-black">
+                Selling Price *
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                value={price}
+                onChange={(e) =>
+                  setPrice(
+                    e.target.value
+                  )
+                }
+                placeholder="85"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-yellow-400"
+              />
+
+            </div>
+
+            {/* STOCK */}
+
+            <div>
+
+              <label className="mb-2 block text-sm font-black">
+                Stock
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                value={stock}
+                onChange={(e) =>
+                  setStock(
+                    e.target.value
+                  )
+                }
+                placeholder="100"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-yellow-400"
+              />
+
+            </div>
 
           </div>
 
-          {/* PRODUCT GRID */}
+        </section>
 
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {/* =================================================
+            FIVE IMAGES
+        ================================================= */}
 
-            {filteredProducts.map(
-              (item: any) => {
+        <section className="mt-5 rounded-3xl bg-white p-6 shadow-sm">
 
-                const productImages =
-                  Array.isArray(
-                    item.images
-                  ) &&
-                  item.images.length > 0
-                    ? item.images
-                    : item.image
-                    ? [item.image]
-                    : [];
+          <h2 className="text-xl font-black">
+            3. Product Images
+          </h2>
 
-                return (
-                  <div
-                    key={item.id}
-                    className="overflow-hidden rounded-xl bg-zinc-900"
-                  >
+          <p className="mt-1 text-xs text-slate-500">
+            Maximum 5 images. Product detail page par swipe gallery ke liye.
+          </p>
 
-                    {/* IMAGE */}
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
 
-                    <div className="relative">
+            {images.map(
+              (image, index) => (
+                <div key={index}>
 
-                      <img
-                        src={
-                          productImages[0] ||
-                          "/no-image.png"
-                        }
-                        alt={item.name}
-                        className="h-40 w-full object-cover"
-                      />
+                  <label className="mb-2 block text-sm font-black">
+                    Image {index + 1}
+                  </label>
 
-                      {/* IMAGE COUNT */}
+                  <input
+                    type="url"
+                    value={image}
+                    onChange={(e) =>
+                      updateImage(
+                        index,
+                        e.target.value
+                      )
+                    }
+                    placeholder="https://..."
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-yellow-400"
+                  />
 
-                      {productImages.length >
-                        1 && (
-                        <div className="absolute right-2 top-2 rounded-full bg-black/80 px-2 py-1 text-xs font-bold text-white">
-                          📷{" "}
-                          {
-                            productImages.length
-                          }
-                        </div>
-                      )}
-
-                    </div>
-
-                    <div className="p-3">
-
-                      <h3 className="line-clamp-2 min-h-10 font-bold">
-                        {item.name}
-                      </h3>
-
-                      <p className="mt-2 text-lg font-bold text-yellow-400">
-                        ₹{item.price}
-                      </p>
-
-                      <p className="mt-1 text-sm text-zinc-400">
-                        Stock:{" "}
-                        {item.stock ||
-                          0}
-                      </p>
-
-                      <p className="mt-1 text-xs text-zinc-500">
-                        {productImages.length}{" "}
-                        image
-                        {productImages.length !==
-                        1
-                          ? "s"
-                          : ""}
-                      </p>
-
-                      <div className="mt-3 flex gap-2">
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            editProduct(
-                              item
-                            )
-                          }
-                          className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-bold hover:bg-blue-500"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            removeProduct(
-                              item.id
-                            )
-                          }
-                          className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-bold hover:bg-red-500"
-                        >
-                          Delete
-                        </button>
-
-                      </div>
-
-                    </div>
-
-                  </div>
-                );
-              }
+                </div>
+              )
             )}
 
           </div>
 
-          {filteredProducts.length ===
-            0 && (
-            <div className="py-10 text-center text-zinc-400">
-              No Products Found
+        </section>
+
+        {/* =================================================
+            VARIANTS
+        ================================================= */}
+
+        <section className="mt-5 rounded-3xl bg-white p-6 shadow-sm">
+
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+
+            <div>
+
+              <h2 className="text-xl font-black">
+                4. Size / Variants
+              </h2>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Example: 250 ML, 500 ML, 1 KG, Small, Medium, Pack of 2
+              </p>
+
             </div>
+
+            <button
+              type="button"
+              onClick={
+                addVariant
+              }
+              className="rounded-2xl bg-yellow-400 px-5 py-3 font-black text-black"
+            >
+              + Add Variant
+            </button>
+
+          </div>
+
+          {variants.length === 0 ? (
+
+            <div className="mt-5 rounded-2xl border-2 border-dashed border-slate-200 p-7 text-center">
+
+              <div className="text-3xl">
+                📦
+              </div>
+
+              <p className="mt-2 text-sm font-bold text-slate-500">
+                No variants added
+              </p>
+
+            </div>
+
+          ) : (
+
+            <div className="mt-5 space-y-4">
+
+              {variants.map(
+                (
+                  variant,
+                  index
+                ) => (
+
+                  <div
+                    key={
+                      variant.id
+                    }
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                  >
+
+                    <div className="grid gap-3 md:grid-cols-4">
+
+                      <input
+                        value={
+                          variant.name
+                        }
+                        onChange={(e) =>
+                          updateVariant(
+                            index,
+                            "name",
+                            e.target.value
+                          )
+                        }
+                        placeholder="500 ML"
+                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 outline-none focus:border-yellow-400"
+                      />
+
+                      <input
+                        type="number"
+                        min="0"
+                        value={
+                          variant.mrp
+                        }
+                        onChange={(e) =>
+                          updateVariant(
+                            index,
+                            "mrp",
+                            e.target.value
+                          )
+                        }
+                        placeholder="MRP"
+                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 outline-none focus:border-yellow-400"
+                      />
+
+                      <input
+                        type="number"
+                        min="0"
+                        value={
+                          variant.price
+                        }
+                        onChange={(e) =>
+                          updateVariant(
+                            index,
+                            "price",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Selling Price"
+                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 outline-none focus:border-yellow-400"
+                      />
+
+                      <input
+                        type="number"
+                        min="0"
+                        value={
+                          variant.stock
+                        }
+                        onChange={(e) =>
+                          updateVariant(
+                            index,
+                            "stock",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Stock"
+                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 outline-none focus:border-yellow-400"
+                      />
+
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        deleteVariant(
+                          index
+                        )
+                      }
+                      className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-600"
+                    >
+                      🗑️ Remove
+                    </button>
+
+                  </div>
+
+                )
+              )}
+
+            </div>
+
           )}
 
-        </div>
+        </section>
+
+        {/* =================================================
+            STATUS
+        ================================================= */}
+
+        <section className="mt-5 rounded-3xl bg-white p-6 shadow-sm">
+
+          <div className="flex items-center justify-between">
+
+            <div>
+
+              <h2 className="font-black">
+                Product Status
+              </h2>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Active product customer ko show hoga.
+              </p>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setActive(
+                  !active
+                )
+              }
+              className={`relative h-8 w-14 rounded-full ${
+                active
+                  ? "bg-green-500"
+                  : "bg-slate-300"
+              }`}
+            >
+
+              <span
+                className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow ${
+                  active
+                    ? "left-7"
+                    : "left-1"
+                }`}
+              />
+
+            </button>
+
+          </div>
+
+        </section>
+
+        {/* =================================================
+            SAVE BUTTON
+        ================================================= */}
+
+        <section className="mt-5 rounded-3xl bg-white p-6 shadow-sm">
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+
+            <button
+              type="button"
+              onClick={
+                resetForm
+              }
+              disabled={saving}
+              className="rounded-2xl border border-slate-200 px-7 py-4 font-black text-slate-700"
+            >
+              Reset
+            </button>
+
+            <button
+              type="button"
+              onClick={
+                saveProduct
+              }
+              disabled={saving}
+              className="rounded-2xl bg-yellow-400 px-8 py-4 font-black text-black hover:bg-yellow-300 disabled:opacity-50"
+            >
+              {saving
+                ? "Saving..."
+                : "✅ Add Product"}
+            </button>
+
+          </div>
+
+        </section>
 
       </div>
 

@@ -1,308 +1,187 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getCategories } from "../services/categoryService";
-
-interface CategoriesProps {
-  selectedCategory?: string;
-  onSelectCategory?: (category: string) => void;
-}
-
-const fallbackCategories = [
+const categories = [
   {
-    id: "",
+    id: "all",
     name: "All",
-    icon: "🛍️",
+    icon: "✨",
+    bg: "bg-yellow-50",
   },
   {
-    id: "Fruits & Vegetables",
-    name: "Fruits & Vegetables",
-    icon: "🥬",
+    id: "grocery",
+    name: "Grocery",
+    icon: "🛒",
+    bg: "bg-green-50",
   },
   {
-    id: "Dairy, Bread & Eggs",
-    name: "Dairy, Bread & Eggs",
-    icon: "🥛",
-  },
-  {
-    id: "Atta, Rice, Oil & Dals",
-    name: "Atta, Rice, Oil & Dals",
-    icon: "🌾",
-  },
-  {
-    id: "Meat, Fish & Eggs",
-    name: "Meat, Fish & Eggs",
-    icon: "🍗",
-  },
-  {
-    id: "Masala & Dry Fruits",
-    name: "Masala & Dry Fruits",
-    icon: "🌶️",
-  },
-  {
-    id: "Breakfast & Sauces",
-    name: "Breakfast & Sauces",
-    icon: "🥣",
-  },
-  {
-    id: "Packaged Food",
-    name: "Packaged Food",
-    icon: "🍪",
-  },
-  {
-    id: "Cafe",
-    name: "Cafe",
-    icon: "☕",
-  },
-  {
-    id: "Tea, Coffee & More",
-    name: "Tea, Coffee & More",
-    icon: "🍵",
-  },
-  {
-    id: "Ice Creams & More",
-    name: "Ice Creams & More",
-    icon: "🍦",
-  },
-  {
-    id: "Frozen Food",
-    name: "Frozen Food",
-    icon: "🧊",
-  },
-  {
-    id: "Snacks",
+    id: "snacks",
     name: "Snacks",
     icon: "🍿",
+    bg: "bg-orange-50",
   },
   {
-    id: "Beverages",
-    name: "Beverages",
+    id: "beverages",
+    name: "Drinks",
     icon: "🥤",
+    bg: "bg-blue-50",
   },
   {
-    id: "Personal Care",
+    id: "dairy",
+    name: "Dairy",
+    icon: "🥛",
+    bg: "bg-cyan-50",
+  },
+  {
+    id: "baby",
+    name: "Baby Care",
+    icon: "👶",
+    bg: "bg-pink-50",
+  },
+  {
+    id: "personal care",
     name: "Personal Care",
     icon: "🧴",
+    bg: "bg-purple-50",
   },
   {
-    id: "Household",
+    id: "household",
     name: "Household",
-    icon: "🧹",
+    icon: "🏠",
+    bg: "bg-amber-50",
   },
   {
-    id: "Medicines",
-    name: "Medicines",
-    icon: "💊",
+    id: "chocolate",
+    name: "Chocolate",
+    icon: "🍫",
+    bg: "bg-rose-50",
+  },
+  {
+    id: "ice cream",
+    name: "Ice Cream",
+    icon: "🍦",
+    bg: "bg-indigo-50",
+  },
+  {
+    id: "vegetables",
+    name: "Vegetables",
+    icon: "🥦",
+    bg: "bg-emerald-50",
+  },
+  {
+    id: "fruits",
+    name: "Fruits",
+    icon: "🍎",
+    bg: "bg-red-50",
   },
 ];
 
 export default function Categories({
-  selectedCategory = "",
+  selectedCategory,
   onSelectCategory,
-}: CategoriesProps) {
-  const [categories, setCategories] =
-    useState<any[]>(fallbackCategories);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
-  const loadCategories = async () => {
-    try {
-      const data = await getCategories();
-
-      if (
-        Array.isArray(data) &&
-        data.length > 0
-      ) {
-        const firebaseCategories = data.map(
-          (item: any) => ({
-            id: item.id,
-            name:
-              item.name ||
-              "Category",
-            icon:
-              item.icon ||
-              "🛍️",
-          })
-        );
-
-        setCategories([
-          {
-            id: "",
-            name: "All",
-            icon: "🛍️",
-          },
-          ...firebaseCategories,
-        ]);
-      }
-    } catch (error) {
-      console.error(
-        "Category loading failed:",
-        error
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSelect = (
-    categoryId: string
-  ) => {
-    if (!onSelectCategory) return;
-
-    onSelectCategory(categoryId);
-
-    setTimeout(() => {
-      document
-        .getElementById("products")
-        ?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-    }, 50);
-  };
+}: {
+  selectedCategory: string;
+  onSelectCategory: (
+    category: string
+  ) => void;
+}) {
+  const activeCategory =
+    selectedCategory || "all";
 
   return (
-    <section className="bg-white px-4 py-4">
+    <section className="bg-[#f7f8fa] px-4 py-5">
+
       <div className="mx-auto max-w-7xl">
 
         {/* HEADER */}
 
-        <div className="mb-4">
-          <h2 className="text-lg font-black text-black">
-            Shop by Category
-          </h2>
+        <div className="mb-4 flex items-center justify-between">
 
-          <p className="text-xs text-zinc-500">
-            Everything you need, all in one place
-          </p>
+          <div>
+            <h2 className="text-xl font-black text-zinc-900">
+              Shop by Category
+            </h2>
+
+            <p className="mt-1 text-xs text-zinc-500">
+              Apni category choose karein
+            </p>
+          </div>
+
+          {activeCategory !== "all" && (
+            <button
+              type="button"
+              onClick={() =>
+                onSelectCategory("")
+              }
+              className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-zinc-600 shadow-sm"
+            >
+              Clear
+            </button>
+          )}
+
         </div>
 
-        {/* CATEGORY BAR */}
+        {/* CATEGORY SCROLL */}
 
-        <div className="relative">
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
 
-          <div
-            className="
-              flex
-              gap-3
-              overflow-x-auto
-              pb-3
-              [scrollbar-width:none]
-              [&::-webkit-scrollbar]:hidden
-            "
-          >
+          {categories.map(
+            (category) => {
 
-            {loading
-              ? fallbackCategories
-                  .slice(0, 8)
-                  .map((item) => (
-                    <div
-                      key={item.name}
-                      className="h-[105px] w-[82px] shrink-0 animate-pulse rounded-2xl bg-zinc-100"
-                    />
-                  ))
-              : categories.map(
-                  (category: any) => {
-                    const active =
-                      selectedCategory ===
-                      category.id;
+              const isActive =
+                category.id ===
+                activeCategory;
 
-                    return (
-                      <button
-                        key={
-                          category.id ||
-                          category.name
-                        }
-                        type="button"
-                        onClick={() =>
-                          handleSelect(
-                            category.id
-                          )
-                        }
-                        className={`
-                          group
-                          flex
-                          w-[82px]
-                          shrink-0
-                          flex-col
-                          items-center
-                          rounded-2xl
-                          border
-                          px-2
-                          py-2
-                          transition-all
-                          duration-200
-
-                          ${
-                            active
-                              ? "border-yellow-400 bg-yellow-50 shadow-md"
-                              : "border-zinc-200 bg-white hover:border-yellow-300 hover:bg-yellow-50"
-                          }
-                        `}
-                      >
-
-                        {/* ICON */}
-
-                        <div
-                          className={`
-                            flex
-                            h-16
-                            w-16
-                            items-center
-                            justify-center
-                            rounded-xl
-                            text-4xl
-                            transition
-                            group-hover:scale-105
-
-                            ${
-                              active
-                                ? "bg-yellow-100"
-                                : "bg-zinc-50"
-                            }
-                          `}
-                        >
-                          {category.icon ||
-                            "🛍️"}
-                        </div>
-
-                        {/* NAME */}
-
-                        <p
-                          className={`
-                            mt-2
-                            line-clamp-2
-                            min-h-[32px]
-                            text-center
-                            text-[11px]
-                            font-bold
-                            leading-4
-
-                            ${
-                              active
-                                ? "text-black"
-                                : "text-zinc-600"
-                            }
-                          `}
-                        >
-                          {category.name}
-                        </p>
-
-                      </button>
-                    );
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() =>
+                    onSelectCategory(
+                      category.id === "all"
+                        ? ""
+                        : category.id
+                    )
                   }
-                )}
+                  className={`flex min-w-[92px] shrink-0 flex-col items-center rounded-2xl border p-3 transition active:scale-95 ${
+                    isActive
+                      ? "border-yellow-400 bg-yellow-100 shadow-sm"
+                      : `border-zinc-200 ${category.bg} hover:border-yellow-300`
+                  }`}
+                >
 
-          </div>
+                  {/* ICON */}
+
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-full text-2xl ${
+                      isActive
+                        ? "bg-yellow-400"
+                        : "bg-white"
+                    }`}
+                  >
+                    {category.icon}
+                  </div>
+
+                  {/* NAME */}
+
+                  <span
+                    className={`mt-2 text-xs font-black ${
+                      isActive
+                        ? "text-zinc-900"
+                        : "text-zinc-700"
+                    }`}
+                  >
+                    {category.name}
+                  </span>
+
+                </button>
+              );
+            }
+          )}
 
         </div>
 
       </div>
+
     </section>
   );
 }

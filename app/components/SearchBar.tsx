@@ -1,31 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { Search, X } from "lucide-react";
 
-interface SearchBarProps {
-  value: string;
-  onChange: (value: string) => void;
-}
+type SearchBarProps = {
+  value?: string;
+  onChange?: (value: string) => void;
+};
 
 export default function SearchBar({
-  value,
-  onChange,
+  value = "",
+  onChange = () => {},
 }: SearchBarProps) {
-  const [focused, setFocused] = useState(false);
-
   return (
-    <section className="bg-white px-4 pb-4 pt-2 text-black">
+    <div className="border-b border-zinc-100 bg-white px-4 py-3">
       <div className="mx-auto max-w-7xl">
-        <div
-          className={`flex items-center gap-3 rounded-2xl border bg-zinc-100 px-4 transition ${
-            focused
-              ? "border-yellow-400 bg-white shadow-md"
-              : "border-transparent"
-          }`}
-        >
-          <span className="text-xl">
-            🔍
-          </span>
+
+        <div className="relative">
+
+          <Search
+            size={20}
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400"
+          />
 
           <input
             type="text"
@@ -33,52 +28,25 @@ export default function SearchBar({
             onChange={(e) =>
               onChange(e.target.value)
             }
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder="Search for medicines, groceries & more"
-            className="h-12 min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-zinc-500"
+            placeholder="Search products..."
+            className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 pl-12 pr-12 text-sm font-medium text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-yellow-400 focus:bg-white focus:ring-4 focus:ring-yellow-100"
           />
 
-          {value && (
+          {value.length > 0 && (
             <button
               type="button"
-              onClick={() => onChange("")}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-300 text-sm font-bold hover:bg-zinc-400"
+              onClick={() =>
+                onChange("")
+              }
+              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-zinc-200 text-zinc-600 hover:bg-zinc-300"
             >
-              ×
+              <X size={17} />
             </button>
           )}
 
-          <button
-            type="button"
-            className="hidden rounded-xl bg-black px-4 py-2 text-sm font-bold text-white sm:block"
-          >
-            Search
-          </button>
         </div>
 
-        {!value && (
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-1 text-xs">
-            {[
-              "Medicines",
-              "Grocery",
-              "Snacks",
-              "Dairy",
-              "Beverages",
-              "Personal Care",
-            ].map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => onChange(item)}
-                className="shrink-0 rounded-full bg-zinc-100 px-4 py-2 font-semibold text-zinc-600 hover:bg-yellow-100 hover:text-black"
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
-    </section>
+    </div>
   );
 }

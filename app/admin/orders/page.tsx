@@ -8,407 +8,260 @@ import {
   deleteOrder,
 } from "../../services/orderService";
 
+type Order = {
+  id: string;
+  name?: string;
+  phone?: string;
+  address?: string;
+
+  customer?: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    pincode?: string;
+  };
+
+  items?: any[];
+
+  subtotal?: number;
+  delivery?: number;
+  deliveryCharge?: number;
+  total?: number;
+
+  payment?: string;
+  paymentMethod?: string;
+
+  status?: string;
+
+  createdAt?: any;
+};
+
+const STATUSES = [
+  "Pending",
+  "Confirmed",
+  "Preparing",
+  "Out for Delivery",
+  "Delivered",
+  "Cancelled",
+];
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] =
-    useState<any[]>([]);
+    useState<Order[]>([]);
 
   const [loading, setLoading] =
     useState(true);
 
-  const [updatingId, setUpdatingId] =
-    useState("");
+  const loadOrders =
+    async () => {
+      try {
+        setLoading(true);
 
-  // ==========================================
-  // LOAD ORDERS
-  // ==========================================
+        const data =
+          await getOrders();
+
+        const sorted =
+          (data as Order[]).sort(
+            (a, b) =>
+              getTime(
+                b.createdAt
+              ) -
+              getTime(
+                a.createdAt
+              )
+          );
+
+        setOrders(sorted);
+      } catch (error) {
+        console.error(
+          error
+        );
+
+        alert(
+          "Orders loading failed"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     loadOrders();
   }, []);
 
-  const loadOrders = async () => {
-    try {
-      setLoading(true);
+  const changeStatus =
+    async (
+      id: string,
+      status: string
+    ) => {
+      try {
+        await updateOrderStatus(
+          id,
+          status
+        );
 
-      const data =
-        await getOrders();
+        setOrders(
+          (current) =>
+            current.map(
+              (order) =>
+                order.id === id
+                  ? {
+                      ...order,
+                      status,
+                    }
+                  : order
+            )
+        );
+      } catch (error) {
+        console.error(
+          error
+        );
 
-      // Latest orders first
-      data.sort(
-        (a: any, b: any) => {
-          const aTime =
-            a.createdAt?.seconds ||
-            0;
+        alert(
+          "Status update failed"
+        );
+      }
+    };
 
-          const bTime =
-            b.createdAt?.seconds ||
-            0;
+  const removeOrder =
+    async (
+      id: string
+    ) => {
+      if (
+        !confirm(
+          "Delete this order?"
+        )
+      ) {
+        return;
+      }
 
-          return bTime - aTime;
-        }
-      );
+      try {
+        await deleteOrder(
+          id
+        );
 
-      setOrders(data);
-    } catch (error) {
-      console.error(
-        "Orders loading failed:",
-        error
-      );
+        setOrders(
+          (current) =>
+            current.filter(
+              (order) =>
+                order.id !== id
+            )
+        );
+      } catch (error) {
+        console.error(
+          error
+        );
 
-      alert(
-        "Failed to load orders."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        alert(
+          "Order delete failed"
+        );
+      }
+    };
 
-  // ==========================================
-  // CHANGE STATUS
-  // ==========================================
+  return (
+    <main className="min-h-screen bg-slate-100 p-4 text-slate-900 md:p-8">
 
-  const changeStatus = async (
-    id: string,
-    status: string
-  ) => {
-    try {
-      setUpdatingId(id);
+      <div className="mx-auto max-w-7xl">
 
-      await updateOrderStatus(
-        id,
-        status
-      );
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
 
-      setOrders(
-        (old) =>
-          old.map(
-            (order) =>
-              order.id === id
-                ? {
-                    ...order,
-                    status,
-                  }
-                : order
-          )
-      );
+          <p className="text-xs font-black uppercase tracking-widest text-yellow-600">
+            NIGHT NOW ADMIN
+          </p>
 
-      // Customer notification is
-      // automatically created inside
-      // updateOrderStatus()
+          <h1 className="mt-1 text-3xl font-black">
+            Orders
+          </h1>
 
-    } catch (error) {
-      console.error(
-        "Status update failed:",
-        error
-      );
-
-      alert(
-        "Failed to update order."
-      );
-    } finally {
-      setUpdatingId("");
-    }
-  };
-
-  // ==========================================
-  // ACCEPT & PACK
-  // ==========================================
-
-  const acceptOrder = async (
-    order: any
-  ) => {
-    const confirmed =
-      confirm(
-        `Accept Order #${order.id.slice(
-          0,
-          8
-        )} and mark it as Packed?`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    await changeStatus(
-      order.id,
-      "Packed"
-    );
-  };
-
-  // ==========================================
-  // DELETE ORDER
-  // ==========================================
-
-  const removeOrder = async (
-    id: string
-  ) => {
-    if (
-      !confirm(
-        "Delete this order permanently?"
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await deleteOrder(id);
-
-      setOrders(
-        (old) =>
-          old.filter(
-            (order) =>
-              order.id !== id
-          )
-      );
-    } catch (error) {
-      console.error(
-        "Delete failed:",
-        error
-      );
-
-      alert(
-        "Failed to delete order."
-      );
-    }
-  };
-
-  // ==========================================
-  // STATUS STYLE
-  // ==========================================
-
-  const getStatusClass = (
-    status: string
-  ) => {
-    switch (status) {
-      case "Pending":
-        return "bg-yellow-500/20 text-yellow-400";
-
-      case "Confirmed":
-      case "Packed":
-        return "bg-blue-500/20 text-blue-400";
-
-      case "Preparing":
-        return "bg-purple-500/20 text-purple-400";
-
-      case "Out for Delivery":
-        return "bg-orange-500/20 text-orange-400";
-
-      case "Delivered":
-        return "bg-green-500/20 text-green-400";
-
-      case "Cancelled":
-        return "bg-red-500/20 text-red-400";
-
-      default:
-        return "bg-zinc-700 text-zinc-300";
-    }
-  };
-
-  // ==========================================
-  // LOADING
-  // ==========================================
-
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-black text-white">
-
-        <div className="text-center">
-
-          <div className="text-5xl">
-            📦
-          </div>
-
-          <p className="mt-4 font-bold text-yellow-400">
-            Loading Orders...
+          <p className="mt-2 text-sm text-slate-500">
+            Customer, address, items aur order status.
           </p>
 
         </div>
 
-      </main>
-    );
-  }
+        {loading ? (
 
-  // ==========================================
-  // ADMIN ORDERS
-  // ==========================================
-
-  return (
-    <main className="min-h-screen bg-black p-5 text-white md:p-8">
-
-      <div className="mx-auto max-w-7xl">
-
-        {/* HEADER */}
-
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-
-          <div>
-
-            <p className="text-sm text-zinc-500">
-              Night Now Admin
-            </p>
-
-            <h1 className="text-4xl font-black text-yellow-400">
-              Orders
-            </h1>
-
-            <p className="mt-1 text-zinc-400">
-              Total Orders:{" "}
-              {orders.length}
-            </p>
-
+          <div className="py-20 text-center font-bold">
+            Loading orders...
           </div>
 
-          <button
-            onClick={loadOrders}
-            className="rounded-xl bg-zinc-800 px-5 py-3 font-bold hover:bg-zinc-700"
-          >
-            🔄 Refresh
-          </button>
+        ) : orders.length ===
+          0 ? (
 
-        </div>
+          <div className="mt-5 rounded-3xl bg-white p-10 text-center">
+            No orders found.
+          </div>
 
-        {/* ================================= */}
-        {/* ORDERS */}
-        {/* ================================= */}
+        ) : (
 
-        <div className="mt-8 space-y-5">
+          <div className="mt-5 space-y-5">
 
-          {orders.map(
-            (order: any) => {
+            {orders.map(
+              (order) => {
 
-              const status =
-                order.status ||
-                "Pending";
+                const customerName =
+                  order.customer
+                    ?.name ||
+                  order.name ||
+                  "Customer";
 
-              const isUpdating =
-                updatingId ===
-                order.id;
+                const phone =
+                  order.customer
+                    ?.phone ||
+                  order.phone ||
+                  "";
 
-              return (
-                <div
-                  key={order.id}
-                  className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900"
-                >
+                const address =
+                  order.customer
+                    ?.address ||
+                  order.address ||
+                  "";
 
-                  {/* TOP */}
+                const city =
+                  order.customer
+                    ?.city ||
+                  "";
 
-                  <div className="p-5">
+                const pincode =
+                  order.customer
+                    ?.pincode ||
+                  "";
 
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                return (
+                  <div
+                    key={
+                      order.id
+                    }
+                    className="rounded-3xl bg-white p-5 shadow-sm"
+                  >
 
-                      {/* CUSTOMER */}
+                    {/* TOP */}
+
+                    <div className="flex flex-col justify-between gap-4 lg:flex-row">
 
                       <div>
 
-                        <p className="font-black text-yellow-400">
-                          Order #
-                          {order.id.slice(
-                            0,
-                            8
+                        <p className="text-xs font-bold text-slate-400">
+                          ORDER
+                        </p>
+
+                        <h2 className="font-black">
+                          #{order.id}
+                        </h2>
+
+                        <p className="mt-1 text-xs text-slate-400">
+                          {formatDate(
+                            order.createdAt
                           )}
                         </p>
 
-                        <p className="mt-3 text-lg font-bold">
-                          {order.customer?.name ||
-                            order.customerName ||
-                            "Customer"}
-                        </p>
-
-                        {(order.customer?.phone ||
-                          order.customerPhone) && (
-                          <p className="mt-1 text-sm text-zinc-400">
-                            📱{" "}
-                            {order.customer?.phone ||
-                              order.customerPhone}
-                          </p>
-                        )}
-
-                        {order.customer
-                          ?.email && (
-                          <p className="text-sm text-zinc-500">
-                            ✉️{" "}
-                            {
-                              order.customer
-                                .email
-                            }
-                          </p>
-                        )}
-
                       </div>
-
-                      {/* PRICE / STATUS */}
-
-                      <div className="lg:text-right">
-
-                        <p className="text-3xl font-black text-yellow-400">
-                          ₹
-                          {Number(
-                            order.total ||
-                              0
-                          )}
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap gap-2 lg:justify-end">
-
-                          <span
-                            className={`rounded-lg px-3 py-1 text-xs font-black ${getStatusClass(
-                              status
-                            )}`}
-                          >
-                            {status}
-                          </span>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                  {/* ================================= */}
-                  {/* ACCEPT BUTTON */}
-                  {/* ================================= */}
-
-                  {status ===
-                    "Pending" && (
-                    <div className="border-y border-zinc-800 bg-zinc-950 p-4">
-
-                      <button
-                        onClick={() =>
-                          acceptOrder(
-                            order
-                          )
-                        }
-                        disabled={
-                          isUpdating
-                        }
-                        className="w-full rounded-xl bg-green-500 py-3 font-black text-black transition hover:bg-green-400 disabled:opacity-50"
-                      >
-                        {isUpdating
-                          ? "Accepting..."
-                          : "✓ Accept & Pack Order"}
-                      </button>
-
-                    </div>
-                  )}
-
-                  {/* ================================= */}
-                  {/* STATUS CONTROL */}
-                  {/* ================================= */}
-
-                  <div className="border-b border-zinc-800 bg-zinc-950 p-4">
-
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-
-                      <p className="text-sm font-bold text-zinc-400">
-                        Update Order Status
-                      </p>
 
                       <select
-                        value={status}
-                        disabled={
-                          isUpdating
+                        value={
+                          order.status ||
+                          "Pending"
                         }
                         onChange={(e) =>
                           changeStatus(
@@ -416,211 +269,231 @@ export default function AdminOrdersPage() {
                             e.target.value
                           )
                         }
-                        className="rounded-xl bg-zinc-800 px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-yellow-400"
+                        className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-black outline-none"
                       >
 
-                        <option value="Pending">
-                          Pending
-                        </option>
-
-                        <option value="Packed">
-                          Packed
-                        </option>
-
-                        <option value="Out for Delivery">
-                          Out for Delivery
-                        </option>
-
-                        <option value="Delivered">
-                          Delivered
-                        </option>
-
-                        <option value="Cancelled">
-                          Cancelled
-                        </option>
+                        {STATUSES.map(
+                          (
+                            status
+                          ) => (
+                            <option
+                              key={
+                                status
+                              }
+                              value={
+                                status
+                              }
+                            >
+                              {status}
+                            </option>
+                          )
+                        )}
 
                       </select>
 
                     </div>
 
-                  </div>
+                    {/* CUSTOMER */}
 
-                  {/* ================================= */}
-                  {/* ADDRESS */}
-                  {/* ================================= */}
+                    <div className="mt-5 grid gap-4 lg:grid-cols-3">
 
-                  <div className="p-5">
+                      <div className="rounded-2xl bg-slate-50 p-4">
 
-                    <div className="rounded-xl bg-zinc-800 p-4">
+                        <p className="text-xs font-black text-slate-400">
+                          CUSTOMER
+                        </p>
 
-                      <p className="text-xs font-bold uppercase text-zinc-500">
-                        Delivery Address
-                      </p>
+                        <p className="mt-2 font-black">
+                          {customerName}
+                        </p>
 
-                      <p className="mt-2 font-semibold">
-                        {order.customer?.address ||
-                          order.address ||
-                          "Address not available"}
-                      </p>
+                        <a
+                          href={`tel:${phone}`}
+                          className="mt-1 block text-sm font-bold text-blue-600"
+                        >
+                          📞 {phone}
+                        </a>
 
-                      <p className="mt-1 text-sm text-zinc-400">
+                      </div>
 
-                        {order.customer?.city ||
-                          order.city ||
-                          ""}
+                      <div className="rounded-2xl bg-slate-50 p-4 lg:col-span-2">
 
-                        {" "}
+                        <p className="text-xs font-black text-slate-400">
+                          DELIVERY LOCATION
+                        </p>
 
-                        {order.customer?.pincode ||
-                          order.pincode ||
-                          ""}
+                        <p className="mt-2 text-sm font-bold">
+                          📍 {address}
+                        </p>
 
-                      </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {city}{" "}
+                          {pincode}
+                        </p>
+
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                            `${address}, ${city}, ${pincode}`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-block rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black"
+                        >
+                          📍 Open Location
+                        </a>
+
+                      </div>
 
                     </div>
 
-                  </div>
+                    {/* ITEMS */}
 
-                  {/* ================================= */}
-                  {/* ITEMS */}
-                  {/* ================================= */}
+                    <div className="mt-5 rounded-2xl border border-slate-200 p-4">
 
-                  <div className="px-5 pb-5">
+                      <p className="text-xs font-black text-slate-400">
+                        ORDER ITEMS
+                      </p>
 
-                    <h2 className="mb-4 font-black">
-                      Order Items
-                    </h2>
+                      <div className="mt-3 space-y-2">
 
-                    <div className="space-y-3">
+                        {(order.items ||
+                          []).map(
+                          (
+                            item,
+                            index
+                          ) => (
+                            <div
+                              key={`${item.id || index}-${index}`}
+                              className="flex justify-between border-b border-slate-100 py-2 last:border-0"
+                            >
 
-                      {order.items?.map(
-                        (
-                          item: any,
-                          index: number
-                        ) => (
+                              <span className="text-sm font-bold">
+                                {item.name ||
+                                  "Product"}{" "}
+                                ×{" "}
+                                {item.quantity ||
+                                  1}
+                              </span>
 
-                          <div
-                            key={
-                              item.id ||
-                              index
-                            }
-                            className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-950 p-3"
-                          >
-
-                            <div className="flex min-w-0 items-center gap-3">
-
-                              {item.image && (
-                                <img
-                                  src={
-                                    item.image
-                                  }
-                                  alt={
-                                    item.name
-                                  }
-                                  className="h-14 w-14 rounded-lg bg-white object-contain"
-                                />
-                              )}
-
-                              <div className="min-w-0">
-
-                                <p className="truncate font-bold">
-                                  {
-                                    item.name
-                                  }
-                                </p>
-
-                                <p className="mt-1 text-sm text-zinc-400">
-                                  {
-                                    item.quantity
-                                  }{" "}
-                                  × ₹
-                                  {
-                                    item.price
-                                  }
-                                </p>
-
-                              </div>
+                              <span className="font-black">
+                                ₹
+                                {Number(
+                                  item.price ||
+                                    0
+                                ) *
+                                  Number(
+                                    item.quantity ||
+                                      1
+                                  )}
+                              </span>
 
                             </div>
+                          )
+                        )}
 
-                            <p className="shrink-0 font-black">
-                              ₹
-                              {Number(
-                                item.price ||
-                                  0
-                              ) *
-                                Number(
-                                  item.quantity ||
-                                    0
-                                )}
-                            </p>
-
-                          </div>
-
-                        )
-                      )}
+                      </div>
 
                     </div>
 
-                  </div>
+                    {/* TOTAL */}
 
-                  {/* ================================= */}
-                  {/* BOTTOM */}
-                  {/* ================================= */}
+                    <div className="mt-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
 
-                  <div className="flex flex-col gap-3 border-t border-zinc-800 p-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
 
-                    <p className="text-sm text-zinc-400">
-                      Payment:{" "}
-                      <span className="font-bold text-white">
-                        {order.paymentMethod ||
-                          "COD"}
-                      </span>
-                    </p>
+                        <p className="text-xs text-slate-400">
+                          PAYMENT
+                        </p>
+
+                        <p className="font-black">
+                          {order.paymentMethod ||
+                            order.payment ||
+                            "COD"}
+                        </p>
+
+                      </div>
+
+                      <div className="text-left sm:text-right">
+
+                        <p className="text-xs text-slate-400">
+                          TOTAL
+                        </p>
+
+                        <p className="text-2xl font-black text-green-600">
+                          ₹
+                          {order.total ??
+                            order.subtotal ??
+                            0}
+                        </p>
+
+                      </div>
+
+                    </div>
 
                     <button
+                      type="button"
                       onClick={() =>
                         removeOrder(
                           order.id
                         )
                       }
-                      className="rounded-xl bg-red-600 px-5 py-3 font-bold hover:bg-red-500"
+                      className="mt-5 rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-600"
                     >
-                      🗑 Delete Order
+                      🗑️ Delete Order
                     </button>
 
                   </div>
+                );
+              }
+            )}
 
-                </div>
-              );
-            }
-          )}
+          </div>
 
-          {/* NO ORDERS */}
-
-          {orders.length ===
-            0 && (
-            <div className="rounded-2xl bg-zinc-900 p-12 text-center">
-
-              <div className="text-6xl">
-                📦
-              </div>
-
-              <p className="mt-4 text-xl font-black">
-                No Orders Found
-              </p>
-
-              <p className="mt-2 text-sm text-zinc-500">
-                New customer orders will appear here.
-              </p>
-
-            </div>
-          )}
-
-        </div>
+        )}
 
       </div>
 
     </main>
+  );
+}
+
+function getTime(
+  value: any
+) {
+  if (!value) return 0;
+
+  if (
+    typeof value?.toMillis ===
+    "function"
+  ) {
+    return value.toMillis();
+  }
+
+  if (
+    value?.seconds
+  ) {
+    return (
+      value.seconds * 1000
+    );
+  }
+
+  return (
+    new Date(value).getTime() ||
+    0
+  );
+}
+
+function formatDate(
+  value: any
+) {
+  const time =
+    getTime(value);
+
+  if (!time) return "-";
+
+  return new Date(
+    time
+  ).toLocaleString(
+    "en-IN"
   );
 }

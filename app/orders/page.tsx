@@ -1,413 +1,343 @@
-// app/orders/page.tsx
-
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
 
-import { auth } from "../lib/firebase";
-import { subscribeToOrders } from "../services/orderService";
+import {
+  getOrders,
+} from "../services/orderService";
+
+type Order = {
+  id: string;
+  name?: string;
+  phone?: string;
+  customer?: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    pincode?: string;
+  };
+  items?: any[];
+  total?: number;
+  subtotal?: number;
+  delivery?: number;
+  deliveryCharge?: number;
+  payment?: string;
+  paymentMethod?: string;
+  status?: string;
+  createdAt?: any;
+};
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] =
+    useState<Order[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const loadOrders = async () => {
+    try {
+      const data =
+        await getOrders();
+
+      const profile =
+        JSON.parse(
+          localStorage.getItem(
+            "nightnow_customer_profile"
+          ) || "{}"
+        );
+
+      const phone =
+        profile?.phone || "";
+
+      let result =
+        data as Order[];
+
+      if (phone) {
+        result =
+          result.filter(
+            (order) => {
+              const orderPhone =
+                order.customer?.phone ||
+                order.phone ||
+                "";
+
+              return (
+                String(
+                  orderPhone
+                ) === String(phone)
+              );
+            }
+          );
+      }
+
+      result.sort(
+        (a, b) =>
+          getTime(
+            b.createdAt
+          ) -
+          getTime(
+            a.createdAt
+          )
+      );
+
+      setOrders(result);
+    } catch (error) {
+      console.error(
+        "Orders loading failed:",
+        error
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let unsubscribeOrders: (() => void) | null = null;
-
-    const unsubscribeAuth = onAuthStateChanged(
-      auth,
-      (currentUser) => {
-        setUser(currentUser);
-
-        // ----------------------------------------
-        // USER NOT LOGGED IN
-        // ----------------------------------------
-
-        if (!currentUser) {
-          setOrders([]);
-          setLoading(false);
-
-          if (unsubscribeOrders) {
-            unsubscribeOrders();
-            unsubscribeOrders = null;
-          }
-
-          return;
-        }
-
-        // ----------------------------------------
-        // USER LOGGED IN
-        // ----------------------------------------
-
-        setLoading(true);
-
-        // Remove old order listener if any
-        if (unsubscribeOrders) {
-          unsubscribeOrders();
-          unsubscribeOrders = null;
-        }
-
-        // Subscribe to orders in real-time
-        unsubscribeOrders = subscribeToOrders(
-          (data) => {
-            const userEmail =
-              currentUser.email
-                ?.trim()
-                .toLowerCase();
-
-            const userPhone =
-              currentUser.phoneNumber?.replace(
-                /\D/g,
-                ""
-              );
-
-            const myOrders = data
-              .filter((order: any) => {
-                const orderEmail =
-                  order.customer?.email
-                    ?.trim()
-                    .toLowerCase();
-
-                const orderPhone =
-                  String(
-                    order.customer?.phone || ""
-                  ).replace(/\D/g, "");
-
-                return (
-                  order.userId ===
-                    currentUser.uid ||
-                  order.customer?.uid ===
-                    currentUser.uid ||
-                  (userEmail &&
-                    orderEmail ===
-                      userEmail) ||
-                  (userPhone &&
-                    orderPhone &&
-                    orderPhone ===
-                      userPhone)
-                );
-              })
-              .sort(
-                (
-                  a: any,
-                  b: any
-                ) => {
-                  const aTime =
-                    a.createdAt?.toMillis?.() ||
-                    (a.createdAt
-                      ? new Date(
-                          a.createdAt
-                        ).getTime()
-                      : 0);
-
-                  const bTime =
-                    b.createdAt?.toMillis?.() ||
-                    (b.createdAt
-                      ? new Date(
-                          b.createdAt
-                        ).getTime()
-                      : 0);
-
-                  return bTime - aTime;
-                }
-              );
-
-            setOrders(myOrders);
-            setLoading(false);
-          }
-        );
-      }
-    );
-
-    // ----------------------------------------
-    // CLEANUP
-    // ----------------------------------------
-
-    return () => {
-      unsubscribeAuth();
-
-      if (unsubscribeOrders) {
-        unsubscribeOrders();
-      }
-    };
+    loadOrders();
   }, []);
 
-  // ==========================================
-  // LOADING
-  // ==========================================
-
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-black text-white">
-        <p className="text-lg font-bold">
-          Loading Orders...
-        </p>
-      </main>
-    );
-  }
-
-  // ==========================================
-  // LOGIN REQUIRED
-  // ==========================================
-
-  if (!user) {
-    return (
-      <main className="min-h-screen bg-black px-4 py-20 text-white">
-        <div className="mx-auto max-w-md text-center">
-          <div className="text-6xl">
-            🔐
-          </div>
-
-          <h1 className="mt-5 text-3xl font-black">
-            Login Required
-          </h1>
-
-          <p className="mt-2 text-zinc-400">
-            Login to see your orders.
-          </p>
-
-          <Link href="/login">
-            <button className="mt-6 rounded-xl bg-yellow-400 px-8 py-3 font-bold text-black">
-              Login
-            </button>
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  // ==========================================
-  // ORDERS PAGE
-  // ==========================================
-
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white">
+    <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-900">
+
       <div className="mx-auto max-w-5xl">
 
-        {/* HEADER */}
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
 
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-yellow-400">
-              My Orders
-            </h1>
+          <p className="text-xs font-black text-yellow-600">
+            NIGHT NOW
+          </p>
 
-            <p className="mt-1 text-sm text-zinc-400">
-              {user.email ||
-                user.phoneNumber ||
-                "Customer"}
-            </p>
-          </div>
+          <h1 className="mt-1 text-3xl font-black">
+            My Orders
+          </h1>
 
-          <Link href="/">
-            <button className="rounded-lg bg-zinc-800 px-4 py-2">
-              Home
-            </button>
-          </Link>
+          <p className="mt-2 text-sm text-slate-500">
+            Aapke orders ki history.
+          </p>
+
         </div>
 
-        {/* NO ORDERS */}
+        {loading ? (
 
-        {orders.length === 0 ? (
-          <div className="mt-8 rounded-2xl bg-zinc-900 p-10 text-center">
+          <div className="py-20 text-center font-bold">
+            Loading orders...
+          </div>
+
+        ) : orders.length ===
+          0 ? (
+
+          <div className="mt-5 rounded-3xl bg-white p-10 text-center shadow-sm">
+
             <div className="text-6xl">
-              📦
+              🛒
             </div>
 
-            <h2 className="mt-4 text-2xl font-bold">
+            <h2 className="mt-5 text-2xl font-black">
               No Orders Yet
             </h2>
 
-            <p className="mt-2 text-zinc-400">
-              Your orders will appear here.
-            </p>
-
-            <Link href="/">
-              <button className="mt-6 rounded-xl bg-yellow-400 px-6 py-3 font-bold text-black">
-                Start Shopping
-              </button>
+            <Link
+              href="/"
+              className="mt-5 inline-block rounded-xl bg-yellow-400 px-6 py-3 font-black"
+            >
+              Start Shopping
             </Link>
-          </div>
-        ) : (
-          /* ORDERS */
 
-          <div className="mt-8 space-y-5">
+          </div>
+
+        ) : (
+
+          <div className="mt-5 space-y-4">
 
             {orders.map(
-              (order: any) => (
+              (order) => (
                 <div
-                  key={order.id}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
+                  key={
+                    order.id
+                  }
+                  className="rounded-3xl bg-white p-5 shadow-sm"
                 >
 
-                  {/* ORDER HEADER */}
-
-                  <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex flex-col justify-between gap-3 md:flex-row">
 
                     <div>
-                      <p className="font-bold">
-                        Order #
-                        {String(
-                          order.id || ""
-                        ).slice(0, 8)}
+
+                      <p className="text-xs font-bold text-slate-400">
+                        ORDER ID
                       </p>
 
-                      <p className="mt-1 text-sm text-zinc-400">
-                        {order.customer?.name ||
-                          "Customer"}
-                      </p>
-
-                      {order.createdAt && (
-                        <p className="mt-1 text-xs text-zinc-500">
-                          Order placed
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="text-right">
-
-                      <p className="text-xl font-black text-yellow-400">
-                        ₹
-                        {Number(
-                          order.total || 0
+                      <p className="font-black">
+                        #{order.id.slice(
+                          0,
+                          8
                         )}
                       </p>
 
-                      <span className="text-sm font-bold text-green-400">
-                        {order.status ||
-                          "Pending"}
-                      </span>
                     </div>
 
-                  </div>
-
-                  {/* ITEMS */}
-
-                  <div className="mt-5 space-y-3">
-
-                    {Array.isArray(
-                      order.items
-                    ) &&
-                      order.items.map(
-                        (
-                          item: any,
-                          index: number
-                        ) => (
-                          <div
-                            key={
-                              item.id ||
-                              `${order.id}-${index}`
-                            }
-                            className="flex justify-between border-b border-zinc-800 pb-3"
-                          >
-
-                            <div>
-                              <p className="font-semibold">
-                                {item.name ||
-                                  "Product"}
-                              </p>
-
-                              <p className="text-sm text-zinc-400">
-                                {Number(
-                                  item.quantity ||
-                                    1
-                                )}{" "}
-                                × ₹
-                                {Number(
-                                  item.price ||
-                                    0
-                                )}
-                              </p>
-                            </div>
-
-                            <p className="font-bold">
-                              ₹
-                              {Number(
-                                item.price ||
-                                  0
-                              ) *
-                                Number(
-                                  item.quantity ||
-                                    1
-                                )}
-                            </p>
-
-                          </div>
-                        )
-                      )}
+                    <Status
+                      status={
+                        order.status
+                      }
+                    />
 
                   </div>
 
-                  {/* ADDRESS */}
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
 
-                  <div className="mt-5 rounded-xl bg-zinc-800 p-4">
+                    {(order.items ||
+                      []).map(
+                      (
+                        item,
+                        index
+                      ) => (
+                        <div
+                          key={`${item.id || index}-${index}`}
+                          className="flex justify-between border-b border-slate-200 py-2 last:border-0"
+                        >
 
-                    <p className="text-sm text-zinc-400">
-                      Delivery Address
-                    </p>
+                          <span className="text-sm font-bold">
+                            {item.name ||
+                              "Product"}{" "}
+                            ×{" "}
+                            {item.quantity ||
+                              1}
+                          </span>
 
-                    <p className="mt-1">
-                      {order.customer?.address ||
-                        "-"}
-                    </p>
+                          <span className="text-sm font-black">
+                            ₹
+                            {Number(
+                              item.price ||
+                                0
+                            ) *
+                              Number(
+                                item.quantity ||
+                                  1
+                              )}
+                          </span>
 
-                    <p className="text-sm text-zinc-400">
-                      {order.customer?.city ||
-                        ""}{" "}
-                      {order.customer?.pincode ||
-                        ""}
-                    </p>
-
-                    <p className="mt-1 text-sm text-zinc-400">
-                      Phone:{" "}
-                      {order.customer?.phone ||
-                        "-"}
-                    </p>
-
-                  </div>
-
-                  {/* PAYMENT */}
-
-                  <div className="mt-4 flex flex-wrap justify-between gap-2 text-sm text-zinc-400">
-
-                    <span>
-                      Payment:{" "}
-                      <span className="font-bold text-white">
-                        {order.paymentMethod ||
-                          "COD"}
-                      </span>
-                    </span>
-
-                    {order.coupon && (
-                      <span className="text-green-400">
-                        Coupon:{" "}
-                        {order.coupon}
-                      </span>
+                        </div>
+                      )
                     )}
 
                   </div>
 
-                  {/* VIEW DETAILS */}
+                  <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
 
-                  <Link
-                    href={`/orders/${order.id}`}
-                  >
-                    <button className="mt-5 w-full rounded-xl bg-yellow-400 py-3 font-bold text-black hover:bg-yellow-300">
-                      View Order Details
-                    </button>
-                  </Link>
+                    <div>
+                      <p className="text-xs text-slate-400">
+                        Total
+                      </p>
+                      <p className="font-black">
+                        ₹
+                        {order.total ??
+                          order.subtotal ??
+                          0}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-slate-400">
+                        Payment
+                      </p>
+                      <p className="font-black">
+                        {order.paymentMethod ||
+                          order.payment ||
+                          "COD"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-slate-400">
+                        Date
+                      </p>
+                      <p className="font-black">
+                        {formatDate(
+                          order.createdAt
+                        )}
+                      </p>
+                    </div>
+
+                  </div>
 
                 </div>
               )
             )}
 
           </div>
+
         )}
 
       </div>
+
     </main>
+  );
+}
+
+function Status({
+  status,
+}: {
+  status?: string;
+}) {
+  const value =
+    status ||
+    "Pending";
+
+  const color =
+    value === "Delivered"
+      ? "bg-green-100 text-green-700"
+      : value === "Cancelled"
+        ? "bg-red-100 text-red-700"
+        : "bg-yellow-100 text-yellow-700";
+
+  return (
+    <span
+      className={`rounded-full px-4 py-2 text-xs font-black ${color}`}
+    >
+      {value}
+    </span>
+  );
+}
+
+function getTime(
+  value: any
+) {
+  if (!value) return 0;
+
+  if (
+    typeof value?.toMillis ===
+    "function"
+  ) {
+    return value.toMillis();
+  }
+
+  if (
+    value?.seconds
+  ) {
+    return (
+      value.seconds * 1000
+    );
+  }
+
+  return new Date(
+    value
+  ).getTime() || 0;
+}
+
+function formatDate(
+  value: any
+) {
+  const time =
+    getTime(value);
+
+  if (!time) {
+    return "-";
+  }
+
+  return new Date(
+    time
+  ).toLocaleString(
+    "en-IN"
   );
 }

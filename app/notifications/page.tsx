@@ -1,121 +1,210 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import {
+  collection,
+  getDocs,
+} from "firebase/firestore";
+
+import { db } from "../lib/firebase";
+
+type Notification = {
+  id: string;
+  title?: string;
+  message?: string;
+  active?: boolean;
+  createdAt?: any;
+};
+
 export default function NotificationsPage() {
-  const [notifications, setNotifications] =
-    useState<any[]>([]);
+  const [
+    notifications,
+    setNotifications,
+  ] = useState<
+    Notification[]
+  >([]);
+
+  const [loading, setLoading] =
+    useState(true);
 
   useEffect(() => {
-    try {
-      const saved =
-        localStorage.getItem(
-          "nightnow-notifications"
-        );
+    const load =
+      async () => {
+        try {
+          const snapshot =
+            await getDocs(
+              collection(
+                db,
+                "notifications"
+              )
+            );
 
-      if (saved) {
-        const data =
-          JSON.parse(saved);
+          const data =
+            snapshot.docs
+              .map(
+                (item) => ({
+                  id: item.id,
+                  ...item.data(),
+                })
+              )
+              .filter(
+                (item: any) =>
+                  item.active !==
+                  false
+              )
+              .sort(
+                (a: any, b: any) =>
+                  getTime(
+                    b.createdAt
+                  ) -
+                  getTime(
+                    a.createdAt
+                  )
+              ) as Notification[];
 
-        if (Array.isArray(data)) {
-          setNotifications(data);
+          setNotifications(
+            data
+          );
+        } catch (error) {
+          console.error(
+            error
+          );
+        } finally {
+          setLoading(false);
         }
-      }
-    } catch (error) {
-      console.error(error);
-    }
+      };
+
+    load();
   }, []);
 
-  const defaultNotifications = [
-    {
-      id: "welcome",
-      icon: "🎁",
-      title: "Welcome to Night Now",
-      message:
-        "Fast delivery for everything you need.",
-    },
-    {
-      id: "delivery",
-      icon: "🚀",
-      title: "Fast Delivery",
-      message:
-        "Your everyday essentials delivered quickly.",
-    },
-    {
-      id: "offer",
-      icon: "🔥",
-      title: "Free Delivery",
-      message:
-        "Get free delivery on orders above ₹299.",
-    },
-  ];
-
-  const data =
-    notifications.length > 0
-      ? notifications
-      : defaultNotifications;
-
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-7 pb-24 text-black">
+    <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-900">
 
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-3xl">
 
-        <Link
-          href="/"
-          className="text-sm font-bold text-zinc-500"
-        >
-          ← Home
-        </Link>
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
 
-        <div className="mt-5">
+          <p className="text-xs font-black text-yellow-600">
+            NIGHT NOW
+          </p>
 
-          <h1 className="text-3xl font-black">
+          <h1 className="mt-1 text-3xl font-black">
             Notifications
           </h1>
 
-          <p className="mt-1 text-sm text-zinc-500">
-            Latest updates from Night Now
-          </p>
-
         </div>
 
-        <div className="mt-6 space-y-3">
+        {loading ? (
 
-          {data.map(
-            (item: any) => (
-              <div
-                key={item.id}
-                className="flex gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
-              >
+          <div className="py-20 text-center font-bold">
+            Loading...
+          </div>
 
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-yellow-100 text-2xl">
-                  {item.icon ||
-                    "🔔"}
+        ) : notifications.length ===
+          0 ? (
+
+          <div className="mt-5 rounded-3xl bg-white p-10 text-center shadow-sm">
+
+            <div className="text-5xl">
+              🔔
+            </div>
+
+            <p className="mt-4 font-black">
+              No new notifications
+            </p>
+
+          </div>
+
+        ) : (
+
+          <div className="mt-5 space-y-3">
+
+            {notifications.map(
+              (item) => (
+                <div
+                  key={
+                    item.id
+                  }
+                  className="rounded-3xl bg-white p-5 shadow-sm"
+                >
+
+                  <div className="flex gap-4">
+
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-100 text-2xl">
+                      🔔
+                    </div>
+
+                    <div className="min-w-0">
+
+                      <h2 className="font-black">
+                        {item.title ||
+                          "Night Now"}
+                      </h2>
+
+                      <p className="mt-1 text-sm leading-6 text-slate-600">
+                        {item.message}
+                      </p>
+
+                      <p className="mt-2 text-xs text-slate-400">
+                        {formatDate(
+                          item.createdAt
+                        )}
+                      </p>
+
+                    </div>
+
+                  </div>
+
                 </div>
+              )
+            )}
 
-                <div className="min-w-0">
+          </div>
 
-                  <h2 className="font-black">
-                    {item.title ||
-                      "Notification"}
-                  </h2>
-
-                  <p className="mt-1 text-sm leading-6 text-zinc-500">
-                    {item.message ||
-                      item.description ||
-                      ""}
-                  </p>
-
-                </div>
-
-              </div>
-            )
-          )}
-
-        </div>
+        )}
 
       </div>
+
     </main>
+  );
+}
+
+function getTime(
+  value: any
+) {
+  if (!value) return 0;
+
+  if (
+    typeof value?.toMillis ===
+    "function"
+  ) {
+    return value.toMillis();
+  }
+
+  if (
+    value?.seconds
+  ) {
+    return value.seconds * 1000;
+  }
+
+  return (
+    new Date(value).getTime() ||
+    0
+  );
+}
+
+function formatDate(
+  value: any
+) {
+  const time =
+    getTime(value);
+
+  if (!time) return "";
+
+  return new Date(
+    time
+  ).toLocaleString(
+    "en-IN"
   );
 }

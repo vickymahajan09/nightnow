@@ -1,84 +1,47 @@
 "use client";
 
-import Link from "next/link";
+import { Search, X } from "lucide-react";
 
-export default function OfferBanner() {
+export default function SearchBar({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
-    <section className="bg-white px-4 py-3 text-black">
+    <div className="border-b border-zinc-100 bg-white px-4 py-3">
       <div className="mx-auto max-w-7xl">
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="relative">
 
-          <div className="flex items-center gap-3 rounded-2xl bg-yellow-100 p-4">
-            <div className="text-3xl">
-              🎁
-            </div>
+          <Search
+            size={20}
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400"
+          />
 
-            <div>
-              <p className="text-xs font-bold text-zinc-500">
-                FIRST ORDER
-              </p>
+          <input
+            value={value}
+            onChange={(e) =>
+              onChange(e.target.value)
+            }
+            placeholder="Search products..."
+            className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 pl-12 pr-12 text-sm font-medium text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-yellow-400 focus:bg-white focus:ring-4 focus:ring-yellow-100"
+          />
 
-              <p className="font-black">
-                FREE DELIVERY
-              </p>
-
-              <p className="text-xs text-zinc-600">
-                Your first order is on us
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 rounded-2xl bg-green-100 p-4">
-            <div className="text-3xl">
-              🚀
-            </div>
-
-            <div>
-              <p className="text-xs font-bold text-zinc-500">
-                FAST DELIVERY
-              </p>
-
-              <p className="font-black">
-                At Your Doorstep
-              </p>
-
-              <p className="text-xs text-zinc-600">
-                Quick & reliable delivery
-              </p>
-            </div>
-          </div>
-
-          <Link
-            href="/#products"
-            className="flex items-center gap-3 rounded-2xl bg-zinc-100 p-4 transition hover:bg-zinc-200"
-          >
-            <div className="text-3xl">
-              🔥
-            </div>
-
-            <div>
-              <p className="text-xs font-bold text-zinc-500">
-                NIGHT NOW DEALS
-              </p>
-
-              <p className="font-black">
-                Shop Best Sellers
-              </p>
-
-              <p className="text-xs text-zinc-600">
-                Grab today's deals
-              </p>
-            </div>
-
-            <span className="ml-auto font-black">
-              →
-            </span>
-          </Link>
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-zinc-200 text-zinc-600"
+            >
+              <X size={17} />
+            </button>
+          )}
 
         </div>
 
       </div>
-    </section>
+    </div>
   );
 }

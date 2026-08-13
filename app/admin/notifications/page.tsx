@@ -8,153 +8,329 @@ import {
   deleteNotification,
 } from "../../services/notificationService";
 
-export default function AdminNotificationsPage() {
-  const [title, setTitle] = useState("");
-  const [message, setMessage] = useState("");
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+type Notification = {
+  id: string;
+  title?: string;
+  message?: string;
+  active?: boolean;
+  createdAt?: any;
+};
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      setItems(await getNotifications());
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+export default function AdminNotificationsPage() {
+  const [title, setTitle] =
+    useState("");
+
+  const [message, setMessage] =
+    useState("");
+
+  const [
+    notifications,
+    setNotifications,
+  ] = useState<
+    Notification[]
+  >([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const load =
+    async () => {
+      try {
+        const data =
+          await getNotifications();
+
+        const sorted =
+          (
+            data as Notification[]
+          ).sort(
+            (a, b) =>
+              getTime(
+                b.createdAt
+              ) -
+              getTime(
+                a.createdAt
+              )
+          );
+
+        setNotifications(
+          sorted
+        );
+      } catch (error) {
+        console.error(
+          error
+        );
+      }
+    };
 
   useEffect(() => {
     load();
   }, []);
 
-  const save = async () => {
-    if (!title.trim() || !message.trim()) {
-      alert("Please fill all fields");
-      return;
-    }
+  const create =
+    async () => {
+      if (!title.trim()) {
+        alert(
+          "Notification title required"
+        );
+        return;
+      }
 
-    try {
-      setSaving(true);
+      if (!message.trim()) {
+        alert(
+          "Notification message required"
+        );
+        return;
+      }
 
-      await addNotification(
-        title,
-        message
-      );
+      try {
+        setLoading(true);
 
-      setTitle("");
-      setMessage("");
+        await addNotification(
+          title.trim(),
+          message.trim()
+        );
 
-      await load();
+        setTitle("");
+        setMessage("");
 
-      alert("Notification Added");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to add notification");
-    } finally {
-      setSaving(false);
-    }
-  };
+        await load();
 
-  const remove = async (id: string) => {
-    if (!confirm("Delete notification?")) return;
+        alert(
+          "✅ Notification sent"
+        );
+      } catch (error) {
+        console.error(
+          error
+        );
 
-    try {
-      await deleteNotification(id);
+        alert(
+          "Notification failed"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      setItems((old) =>
-        old.filter((item) => item.id !== id)
-      );
-    } catch (error) {
-      console.error(error);
-      alert("Failed to delete notification");
-    }
-  };
+  const remove =
+    async (
+      id: string
+    ) => {
+      if (
+        !confirm(
+          "Delete notification?"
+        )
+      ) {
+        return;
+      }
+
+      try {
+        await deleteNotification(
+          id
+        );
+
+        setNotifications(
+          (current) =>
+            current.filter(
+              (item) =>
+                item.id !== id
+            )
+        );
+      } catch (error) {
+        console.error(
+          error
+        );
+
+        alert(
+          "Delete failed"
+        );
+      }
+    };
 
   return (
-    <main className="min-h-screen bg-black p-5 text-white md:p-8">
+    <main className="min-h-screen bg-slate-100 p-4 text-slate-900 md:p-8">
+
       <div className="mx-auto max-w-5xl">
-        <h1 className="text-4xl font-black text-yellow-400">
-          Notifications
-        </h1>
 
-        <p className="mt-1 text-zinc-500">
-          Admin notification management
-        </p>
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
 
-        <div className="mt-8 rounded-2xl bg-zinc-900 p-6">
-          <input
-            value={title}
-            onChange={(e) =>
-              setTitle(e.target.value)
-            }
-            placeholder="Notification Title"
-            className="mb-4 w-full rounded-xl bg-zinc-800 p-4 outline-none"
-          />
+          <p className="text-xs font-black uppercase tracking-widest text-yellow-600">
+            NIGHT NOW ADMIN
+          </p>
 
-          <textarea
-            value={message}
-            onChange={(e) =>
-              setMessage(e.target.value)
-            }
-            placeholder="Notification Message"
-            rows={4}
-            className="mb-4 w-full rounded-xl bg-zinc-800 p-4 outline-none"
-          />
+          <h1 className="mt-1 text-3xl font-black">
+            Notifications
+          </h1>
 
-          <button
-            onClick={save}
-            disabled={saving}
-            className="w-full rounded-xl bg-yellow-400 py-4 font-bold text-black disabled:opacity-50"
-          >
-            {saving
-              ? "Saving..."
-              : "Add Notification"}
-          </button>
+          <p className="mt-2 text-sm text-slate-500">
+            Customer ko announcement / offer / update bhejein.
+          </p>
+
         </div>
 
-        <div className="mt-8 space-y-4">
-          {loading ? (
-            <p className="text-center text-zinc-500">
-              Loading...
-            </p>
-          ) : items.length === 0 ? (
-            <div className="rounded-2xl bg-zinc-900 p-8 text-center text-zinc-500">
-              No Notifications
-            </div>
-          ) : (
-            items.map((item: any) => (
-              <div
-                key={item.id}
-                className="rounded-2xl bg-zinc-900 p-5"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h2 className="font-bold">
-                      {item.title}
-                    </h2>
+        {/* CREATE */}
 
-                    <p className="mt-2 text-zinc-400">
-                      {item.message}
-                    </p>
-                  </div>
+        <section className="mt-5 rounded-3xl bg-white p-6 shadow-sm">
 
-                  <button
-                    onClick={() =>
-                      remove(item.id)
-                    }
-                    className="rounded-lg bg-red-600 px-4 py-2 font-bold"
-                  >
-                    Delete
-                  </button>
-                </div>
+          <h2 className="text-xl font-black">
+            Create Notification
+          </h2>
+
+          <div className="mt-5 space-y-4">
+
+            <input
+              value={title}
+              onChange={(e) =>
+                setTitle(
+                  e.target.value
+                )
+              }
+              placeholder="Title"
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-yellow-400"
+            />
+
+            <textarea
+              value={message}
+              onChange={(e) =>
+                setMessage(
+                  e.target.value
+                )
+              }
+              rows={4}
+              placeholder="Message..."
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none focus:border-yellow-400"
+            />
+
+            <button
+              type="button"
+              onClick={
+                create
+              }
+              disabled={loading}
+              className="rounded-2xl bg-yellow-400 px-7 py-3 font-black text-black disabled:opacity-50"
+            >
+              {loading
+                ? "Sending..."
+                : "🔔 Send Notification"}
+            </button>
+
+          </div>
+
+        </section>
+
+        {/* LIST */}
+
+        <section className="mt-5 rounded-3xl bg-white p-6 shadow-sm">
+
+          <h2 className="text-xl font-black">
+            Sent Notifications
+          </h2>
+
+          <div className="mt-5 space-y-3">
+
+            {notifications.length ===
+              0 ? (
+
+              <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm font-bold text-slate-500">
+                No notifications.
               </div>
-            ))
-          )}
-        </div>
+
+            ) : (
+
+              notifications.map(
+                (item) => (
+                  <div
+                    key={
+                      item.id
+                    }
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                  >
+
+                    <div className="flex items-start justify-between gap-4">
+
+                      <div>
+
+                        <h3 className="font-black">
+                          🔔{" "}
+                          {item.title}
+                        </h3>
+
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                          {item.message}
+                        </p>
+
+                        <p className="mt-2 text-xs text-slate-400">
+                          {formatDate(
+                            item.createdAt
+                          )}
+                        </p>
+
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          remove(
+                            item.id
+                          )
+                        }
+                        className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600"
+                      >
+                        Delete
+                      </button>
+
+                    </div>
+
+                  </div>
+                )
+              )
+
+            )}
+
+          </div>
+
+        </section>
+
       </div>
+
     </main>
+  );
+}
+
+function getTime(
+  value: any
+) {
+  if (!value) return 0;
+
+  if (
+    typeof value?.toMillis ===
+    "function"
+  ) {
+    return value.toMillis();
+  }
+
+  if (
+    value?.seconds
+  ) {
+    return value.seconds * 1000;
+  }
+
+  return (
+    new Date(value).getTime() ||
+    0
+  );
+}
+
+function formatDate(
+  value: any
+) {
+  const time =
+    getTime(value);
+
+  if (!time) return "";
+
+  return new Date(
+    time
+  ).toLocaleString(
+    "en-IN"
   );
 }

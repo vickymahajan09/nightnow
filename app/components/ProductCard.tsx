@@ -1,196 +1,497 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-import { getProducts } from "../services/productService";
+import Link from "next/link";
+
+import {
+  collection,
+  getDocs,
+} from "firebase/firestore";
+
+import { db } from "../lib/firebase";
 import { useCart } from "../context/CartContext";
 
-interface ProductCardProps {
-  selectedCategory?: string;
-  search?: string;
-}
+
+// =====================================================
+// TYPE
+// =====================================================
+
+type Product = {
+  id: string;
+
+  name?: string;
+  category?: string;
+
+  image?: string;
+  images?: string[];
+
+  price?: number;
+  mrp?: number;
+
+  stock?: number;
+
+  size?: string;
+  weight?: string;
+  volume?: string;
+  pack?: string;
+
+  variantId?: string;
+  variantName?: string;
+
+  variants?: any[];
+
+  [key: string]: any;
+};
+
+
+// =====================================================
+// COMPONENT
+// =====================================================
 
 export default function ProductCard({
   selectedCategory = "",
   search = "",
-}: ProductCardProps) {
+}: {
+  selectedCategory?: string;
+  search?: string;
+}) {
+
   const {
-    cart,
     addToCart,
     removeFromCart,
+    getItemQuantity,
   } = useCart();
 
+
   const [products, setProducts] =
-    useState<any[]>([]);
+    useState<Product[]>([]);
 
   const [loading, setLoading] =
     useState(true);
 
+  const [error, setError] =
+    useState("");
+
+
+  const [wishlist, setWishlist] =
+    useState<string[]>([]);
+
+
+  // ===================================================
+  // LOAD PRODUCTS
+  // ===================================================
+
   useEffect(() => {
+
+    const loadProducts =
+      async () => {
+
+        try {
+
+          setLoading(true);
+          setError("");
+
+          const snapshot =
+            await getDocs(
+              collection(
+                db,
+                "products"
+              )
+            );
+
+
+          const data =
+            snapshot.docs.map(
+              (item) => ({
+                id: item.id,
+                ...item.data(),
+              })
+            ) as Product[];
+
+
+          setProducts(data);
+
+        } catch (err) {
+
+          console.error(
+            "Product loading error:",
+            err
+          );
+
+          setError(
+            "Products load nahi ho pa rahe."
+          );
+
+        } finally {
+
+          setLoading(false);
+
+        }
+
+      };
+
+
     loadProducts();
+
   }, []);
 
-  const loadProducts = async () => {
-    try {
-      const data = await getProducts();
 
-      setProducts(
-        data.filter(
-          (item: any) =>
-            item.active !== false
-        )
-      );
-    } catch (error) {
+  // ===================================================
+  // LOAD WISHLIST
+  // ===================================================
+
+  useEffect(() => {
+
+    try {
+
+      const saved =
+        JSON.parse(
+          localStorage.getItem(
+            "nightnow_wishlist"
+          ) || "[]"
+        );
+
+
+      if (
+        Array.isArray(saved)
+      ) {
+        setWishlist(saved);
+      }
+
+    } catch (err) {
+
       console.error(
-        "Products loading error:",
-        error
+        "Wishlist loading error:",
+        err
       );
-    } finally {
-      setLoading(false);
+
     }
+
+  }, []);
+
+
+  // ===================================================
+  // TOGGLE LIKE
+  // ===================================================
+
+  const toggleWishlist = (
+    productId: string
+  ) => {
+
+    setWishlist(
+      (current) => {
+
+        const updated =
+          current.includes(
+            productId
+          )
+            ? current.filter(
+                (id) =>
+                  id !== productId
+              )
+            : [
+                ...current,
+                productId,
+              ];
+
+
+        try {
+
+          localStorage.setItem(
+            "nightnow_wishlist",
+            JSON.stringify(
+              updated
+            )
+          );
+
+        } catch (err) {
+
+          console.error(
+            "Wishlist save error:",
+            err
+          );
+
+        }
+
+
+        return updated;
+
+      }
+    );
+
   };
 
-  // ==============================
+
+  // ===================================================
   // FILTER PRODUCTS
-  // ==============================
+  // ===================================================
 
   const filteredProducts =
-    products.filter((item: any) => {
-      const categoryMatch =
-        selectedCategory === "" ||
-        item.category ===
-          selectedCategory;
+    useMemo(() => {
 
       const searchText =
-        search.trim().toLowerCase();
+        search
+          .trim()
+          .toLowerCase();
 
-      const searchMatch =
-        searchText === "" ||
-        item.name
-          ?.toLowerCase()
-          .includes(searchText) ||
-        item.description
-          ?.toLowerCase()
-          .includes(searchText);
 
-      return (
-        categoryMatch &&
-        searchMatch
+      const categoryText =
+        selectedCategory
+          .trim()
+          .toLowerCase();
+
+
+      return products.filter(
+        (product) => {
+
+          // -------------------------------------------
+          // CATEGORY
+          // -------------------------------------------
+
+          const productCategory =
+            String(
+              product.category ||
+                ""
+            ).toLowerCase();
+
+
+          const categoryMatch =
+            !categoryText ||
+            categoryText === "all" ||
+            productCategory ===
+              categoryText;
+
+
+          // -------------------------------------------
+          // SEARCH
+          // -------------------------------------------
+
+          if (!searchText) {
+            return categoryMatch;
+          }
+
+
+          const searchableText =
+            [
+              product.name,
+              product.category,
+              product.description,
+              product.brand,
+              product.subcategory,
+              product.searchKeywords,
+            ]
+              .flatMap((value) => {
+
+                if (
+                  Array.isArray(
+                    value
+                  )
+                ) {
+                  return value;
+                }
+
+                return [value];
+
+              })
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+
+
+          return (
+            categoryMatch &&
+            searchableText.includes(
+              searchText
+            )
+          );
+
+        }
       );
-    });
 
-  // ==============================
-  // CART QUANTITY
-  // ==============================
+    }, [
+      products,
+      selectedCategory,
+      search,
+    ]);
 
-  const getCartQuantity = (
-    id: string
-  ) => {
-    const item = cart.find(
-      (cartItem: any) =>
-        cartItem.id === id
-    );
 
-    return Number(
-      item?.quantity || 0
-    );
-  };
-
-  // ==============================
+  // ===================================================
   // LOADING
-  // ==============================
+  // ===================================================
 
   if (loading) {
+
     return (
-      <section
-        id="products"
-        className="px-4 py-8"
-      >
+      <section className="px-4 py-8">
+
         <div className="mx-auto max-w-7xl">
 
-          <div className="mb-5 h-7 w-48 animate-pulse rounded bg-zinc-800" />
+          <div className="flex items-center justify-center py-16">
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="text-center">
 
-            {[1, 2, 3, 4, 5].map(
-              (item) => (
-                <div
-                  key={item}
-                  className="h-72 animate-pulse rounded-xl bg-zinc-900"
-                />
-              )
-            )}
+              <div className="text-4xl">
+                ⏳
+              </div>
+
+              <p className="mt-3 text-sm font-bold text-zinc-500">
+                Products loading...
+              </p>
+
+            </div>
 
           </div>
+
         </div>
+
       </section>
     );
+
   }
 
-  // ==============================
-  // PRODUCT LIST
-  // ==============================
 
-  return (
-    <section
-      id="products"
-      className="bg-white px-4 py-8"
-    >
-      <div className="mx-auto max-w-7xl">
+  // ===================================================
+  // ERROR
+  // ===================================================
 
-        {/* HEADER */}
+  if (error) {
 
-        <div className="mb-5 flex items-center justify-between">
+    return (
+      <section className="px-4 py-8">
 
-          <div>
-            <p className="text-[10px] font-bold uppercase text-yellow-500">
-              Night Now
-            </p>
+        <div className="mx-auto max-w-md rounded-2xl bg-white p-8 text-center shadow-sm">
 
-            <h2 className="text-2xl font-black text-zinc-900">
-              {search
-                ? "Search Results"
-                : "Popular Products"}
-            </h2>
+          <div className="text-5xl">
+            ⚠️
           </div>
 
-          <span className="text-sm text-zinc-500">
-            {filteredProducts.length} Products
-          </span>
+          <p className="mt-4 font-bold text-red-500">
+            {error}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              window.location.reload()
+            }
+            className="mt-5 rounded-xl bg-yellow-400 px-6 py-3 font-black"
+          >
+            Try Again
+          </button>
 
         </div>
 
-        {/* PRODUCTS */}
+      </section>
+    );
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+  }
+
+
+  // ===================================================
+  // NO PRODUCTS
+  // ===================================================
+
+  if (
+    filteredProducts.length === 0
+  ) {
+
+    return (
+      <section className="px-4 py-8">
+
+        <div className="mx-auto max-w-md rounded-2xl bg-white p-10 text-center shadow-sm">
+
+          <div className="text-6xl">
+            🔍
+          </div>
+
+          <h2 className="mt-4 text-xl font-black">
+            No Products Found
+          </h2>
+
+          <p className="mt-2 text-sm text-zinc-500">
+            Try another product name or category.
+          </p>
+
+        </div>
+
+      </section>
+    );
+
+  }
+
+
+  // ===================================================
+  // MAIN
+  // ===================================================
+
+  return (
+    <section className="px-3 py-6 sm:px-4">
+
+      <div className="mx-auto max-w-7xl">
+
+        {/* ============================================
+            HEADING
+        ============================================= */}
+
+        <div className="mb-4 flex items-end justify-between">
+
+          <div>
+
+            <h2 className="text-xl font-black text-zinc-900 sm:text-2xl">
+              {search
+                ? "Search Results"
+                : selectedCategory
+                  ? selectedCategory
+                  : "Popular Products"}
+            </h2>
+
+            <p className="mt-1 text-xs font-medium text-zinc-500">
+              {filteredProducts.length} products
+            </p>
+
+          </div>
+
+        </div>
+
+
+        {/* ============================================
+            PRODUCT GRID
+        ============================================= */}
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 
           {filteredProducts.map(
-            (item: any) => {
-
-              const stock =
-                Number(
-                  item.stock || 0
-                );
-
-              const quantity =
-                getCartQuantity(
-                  item.id
-                );
-
-              // ==========================
-              // PRICE / DISCOUNT
-              // ==========================
+            (product) => {
 
               const price =
                 Number(
-                  item.price || 0
+                  product.price || 0
                 );
+
 
               const mrp =
                 Number(
-                  item.mrp || price
+                  product.mrp || 0
                 );
+
+
+              const stock =
+                Number(
+                  product.stock || 0
+                );
+
+
+              const quantity =
+                getItemQuantity(
+                  product.id,
+                  product.variantId
+                );
+
 
               const discount =
                 mrp > price &&
@@ -202,83 +503,141 @@ export default function ProductCard({
                     )
                   : 0;
 
-              // ==========================
-              // PRODUCT IMAGE
-              // ==========================
 
-              const productImage =
-                item.image ||
-                (Array.isArray(
-                  item.images
-                )
-                  ? item.images[0]
-                  : null) ||
+              const liked =
+                wishlist.includes(
+                  product.id
+                );
+
+
+              const image =
+                product.image ||
+                product.images?.[0] ||
                 "/no-image.png";
 
+
               return (
-                <div
-                  key={item.id}
-                  className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                <article
+                  key={product.id}
+                  className="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 >
 
-                  {/* ====================== */}
-                  {/* IMAGE */}
-                  {/* ====================== */}
+                  {/* =================================
+                      LIKE
+                  ================================== */}
+
+                  <button
+                    type="button"
+                    aria-label={
+                      liked
+                        ? "Remove from wishlist"
+                        : "Add to wishlist"
+                    }
+                    onClick={() =>
+                      toggleWishlist(
+                        product.id
+                      )
+                    }
+                    className={`absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-lg shadow-sm ${
+                      liked
+                        ? "text-red-500"
+                        : "text-zinc-500"
+                    }`}
+                  >
+                    {liked
+                      ? "♥"
+                      : "♡"}
+                  </button>
+
+
+                  {/* =================================
+                      DISCOUNT
+                  ================================== */}
+
+                  {discount > 0 && (
+
+                    <div className="absolute left-2 top-2 z-10 rounded-md bg-green-600 px-2 py-1 text-[10px] font-black text-white">
+                      {discount}% OFF
+                    </div>
+
+                  )}
+
+
+                  {/* =================================
+                      PRODUCT IMAGE
+                  ================================== */}
 
                   <Link
-                    href={`/product/${item.id}`}
+                    href={`/product/${product.id}`}
+                    className="block"
                   >
-                    <div className="relative flex h-[150px] items-center justify-center bg-zinc-50 p-2">
 
-                      {/* DISCOUNT BADGE */}
-
-                      {discount > 0 && (
-                        <div className="absolute left-0 top-0 z-10 rounded-br-lg bg-blue-500 px-2 py-1 text-[10px] font-black text-white">
-                          {discount}% OFF
-                        </div>
-                      )}
-
-                      {/* IMAGE */}
+                    <div className="flex h-40 items-center justify-center bg-zinc-50 p-3 sm:h-44">
 
                       <img
-                        src={
-                          productImage
-                        }
+                        src={image}
                         alt={
-                          item.name ||
+                          product.name ||
                           "Product"
                         }
-                        className="h-full w-full object-contain transition duration-300 hover:scale-105"
+                        loading="lazy"
+                        className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
                       />
 
                     </div>
+
                   </Link>
 
-                  {/* ====================== */}
-                  {/* PRODUCT INFO */}
-                  {/* ====================== */}
+
+                  {/* =================================
+                      PRODUCT INFO
+                  ================================== */}
 
                   <div className="p-3">
 
+                    {/* CATEGORY */}
+
+                    {product.category && (
+
+                      <p className="truncate text-[10px] font-bold uppercase tracking-wide text-zinc-400">
+                        {product.category}
+                      </p>
+
+                    )}
+
+
+                    {/* NAME */}
+
                     <Link
-                      href={`/product/${item.id}`}
+                      href={`/product/${product.id}`}
                     >
-                      <h3 className="line-clamp-2 min-h-[40px] text-sm font-bold leading-5 text-zinc-900 hover:text-yellow-600">
-                        {item.name}
+
+                      <h3 className="mt-1 line-clamp-2 min-h-[38px] text-sm font-black leading-5 text-zinc-900">
+                        {product.name ||
+                          "Product"}
                       </h3>
+
                     </Link>
 
-                    {/* UNIT */}
 
-                    {(item.unit ||
-                      item.weight ||
-                      item.packSize) && (
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        {item.unit ||
-                          item.weight ||
-                          item.packSize}
+                    {/* VARIANT / PACK */}
+
+                    {(product.pack ||
+                      product.weight ||
+                      product.volume ||
+                      product.size) && (
+
+                      <p className="mt-1 truncate text-[11px] font-medium text-zinc-500">
+
+                        {product.pack ||
+                          product.weight ||
+                          product.volume ||
+                          product.size}
+
                       </p>
+
                     )}
+
 
                     {/* PRICE */}
 
@@ -289,128 +648,123 @@ export default function ProductCard({
                       </span>
 
                       {mrp > price && (
-                        <span className="text-xs text-zinc-400 line-through">
+
+                        <span className="text-[11px] text-zinc-400 line-through">
                           ₹{mrp}
                         </span>
+
                       )}
 
                     </div>
 
-                    {/* STOCK */}
 
-                    {stock > 0 &&
-                      stock <= 5 && (
-                        <p className="mt-1 text-[10px] font-bold text-red-500">
-                          Only {stock} left
-                        </p>
-                      )}
+                    {/* =================================
+                        ADD / QUANTITY
+                    ================================== */}
 
-                    {/* ================== */}
-                    {/* CART BUTTON */}
-                    {/* ================== */}
+                    <div className="mt-3">
 
-                    {stock <= 0 ? (
-
-                      <button
-                        disabled
-                        className="mt-3 w-full rounded-lg bg-zinc-200 py-2 text-sm font-bold text-zinc-500"
-                      >
-                        Out of Stock
-                      </button>
-
-                    ) : quantity === 0 ? (
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          addToCart({
-                            ...item,
-                            quantity: 1,
-                          })
-                        }
-                        className="mt-3 ml-auto block min-w-20 rounded-lg border-2 border-yellow-400 bg-yellow-400 px-5 py-2 text-sm font-black text-black transition hover:bg-yellow-300"
-                      >
-                        + ADD
-                      </button>
-
-                    ) : (
-
-                      <div className="mt-3 flex h-10 items-center justify-between rounded-lg bg-yellow-400 p-1">
-
-                        {/* MINUS */}
+                      {quantity <= 0 ? (
 
                         <button
                           type="button"
-                          onClick={() =>
-                            removeFromCart(
-                              item.id
-                            )
+                          disabled={
+                            stock === 0
                           }
-                          className="flex h-8 w-9 items-center justify-center rounded-md bg-black text-lg font-black text-white"
-                        >
-                          −
-                        </button>
-
-                        {/* QUANTITY */}
-
-                        <span className="text-sm font-black text-black">
-                          {quantity}
-                        </span>
-
-                        {/* PLUS */}
-
-                        <button
-                          type="button"
                           onClick={() =>
                             addToCart({
-                              ...item,
+                              ...product,
                               quantity: 1,
+                              variantId:
+                                product.variantId ||
+                                "default",
                             })
                           }
-                          disabled={
-                            quantity >=
-                            stock
-                          }
-                          className="flex h-8 w-9 items-center justify-center rounded-md bg-black text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          className="w-full rounded-lg bg-yellow-400 py-2.5 text-sm font-black text-black transition hover:bg-yellow-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
                         >
-                          +
+                          {stock === 0
+                            ? "OUT OF STOCK"
+                            : "ADD"}
                         </button>
 
-                      </div>
+                      ) : (
+
+                        <div className="flex h-10 items-center overflow-hidden rounded-lg bg-yellow-400">
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeFromCart(
+                                product.id,
+                                product.variantId ||
+                                  "default"
+                              )
+                            }
+                            className="h-full w-10 bg-black text-lg font-black text-white"
+                          >
+                            −
+                          </button>
+
+
+                          <span className="flex-1 text-center text-sm font-black">
+                            {quantity}
+                          </span>
+
+
+                          <button
+                            type="button"
+                            disabled={
+                              stock > 0 &&
+                              quantity >=
+                                stock
+                            }
+                            onClick={() =>
+                              addToCart({
+                                ...product,
+                                quantity: 1,
+                                variantId:
+                                  product.variantId ||
+                                  "default",
+                              })
+                            }
+                            className="h-full w-10 bg-black text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            +
+                          </button>
+
+                        </div>
+
+                      )}
+
+                    </div>
+
+
+                    {/* =================================
+                        VIEW CART
+                    ================================== */}
+
+                    {quantity > 0 && (
+
+                      <Link
+                        href="/cart"
+                        className="mt-2 block text-center text-[11px] font-black text-green-600"
+                      >
+                        View Cart →
+                      </Link>
 
                     )}
 
                   </div>
 
-                </div>
+                </article>
               );
             }
           )}
 
         </div>
 
-        {/* NO PRODUCTS */}
-
-        {filteredProducts.length ===
-          0 && (
-          <div className="py-16 text-center">
-
-            <div className="text-5xl">
-              🔍
-            </div>
-
-            <p className="mt-4 text-xl font-black text-zinc-900">
-              No Products Found
-            </p>
-
-            <p className="mt-2 text-sm text-zinc-500">
-              Try another product name.
-            </p>
-
-          </div>
-        )}
-
       </div>
+
     </section>
   );
 }

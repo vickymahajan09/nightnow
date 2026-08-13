@@ -3,203 +3,181 @@
 import { useEffect, useState } from "react";
 
 import Navbar from "./components/Navbar";
-import Hero from "./components/Hero";
 import SearchBar from "./components/SearchBar";
 import OfferBanner from "./components/OfferBanner";
 import Categories from "./components/Categories";
-import CartPopup from "./components/CartPopup";
 import ProductCard from "./components/ProductCard";
-import Footer from "./components/Footer";
 import SmartNeeds from "./components/SmartNeeds";
+import Footer from "./components/Footer";
 
 export default function Home() {
+  const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] =
     useState("");
-
-  const [search, setSearch] =
-    useState("");
-
-  const [showPopup, setShowPopup] =
-    useState(false);
-
-  // ==============================
-  // FIRST ORDER POPUP
-  // ==============================
+  const [showPopup, setShowPopup] = useState(false);
 
   useEffect(() => {
     try {
-      const alreadyShown =
-        sessionStorage.getItem(
-          "nightnow_first_order_popup"
-        );
+      const shown = sessionStorage.getItem(
+        "nightnow_first_order_popup"
+      );
 
-      if (!alreadyShown) {
+      if (!shown) {
         setShowPopup(true);
-
         sessionStorage.setItem(
           "nightnow_first_order_popup",
           "true"
         );
       }
-    } catch (error) {
-      console.error(
-        "Popup storage error:",
-        error
-      );
-    }
+    } catch {}
   }, []);
 
   const isSearching =
     search.trim().length > 0;
 
   return (
-    <main className="min-h-screen bg-black text-white">
+    <main className="min-h-screen bg-[#f7f8fa] text-zinc-900">
 
-      {/* ============================== */}
       {/* NAVBAR */}
-      {/* ============================== */}
-
       <Navbar />
 
-      {/* ============================== */}
-      {/* SEARCH BAR — ALWAYS TOP */}
-      {/* ============================== */}
-
-      <div className="relative z-40 bg-white">
-        <SearchBar
-          value={search}
-          onChange={setSearch}
-        />
-      </div>
-
-      {/* ============================== */}
-      {/* SEARCH RESULTS */}
-      {/* ============================== */}
+      {/* SEARCH */}
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+      />
 
       {isSearching ? (
-
-        <div className="min-h-[60vh] bg-black">
-
+        <section className="min-h-[70vh] bg-[#f7f8fa] py-5">
           <ProductCard
             selectedCategory=""
             search={search}
           />
-
-        </div>
-
+        </section>
       ) : (
-
         <>
-          {/* ============================== */}
-          {/* FIRST ORDER POPUP */}
-          {/* ============================== */}
+          {/* HERO - simple built-in version */}
+          <section className="bg-gradient-to-br from-yellow-50 via-white to-blue-50 px-4 py-8">
+            <div className="mx-auto max-w-7xl">
 
-          {showPopup && (
-            <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100 md:p-10">
 
-              <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-yellow-400/30 bg-zinc-900 p-7 text-center shadow-2xl">
+                <p className="text-sm font-black uppercase tracking-widest text-yellow-600">
+                  Night Now
+                </p>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowPopup(false)
-                  }
-                  className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 text-xl text-zinc-300 hover:bg-zinc-700"
-                >
-                  ×
-                </button>
+                <h1 className="mt-2 max-w-2xl text-3xl font-black leading-tight text-zinc-900 md:text-5xl">
+                  आपकी जरूरत,
+                  <br />
+                  हमारी जिम्मेदारी.
+                </h1>
 
-                <div className="text-6xl">
-                  🎁
+                <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-500 md:text-base">
+                  Groceries, snacks, beverages,
+                  personal care और daily essentials
+                  एक ही जगह।
+                </p>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+
+                  <a
+                    href="#products"
+                    className="rounded-xl bg-yellow-400 px-6 py-3 text-sm font-black text-black shadow-sm hover:bg-yellow-300"
+                  >
+                    Shop Now →
+                  </a>
+
+                  <a
+                    href="#needs"
+                    className="rounded-xl border border-zinc-200 bg-white px-6 py-3 text-sm font-black text-zinc-700"
+                  >
+                    आपकी जरूरत 🧠
+                  </a>
+
                 </div>
-
-                <h2 className="mt-5 text-3xl font-black text-yellow-400">
-                  Welcome to Night Now!
-                </h2>
-
-                <p className="mt-3 text-xl font-bold text-white">
-                  First Order Delivery FREE 🚀
-                </p>
-
-                <p className="mt-3 text-sm leading-6 text-zinc-400">
-                  आपका पहला ऑर्डर Night Now पर
-                  <span className="font-bold text-green-400">
-                    {" "}FREE DELIVERY
-                  </span>{" "}
-                  के साथ।
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowPopup(false)
-                  }
-                  className="mt-6 w-full rounded-xl bg-yellow-400 py-4 font-black text-black transition hover:bg-yellow-300"
-                >
-                  Start Shopping 🛒
-                </button>
-
-                <p className="mt-4 text-xs text-zinc-500">
-                  आपकी जरूरत, हमारी जिम्मेदारी।
-                </p>
 
               </div>
 
             </div>
-          )}
+          </section>
 
-          {/* ============================== */}
-          {/* HERO */}
-          {/* ============================== */}
-
-          <Hero />
-
-          {/* ============================== */}
           {/* OFFERS */}
-          {/* ============================== */}
-
-          <OfferBanner />
-
+         
           {/* SMART NEEDS */}
-          <SmartNeeds />
+          <section id="needs">
+            <SmartNeeds />
+          </section>
 
-          {/* ============================== */}
           {/* CATEGORIES */}
-          {/* ============================== */}
-
           <Categories
-            selectedCategory={
-              selectedCategory
-            }
+            selectedCategory={selectedCategory}
             onSelectCategory={
               setSelectedCategory
             }
           />
 
-          {/* ============================== */}
           {/* PRODUCTS */}
-          {/* ============================== */}
-
-          <ProductCard
-            selectedCategory={
-              selectedCategory
-            }
-            search=""
-          />
+          <section id="products">
+            <ProductCard
+              selectedCategory={
+                selectedCategory
+              }
+              search=""
+            />
+          </section>
         </>
       )}
 
-      {/* ============================== */}
-      {/* CART POPUP */}
-      {/* ============================== */}
-
-      <CartPopup />
-
-      {/* ============================== */}
       {/* FOOTER */}
-      {/* ============================== */}
-
       <Footer />
+
+      {/* FIRST ORDER POPUP */}
+      {showPopup && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-7 text-center shadow-2xl">
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowPopup(false)
+              }
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl text-zinc-600"
+            >
+              ×
+            </button>
+
+            <div className="text-6xl">
+              🎁
+            </div>
+
+            <h2 className="mt-5 text-2xl font-black">
+              Welcome to Night Now!
+            </h2>
+
+            <p className="mt-3 text-lg font-black text-green-600">
+              First Order Delivery FREE 🚀
+            </p>
+
+            <p className="mt-2 text-sm text-zinc-500">
+              आपका पहला ऑर्डर FREE DELIVERY
+              के साथ।
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowPopup(false)
+              }
+              className="mt-6 w-full rounded-xl bg-yellow-400 py-4 font-black text-black"
+            >
+              Start Shopping 🛒
+            </button>
+
+          </div>
+
+        </div>
+      )}
 
     </main>
   );

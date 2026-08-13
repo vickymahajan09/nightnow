@@ -10,6 +10,7 @@ export default function CartPage() {
     removeFromCart,
     deleteFromCart,
     cartTotal,
+    cartCount,
   } = useCart();
 
   const delivery =
@@ -18,9 +19,9 @@ export default function CartPage() {
   const grandTotal =
     cartTotal + delivery;
 
-  if (!cart || cart.length === 0) {
+  if (cart.length === 0) {
     return (
-      <main className="min-h-screen bg-white px-4 py-16 text-black">
+      <main className="min-h-screen bg-zinc-50 px-4 py-16 text-black">
         <div className="mx-auto max-w-md text-center">
           <div className="text-7xl">🛒</div>
 
@@ -33,7 +34,7 @@ export default function CartPage() {
           </p>
 
           <Link href="/">
-            <button className="mt-8 rounded-xl bg-yellow-400 px-8 py-4 font-black hover:bg-yellow-300">
+            <button className="mt-8 rounded-xl bg-yellow-400 px-8 py-4 font-black">
               Start Shopping →
             </button>
           </Link>
@@ -43,7 +44,7 @@ export default function CartPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-6 pb-28 text-black">
+    <main className="min-h-screen bg-zinc-50 px-4 py-6 pb-20 text-black">
       <div className="mx-auto max-w-6xl">
 
         <Link
@@ -59,12 +60,14 @@ export default function CartPage() {
           </h1>
 
           <p className="mt-1 text-sm text-zinc-500">
-            {cart.length} product
-            {cart.length !== 1 ? "s" : ""}
+            {cartCount} item
+            {cartCount !== 1 ? "s" : ""}
           </p>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_380px]">
+
+          {/* PRODUCTS */}
 
           <div className="space-y-3">
 
@@ -80,97 +83,124 @@ export default function CartPage() {
 
               return (
                 <div
-                  key={item.id}
-                  className="flex gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
+                  key={`${item.id}-${item.variantId || "default"}`}
+                  className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
                 >
-                  <Link
-                    href={`/product/${item.id}`}
-                    className="shrink-0"
-                  >
-                    <img
-                      src={
-                        item.image ||
-                        "/no-image.png"
-                      }
-                      alt={item.name}
-                      className="h-24 w-24 rounded-xl bg-zinc-100 object-cover"
-                    />
-                  </Link>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="flex gap-4">
 
                     <Link
                       href={`/product/${item.id}`}
+                      className="shrink-0"
                     >
-                      <h2 className="line-clamp-2 text-sm font-black">
-                        {item.name}
-                      </h2>
+                      <img
+                        src={
+                          item.image ||
+                          item.images?.[0] ||
+                          "/no-image.png"
+                        }
+                        alt={item.name || "Product"}
+                        className="h-24 w-24 rounded-xl bg-zinc-100 object-contain"
+                      />
                     </Link>
 
-                    <p className="mt-1 text-lg font-black">
-                      ₹{price}
-                    </p>
+                    <div className="min-w-0 flex-1">
 
-                    <p className="text-xs text-zinc-400">
-                      {item.pack ||
-                        item.quantityLabel ||
-                        "1 pack"}
-                    </p>
+                      <Link
+                        href={`/product/${item.id}`}
+                      >
+                        <h2 className="line-clamp-2 text-sm font-black">
+                          {item.name || "Product"}
+                        </h2>
+                      </Link>
 
-                    <div className="mt-3 flex items-center justify-between">
+                      {(item.variantName ||
+                        item.size ||
+                        item.weight ||
+                        item.volume ||
+                        item.pack) && (
+                        <p className="mt-1 text-xs font-bold text-zinc-500">
+                          {item.variantName ||
+                            item.size ||
+                            item.weight ||
+                            item.volume ||
+                            item.pack}
+                        </p>
+                      )}
 
-                      <div className="flex h-9 items-center overflow-hidden rounded-lg bg-yellow-400">
+                      <p className="mt-2 text-lg font-black">
+                        ₹{price}
+                      </p>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            removeFromCart(item.id)
-                          }
-                          className="h-full w-9 bg-black font-black text-white"
-                        >
-                          −
-                        </button>
+                    </div>
+                  </div>
 
-                        <span className="w-10 text-center text-sm font-black">
-                          {quantity}
-                        </span>
+                  <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-4">
 
-                        <button
-                          type="button"
-                          disabled={
-                            quantity >= stock
-                          }
-                          onClick={() =>
-                            addToCart({
-                              ...item,
-                              quantity: 1,
-                            })
-                          }
-                          className="h-full w-9 bg-black font-black text-white disabled:opacity-40"
-                        >
-                          +
-                        </button>
-
-                      </div>
+                    <div className="flex h-9 overflow-hidden rounded-lg bg-yellow-400">
 
                       <button
                         type="button"
                         onClick={() =>
-                          deleteFromCart(item.id)
+                          removeFromCart(
+                            item.id,
+                            item.variantId
+                          )
                         }
-                        className="text-xs font-bold text-red-500"
+                        className="w-9 bg-black text-lg font-black text-white"
                       >
-                        Remove
+                        −
+                      </button>
+
+                      <span className="flex w-10 items-center justify-center text-sm font-black">
+                        {quantity}
+                      </span>
+
+                      <button
+                        type="button"
+                        disabled={
+                          stock > 0 &&
+                          quantity >= stock
+                        }
+                        onClick={() =>
+                          addToCart({
+                            ...item,
+                            quantity: 1,
+                          })
+                        }
+                        className="w-9 bg-black text-lg font-black text-white disabled:opacity-40"
+                      >
+                        +
                       </button>
 
                     </div>
 
+                    <p className="font-black">
+                      ₹{price * quantity}
+                    </p>
+
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      deleteFromCart(
+                        item.id,
+                        item.variantId
+                      )
+                    }
+                    className="mt-3 text-xs font-bold text-red-500"
+                  >
+                    Remove
+                  </button>
+
                 </div>
               );
             })}
 
           </div>
+
+          {/* BILL */}
 
           <div className="h-fit rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
 
@@ -184,6 +214,7 @@ export default function CartPage() {
                 <span className="text-zinc-500">
                   Subtotal
                 </span>
+
                 <span className="font-bold">
                   ₹{cartTotal}
                 </span>
@@ -207,18 +238,18 @@ export default function CartPage() {
                 </span>
               </div>
 
-              {cartTotal > 0 &&
-                cartTotal < 299 && (
-                  <div className="rounded-xl bg-yellow-50 p-3 text-xs font-semibold text-yellow-700">
-                    Add ₹{299 - cartTotal} more
-                    for FREE delivery.
-                  </div>
-                )}
+              {cartTotal < 299 && (
+                <div className="rounded-xl bg-yellow-50 p-3 text-xs font-bold text-yellow-700">
+                  Add ₹{299 - cartTotal} more
+                  for FREE delivery.
+                </div>
+              )}
 
               <div className="border-t border-zinc-200 pt-4">
 
                 <div className="flex justify-between text-xl font-black">
                   <span>Total</span>
+
                   <span className="text-green-600">
                     ₹{grandTotal}
                   </span>
@@ -228,8 +259,11 @@ export default function CartPage() {
 
             </div>
 
-            <Link href="/checkout">
-              <button className="mt-6 w-full rounded-xl bg-yellow-400 py-4 font-black hover:bg-yellow-300">
+            <Link
+              href="/checkout"
+              className="mt-6 block"
+            >
+              <button className="w-full rounded-xl bg-yellow-400 py-4 font-black hover:bg-yellow-300">
                 Proceed to Checkout →
               </button>
             </Link>
