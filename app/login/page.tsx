@@ -3,120 +3,332 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { sendPhoneOTP, savePhoneUserProfile } from "../services/authService";
 
-const ADMIN_EMAIL = "mahajanvicky04@gmail.com";
+import {
+  googleLogin,
+  sendPhoneOTP,
+} from "../services/authService";
+
+const ADMIN_EMAIL =
+  "mahajanvicky04@gmail.com";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [name, setName] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [confirmationResult, setConfirmationResult] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
 
-  const normalizedPhone = () => {
-    const digits = phone.replace(/\D/g, "").replace(/^91/, "");
-    return digits.length === 10 ? `+91${digits}` : "";
-  };
+  const [phone, setPhone] =
+    useState("");
 
-  const sendOTP = async () => {
-    const cleanPhone = normalizedPhone();
-    if (!cleanPhone) return alert("Enter a valid 10 digit mobile number.");
-    setLoading(true);
-    try {
-      const result = await sendPhoneOTP(cleanPhone, "recaptcha-container");
-      setConfirmationResult(result);
-      setOtpSent(true);
-      alert("OTP sent successfully.");
-    } catch (error: any) {
-      alert(error?.message || "Failed to send OTP.");
-    } finally {
-      setLoading(false);
+  const [otp, setOtp] =
+    useState("");
+
+  const [
+    confirmationResult,
+    setConfirmationResult,
+  ] = useState<any>(null);
+
+  const [otpSent, setOtpSent] =
+    useState(false);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const goAfterLogin = (
+    user: any
+  ) => {
+    const email =
+      user?.email
+        ?.trim()
+        .toLowerCase();
+
+    if (
+      email ===
+      ADMIN_EMAIL.toLowerCase()
+    ) {
+      router.replace(
+        "/admin"
+      );
+
+      return;
     }
+
+    router.replace("/");
   };
 
-  const verifyOTP = async () => {
-    if (!confirmationResult || otp.length !== 6) return alert("Enter the 6 digit OTP.");
-    setLoading(true);
-    try {
-      const result = await confirmationResult.confirm(otp);
-      await savePhoneUserProfile(result.user, name);
-      const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase() || ADMIN_EMAIL.toLowerCase();
-      if (result.user.email?.toLowerCase() === adminEmail) router.replace("/admin");
-      else router.replace("/");
-    } catch (error: any) {
-      alert(error?.message || "Invalid OTP.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleGoogleLogin =
+    async () => {
+      if (loading) return;
+
+      setLoading(true);
+
+      try {
+        const result =
+          await googleLogin();
+
+        goAfterLogin(
+          result.user
+        );
+      } catch (error: any) {
+        console.error(
+          error
+        );
+
+        if (
+          error?.code ===
+          "auth/popup-closed-by-user"
+        ) {
+          return;
+        }
+
+        if (
+          error?.code ===
+          "auth/popup-blocked"
+        ) {
+          alert(
+            "Google popup blocked hai. Browser popup allow karein."
+          );
+
+          return;
+        }
+
+        alert(
+          error?.message ||
+            "Google login failed."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  const handleSendOTP =
+    async () => {
+      const cleanPhone =
+        phone.replace(
+          /\s/g,
+          ""
+        );
+
+      if (
+        !cleanPhone.startsWith(
+          "+91"
+        ) ||
+        cleanPhone.length !== 13
+      ) {
+        alert(
+          "Enter valid Indian mobile number with +91."
+        );
+
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const result =
+          await sendPhoneOTP(
+            cleanPhone,
+            "recaptcha-container"
+          );
+
+        setConfirmationResult(
+          result
+        );
+
+        setOtpSent(true);
+      } catch (error: any) {
+        alert(
+          error?.message ||
+            "OTP send failed."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  const handleVerifyOTP =
+    async () => {
+      if (
+        !confirmationResult ||
+        otp.length !== 6
+      ) {
+        alert(
+          "Enter valid 6 digit OTP."
+        );
+
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const result =
+          await confirmationResult.confirm(
+            otp
+          );
+
+        goAfterLogin(
+          result.user
+        );
+      } catch (error: any) {
+        alert(
+          error?.message ||
+            "Invalid OTP."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-10 text-black">
-      <div className="mx-auto max-w-md">
-        <Link href="/" className="text-sm font-bold text-zinc-500">← Back to Night Now</Link>
-        <div className="mt-5 rounded-3xl bg-white p-6 shadow-sm">
+    <main className="relative min-h-screen overflow-hidden bg-zinc-950 px-4 py-10 text-white">
+
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#3f3f46,transparent_55%)]" />
+
+      <div className="relative mx-auto max-w-md">
+
+        <Link
+          href="/"
+          className="text-sm font-bold text-zinc-500"
+        >
+          ← Back to Night Now
+        </Link>
+
+        <section className="mt-5 overflow-hidden rounded-[32px] border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+
           <div className="text-center">
-            <h1 className="text-3xl font-black">Night<span className="text-yellow-500">Now</span></h1>
-            <p className="mt-2 text-sm text-zinc-500">Mobile number se login karein</p>
+
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-yellow-400 text-4xl text-black">
+              🌙
+            </div>
+
+            <h1 className="mt-5 text-3xl font-black">
+              Night
+              <span className="text-yellow-400">
+                Now
+              </span>
+            </h1>
+
+            <p className="mt-2 text-sm text-zinc-500">
+              Login / Continue
+            </p>
           </div>
 
-          <div className="mt-7 space-y-4">
-            {!otpSent && (
-              <input
-                type="tel"
-                inputMode="numeric"
-                maxLength={10}
-                placeholder="Mobile Number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                className="w-full rounded-xl bg-zinc-100 p-4 text-lg outline-none focus:ring-2 focus:ring-yellow-400"
-              />
-            )}
+          {/* GOOGLE */}
 
-            {otpSent && (
-              <>
-                <div className="rounded-xl bg-zinc-100 p-4 text-sm font-bold">OTP sent to +91 {phone}</div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="6 Digit OTP"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  className="w-full rounded-xl bg-zinc-100 p-4 text-center text-xl tracking-[0.5em] outline-none focus:ring-2 focus:ring-yellow-400"
-                />
-                <input
-                  type="text"
-                  placeholder="Your Name (optional)"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl bg-zinc-100 p-4 outline-none focus:ring-2 focus:ring-yellow-400"
-                />
-              </>
-            )}
+          <button
+            type="button"
+            onClick={
+              handleGoogleLogin
+            }
+            disabled={loading}
+            className="mt-8 flex w-full items-center justify-center gap-3 rounded-2xl bg-white py-4 font-black text-black hover:bg-zinc-200 disabled:opacity-60"
+          >
+            <span className="text-lg font-black">
+              G
+            </span>
 
+            {loading
+              ? "Opening Google..."
+              : "Continue with Google"}
+          </button>
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-zinc-800" />
+
+            <span className="text-xs text-zinc-600">
+              OR
+            </span>
+
+            <div className="h-px flex-1 bg-zinc-800" />
+          </div>
+
+          {/* PHONE */}
+
+          <p className="mb-3 text-sm font-black">
+            Mobile Number
+          </p>
+
+          <input
+            type="tel"
+            value={phone}
+            disabled={otpSent}
+            onChange={(e) =>
+              setPhone(
+                e.target.value
+              )
+            }
+            placeholder="+91 9876543210"
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 outline-none focus:border-yellow-400"
+          />
+
+          {!otpSent ? (
             <button
-              type="button"
-              onClick={otpSent ? verifyOTP : sendOTP}
+              onClick={
+                handleSendOTP
+              }
               disabled={loading}
-              className="w-full rounded-xl bg-yellow-400 py-4 font-black disabled:opacity-50"
+              className="mt-3 w-full rounded-2xl bg-yellow-400 py-4 font-black text-black disabled:opacity-60"
             >
-              {loading ? "Please wait..." : otpSent ? "Verify OTP" : "Send OTP"}
+              {loading
+                ? "Sending OTP..."
+                : "Send OTP"}
             </button>
+          ) : (
+            <>
+              <input
+                value={otp}
+                maxLength={6}
+                onChange={(e) =>
+                  setOtp(
+                    e.target.value.replace(
+                      /\D/g,
+                      ""
+                    )
+                  )
+                }
+                placeholder="Enter 6 digit OTP"
+                className="mt-3 w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 text-center text-xl font-black tracking-[0.4em] outline-none focus:border-yellow-400"
+              />
 
-            {otpSent && (
-              <button type="button" onClick={() => { setOtpSent(false); setOtp(""); setConfirmationResult(null); }} className="w-full rounded-xl bg-zinc-100 py-3 text-sm font-bold">
-                Change Mobile Number
+              <button
+                onClick={
+                  handleVerifyOTP
+                }
+                disabled={loading}
+                className="mt-3 w-full rounded-2xl bg-yellow-400 py-4 font-black text-black disabled:opacity-60"
+              >
+                {loading
+                  ? "Verifying..."
+                  : "Verify & Continue"}
               </button>
-            )}
-          </div>
 
-          <div id="recaptcha-container" className="mt-3" />
-          <p className="mt-6 text-center text-xs text-zinc-400">OTP login is required for Night Now customers.</p>
-        </div>
+              <button
+                onClick={() => {
+                  setOtpSent(false);
+                  setOtp("");
+                  setConfirmationResult(
+                    null
+                  );
+                }}
+                className="mt-3 w-full py-2 text-xs font-bold text-zinc-500"
+              >
+                Change Number
+              </button>
+            </>
+          )}
+
+          <div
+            id="recaptcha-container"
+            className="hidden"
+          />
+
+          <p className="mt-6 text-center text-xs leading-5 text-zinc-600">
+            Continue karke aap Night Now
+            ke terms aur privacy policy
+            accept karte hain.
+          </p>
+
+        </section>
+
       </div>
     </main>
   );

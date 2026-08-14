@@ -1,26 +1,88 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
-type SearchBarProps = {
-  value?: string;
-  onChange?: (value: string) => void;
-};
+interface SearchBarProps {
+  value: string;
+  onChange: (value: string) => void;
+}
 
 export default function SearchBar({
-  value = "",
-  onChange = () => {},
+  value,
+  onChange,
 }: SearchBarProps) {
+  const [focused, setFocused] = useState(false);
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const startVoiceSearch = () => {
+    if (typeof window === "undefined") return;
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert(
+        "Voice search is not supported in this browser."
+      );
+      return;
+    }
+
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = "en-IN";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const text =
+        event.results?.[0]?.[0]?.transcript || "";
+
+      onChange(text);
+    };
+
+    recognition.onerror = () => {
+      setListening(false);
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop?.();
+    };
+  }, []);
+
   return (
-    <div className="border-b border-zinc-100 bg-white px-4 py-3">
+    <section className="bg-white px-3 pb-3 pt-2 text-black">
       <div className="mx-auto max-w-7xl">
-
-        <div className="relative">
-
-          <Search
-            size={20}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400"
-          />
+        <div
+          className={[
+            "flex items-center gap-2 rounded-2xl border px-3 transition-all",
+            focused
+              ? "border-yellow-400 bg-white shadow-md"
+              : "border-zinc-200 bg-zinc-100",
+          ].join(" ")}
+        >
+          <span className="text-lg">
+            🔍
+          </span>
 
           <input
             type="text"
@@ -28,25 +90,60 @@ export default function SearchBar({
             onChange={(e) =>
               onChange(e.target.value)
             }
-            placeholder="Search products..."
-            className="h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 pl-12 pr-12 text-sm font-medium text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-yellow-400 focus:bg-white focus:ring-4 focus:ring-yellow-100"
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder="Search medicines, grocery, dairy..."
+            className="h-11 min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-zinc-500"
           />
 
-          {value.length > 0 && (
+          {value && (
             <button
               type="button"
-              onClick={() =>
-                onChange("")
-              }
-              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-zinc-200 text-zinc-600 hover:bg-zinc-300"
+              onClick={() => onChange("")}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-300 text-sm font-black"
             >
-              <X size={17} />
+              ×
             </button>
           )}
 
+          {/* VOICE SEARCH */}
+          <button
+            type="button"
+            onClick={startVoiceSearch}
+            title="Voice Search"
+            className={[
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg transition",
+              listening
+                ? "bg-red-500 text-white animate-pulse"
+                : "bg-black text-white hover:bg-zinc-800",
+            ].join(" ")}
+          >
+            🎙️
+          </button>
         </div>
 
+        {!value && (
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1 text-[11px]">
+            {[
+              "Medicines",
+              "Grocery",
+              "Snacks",
+              "Dairy",
+              "Beverages",
+              "Personal Care",
+            ].map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onChange(item)}
+                className="shrink-0 rounded-full bg-zinc-100 px-3 py-1.5 font-bold text-zinc-600"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    </section>
   );
 }

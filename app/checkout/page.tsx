@@ -2,22 +2,41 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
 
-import { useCart } from "../context/CartContext";
-import { auth } from "../lib/firebase";
-import { addOrder } from "../services/orderService";
 import {
-  getProductById,
-  updateProductStock,
-} from "../services/productService";
-import { getCoupons } from "../services/couponService";
+  onAuthStateChanged,
+} from "firebase/auth";
+
+import {
+  collection,
+  getDocs,
+} from "firebase/firestore";
+
+import { auth, db } from "../lib/firebase";
+
+import {
+  useCart,
+} from "../context/CartContext";
+
+import {
+  addOrder,
+} from "../services/orderService";
 
 declare global {
   interface Window {
     Razorpay: any;
   }
 }
+
+type SavedAddress = {
+  id: string;
+  name?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  pincode?: string;
+  label?: string;
+};
 
 export default function CheckoutPage() {
   const {
@@ -26,169 +45,156 @@ export default function CheckoutPage() {
     deleteFromCart,
   } = useCart();
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [pincode, setPincode] = useState("");
+  const [user, setUser] =
+    useState<any>(null);
 
-  const [couponCode, setCouponCode] = useState("");
-  const [couponDiscount, setCouponDiscount] = useState(0);
-  const [couponMessage, setCouponMessage] = useState("");
+  const [name, setName] =
+    useState("");
 
-  const [coupons, setCoupons] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [phone, setPhone] =
+    useState("");
 
-  // ==============================
-  // DELIVERY CHARGE
-  // ==============================
+  const [address, setAddress] =
+    useState("");
 
-  const getDeliveryCharge = (subtotal: number) => {
-    if (subtotal >= 299) return 0;
-    if (subtotal >= 199) return 20;
-    return 30;
-  };
+  const [city, setCity] =
+    useState("");
 
-  const delivery = getDeliveryCharge(cartTotal);
+  const [pincode, setPincode] =
+    useState("");
 
-  // ==============================
-  // DISCOUNT + TOTAL
-  // ==============================
+  const [savedAddresses, setSavedAddresses] =
+    useState<SavedAddress[]>([]);
 
-  const discountAmount = Math.round(
-    (cartTotal * couponDiscount) / 100
-  );
+  const [showAddresses, setShowAddresses] =
+    useState(false);
 
-  const grandTotal = Math.max(
-    0,
-    cartTotal - discountAmount + delivery
-  );
+  const [loading, setLoading] =
+    useState(false);
 
-  // ==============================
-  // LOAD COUPONS
-  // ==============================
+  const delivery =
+    cartTotal >= 299 ? 0 : 30;
+
+  const grandTotal =
+    cartTotal + delivery;
+
+  // =====================================
+  // AUTH + SAVED ADDRESS
+  // =====================================
 
   useEffect(() => {
-    const loadCoupons = async () => {
-      try {
-        const data = await getCoupons();
-        setCoupons(data);
-      } catch (error) {
-        console.error(
-          "Coupon loading failed:",
-          error
-        );
-      }
-    };
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (currentUser) => {
+          setUser(currentUser);
 
-    loadCoupons();
+          if (!currentUser) {
+            return;
+          }
+
+          try {
+            const snapshot =
+              await getDocs(
+                collection(
+                  db,
+                  "users",
+                  currentUser.uid,
+                  "addresses"
+                )
+              );
+
+            const addresses =
+              snapshot.docs.map(
+                (item) => ({
+                  id: item.id,
+                  ...(item.data() as any),
+                })
+              );
+
+            setSavedAddresses(
+              addresses
+            );
+
+            // AUTO SELECT FIRST SAVED ADDRESS
+            if (
+              addresses.length > 0
+            ) {
+              const first =
+                addresses[0];
+
+              setName(
+                first.name || ""
+              );
+
+              setPhone(
+                first.phone || ""
+              );
+
+              setAddress(
+                first.address || ""
+              );
+
+              setCity(
+                first.city || ""
+              );
+
+              setPincode(
+                first.pincode || ""
+              );
+            }
+          } catch (error) {
+            console.error(
+              "Address loading failed:",
+              error
+            );
+          }
+        }
+      );
+
+    return () =>
+      unsubscribe();
   }, []);
 
-  // ==============================
-  // APPLY COUPON
-  // ==============================
+  // =====================================
+  // SELECT SAVED ADDRESS
+  // =====================================
 
-  const applyCoupon = () => {
-    const code = couponCode
-      .trim()
-      .toUpperCase();
-
-    if (!code) {
-      setCouponMessage(
-        "Enter coupon code"
-      );
-      setCouponDiscount(0);
-      return;
-    }
-
-    const coupon = coupons.find(
-      (item: any) =>
-        String(item.code || "")
-          .toUpperCase() === code &&
-        item.active !== false
+  const selectAddress = (
+    item: SavedAddress
+  ) => {
+    setName(
+      item.name || ""
     );
 
-    if (!coupon) {
-      setCouponDiscount(0);
-      setCouponMessage(
-        "Invalid coupon"
-      );
-      return;
-    }
-
-    const minimumOrder = Number(
-      coupon.minOrder || 0
+    setPhone(
+      item.phone || ""
     );
 
-    if (cartTotal < minimumOrder) {
-      setCouponDiscount(0);
-      setCouponMessage(
-        `Minimum order ₹${minimumOrder} required`
-      );
-      return;
-    }
-
-    if (coupon.expiresAt) {
-      try {
-        const expiry =
-          coupon.expiresAt?.toDate
-            ? coupon.expiresAt.toDate()
-            : new Date(coupon.expiresAt);
-
-        if (
-          !isNaN(expiry.getTime()) &&
-          expiry.getTime() < Date.now()
-        ) {
-          setCouponDiscount(0);
-          setCouponMessage(
-            "Coupon has expired"
-          );
-          return;
-        }
-      } catch {
-        // Ignore invalid expiry
-      }
-    }
-
-    const discount = Number(
-      coupon.discount || 0
+    setAddress(
+      item.address || ""
     );
 
-    if (
-      discount <= 0 ||
-      discount > 100
-    ) {
-      setCouponDiscount(0);
-      setCouponMessage(
-        "Invalid discount"
-      );
-      return;
-    }
-
-    setCouponDiscount(discount);
-
-    setCouponMessage(
-      `${discount}% discount applied`
+    setCity(
+      item.city || ""
     );
+
+    setPincode(
+      item.pincode || ""
+    );
+
+    setShowAddresses(false);
   };
 
-  // ==============================
-  // REMOVE COUPON
-  // ==============================
-
-  const removeCoupon = () => {
-    setCouponCode("");
-    setCouponDiscount(0);
-    setCouponMessage("");
-  };
-
-  // ==============================
-  // VALIDATE CHECKOUT
-  // ==============================
+  // =====================================
+  // VALIDATE
+  // =====================================
 
   const validate = () => {
     if (!name.trim()) {
-      alert("Please enter your name");
+      alert(
+        "Please enter your name"
+      );
       return false;
     }
 
@@ -210,7 +216,9 @@ export default function CheckoutPage() {
     }
 
     if (!city.trim()) {
-      alert("Please enter city");
+      alert(
+        "Please enter city"
+      );
       return false;
     }
 
@@ -232,147 +240,29 @@ export default function CheckoutPage() {
       return false;
     }
 
-    if (grandTotal <= 0) {
-      alert("Invalid order total");
-      return false;
-    }
-
     return true;
   };
 
-  // ==============================
-  // GET CURRENT USER EMAIL
-  // ==============================
-
-  const getCurrentEmail =
-    async (): Promise<string> => {
-      if (auth.currentUser?.email) {
-        return auth.currentUser.email;
-      }
-
-      return new Promise(
-        (resolve) => {
-          const unsubscribe =
-            onAuthStateChanged(
-              auth,
-              (user) => {
-                unsubscribe();
-                resolve(
-                  user?.email || ""
-                );
-              }
-            );
-        }
-      );
-    };
-
-  // ==============================
-  // UPDATE STOCK
-  // ==============================
-
-  const reduceStock = async () => {
-    for (const item of cart) {
-      try {
-        const product =
-          await getProductById(
-            item.id
-          );
-
-        if (!product) {
-          console.warn(
-            "Product not found:",
-            item.id
-          );
-          continue;
-        }
-
-        const currentStock =
-          Number(
-            product.stock || 0
-          );
-
-        const quantity =
-          Number(
-            item.quantity || 1
-          );
-
-        const newStock =
-          currentStock - quantity;
-
-        if (newStock < 0) {
-          throw new Error(
-            `${
-              item.name || "Product"
-            } is out of stock`
-          );
-        }
-
-        await updateProductStock(
-          item.id,
-          newStock
-        );
-      } catch (error) {
-        console.error(
-          "Stock update failed:",
-          error
-        );
-      }
-    }
-  };
-
-  // ==============================
-  // CLEAR CART
-  // ==============================
-
-  const clearCurrentCart = () => {
-    cart.forEach(
-      (item: any) => {
-        deleteFromCart(item.id);
-      }
-    );
-  };
-
-  // ==============================
+  // =====================================
   // SAVE ORDER
-  // ==============================
+  // =====================================
 
   const saveOrder = async (
     paymentMethod: string,
     paymentData: any = {}
   ) => {
-    const email =
-      await getCurrentEmail();
-
-    const currentUser =
-      auth.currentUser;
-
     const order = {
-      userId:
-        currentUser?.uid || "",
-
       customer: {
-        name: name.trim(),
-        email,
+        name,
         phone,
-        address:
-          address.trim(),
-        city: city.trim(),
+        address,
+        city,
         pincode,
       },
 
       items: cart,
 
       subtotal: cartTotal,
-
-      discount:
-        discountAmount,
-
-      coupon:
-        couponDiscount > 0
-          ? couponCode
-              .trim()
-              .toUpperCase()
-          : "",
 
       delivery,
 
@@ -382,105 +272,104 @@ export default function CheckoutPage() {
 
       payment: paymentData,
 
-      createdBy: email,
+      userId:
+        user?.uid || null,
+
+      customerEmail:
+        user?.email || null,
+
+      status: "Placed",
+
+      createdAt:
+        new Date(),
     };
 
-    await addOrder(order);
+    await addOrder(
+      order
+    );
 
-    await reduceStock();
-
-    clearCurrentCart();
+    cart.forEach(
+      (item: any) => {
+        deleteFromCart(
+          item.id
+        );
+      }
+    );
 
     window.location.href =
       "/orders";
   };
 
-  // ==============================
+  // =====================================
   // COD
-  // ==============================
+  // =====================================
 
-  const placeCODOrder =
-    async () => {
-      if (!validate()) return;
-
-      setLoading(true);
-
-      try {
-        await saveOrder("COD");
-      } catch (error: any) {
-        console.error(
-          "COD order failed:",
-          error
-        );
-
-        alert(
-          error?.message ||
-            "Failed to place order"
-        );
-
-        setLoading(false);
-      }
-    };
-
-  // ==============================
-  // LOAD RAZORPAY
-  // ==============================
-
-  const loadRazorpay =
-    async () => {
-      if (
-        document.querySelector(
-          'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
-        )
-      ) {
-        return true;
-      }
-
-      return new Promise<boolean>(
-        (resolve) => {
-          const script =
-            document.createElement(
-              "script"
-            );
-
-          script.src =
-            "https://checkout.razorpay.com/v1/checkout.js";
-
-          script.async = true;
-
-          script.onload = () =>
-            resolve(true);
-
-          script.onerror = () =>
-            resolve(false);
-
-          document.body.appendChild(
-            script
-          );
-        }
-      );
-    };
-
-  // ==============================
-  // ONLINE PAYMENT
-  // ==============================
-
-  const payOnline = async () => {
-    if (!validate()) return;
+  const placeCOD = async () => {
+    if (!validate()) {
+      return;
+    }
 
     setLoading(true);
 
     try {
-      const razorpayLoaded =
-        await loadRazorpay();
+      await saveOrder(
+        "COD"
+      );
+    } catch (error) {
+      console.error(error);
 
-      if (!razorpayLoaded) {
-        throw new Error(
-          "Razorpay could not be loaded"
+      alert(
+        "Order Failed"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =====================================
+  // ONLINE PAYMENT
+  // =====================================
+
+  const payOnline = async () => {
+    if (!validate()) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (
+        !window.Razorpay
+      ) {
+        const script =
+          document.createElement(
+            "script"
+          );
+
+        script.src =
+          "https://checkout.razorpay.com/v1/checkout.js";
+
+        script.async = true;
+
+        document.body.appendChild(
+          script
+        );
+
+        await new Promise(
+          (
+            resolve,
+            reject
+          ) => {
+            script.onload =
+              resolve;
+
+            script.onerror =
+              reject;
+          }
         );
       }
 
-      const orderResponse =
+      const response =
         await fetch(
           "/api/razorpay/create-order",
           {
@@ -491,65 +380,35 @@ export default function CheckoutPage() {
                 "application/json",
             },
 
-            body: JSON.stringify({
-              amount: grandTotal,
-            }),
+            body: JSON.stringify(
+              {
+                amount:
+                  grandTotal,
+              }
+            ),
           }
         );
 
-      const responseText =
-        await orderResponse.text();
+      const razorpayOrder =
+        await response.json();
 
-      let razorpayOrder: any;
-
-      try {
-        razorpayOrder =
-          JSON.parse(
-            responseText
-          );
-      } catch {
-        console.error(
-          "Invalid Razorpay API response:",
-          responseText
-        );
-
+      if (
+        !response.ok
+      ) {
         throw new Error(
-          "Payment server returned an invalid response"
-        );
-      }
-
-      if (!orderResponse.ok) {
-        throw new Error(
-          razorpayOrder?.error ||
-            "Razorpay order creation failed"
-        );
-      }
-
-      if (!razorpayOrder?.id) {
-        throw new Error(
-          "Razorpay order ID missing"
-        );
-      }
-
-      const razorpayKey =
-        process.env
-          .NEXT_PUBLIC_RAZORPAY_KEY_ID;
-
-      if (!razorpayKey) {
-        throw new Error(
-          "Razorpay key is not configured"
+          "Razorpay order creation failed"
         );
       }
 
       const options = {
-        key: razorpayKey,
+        key:
+          process.env
+            .NEXT_PUBLIC_RAZORPAY_KEY_ID,
 
         amount:
           razorpayOrder.amount,
 
-        currency:
-          razorpayOrder.currency ||
-          "INR",
+        currency: "INR",
 
         name: "Night Now",
 
@@ -560,110 +419,41 @@ export default function CheckoutPage() {
           razorpayOrder.id,
 
         prefill: {
-          name: name.trim(),
-          contact: `+91${phone}`,
+          name,
+          contact:
+            `+91${phone}`,
         },
 
         notes: {
           address,
           city,
           pincode,
-
-          coupon:
-            couponDiscount > 0
-              ? couponCode
-                  .trim()
-                  .toUpperCase()
-              : "",
         },
 
         theme: {
-          color: "#FFD700",
+          color:
+            "#facc15",
         },
 
         handler:
           async (
-            response: any
+            paymentResponse: any
           ) => {
             try {
-              const verifyResponse =
-                await fetch(
-                  "/api/razorpay/verify-payment",
-                  {
-                    method: "POST",
-
-                    headers: {
-                      "Content-Type":
-                        "application/json",
-                    },
-
-                    body: JSON.stringify(
-                      response
-                    ),
-                  }
-                );
-
-              const verifyText =
-                await verifyResponse.text();
-
-              let verification: any;
-
-              try {
-                verification =
-                  JSON.parse(
-                    verifyText
-                  );
-              } catch {
-                throw new Error(
-                  "Payment verification server returned invalid response"
-                );
-              }
-
-              if (
-                !verifyResponse.ok ||
-                !verification?.success
-              ) {
-                throw new Error(
-                  verification?.error ||
-                    "Payment verification failed"
-                );
-              }
-
               await saveOrder(
-                "Razorpay",
-                {
-                  paymentId:
-                    response.razorpay_payment_id,
-
-                  razorpayOrderId:
-                    response.razorpay_order_id,
-
-                  signature:
-                    response.razorpay_signature,
-                }
+                "Online",
+                paymentResponse
               );
-            } catch (
-              error: any
-            ) {
+            } catch (error) {
               console.error(
-                "Payment verification failed:",
                 error
               );
 
               alert(
-                error?.message ||
-                  "Payment verification failed"
+                "Payment successful but order saving failed. Please contact support."
               );
-
-              setLoading(false);
             }
           },
-
-        modal: {
-          ondismiss: () => {
-            setLoading(false);
-          },
-        },
       };
 
       const razorpay =
@@ -672,117 +462,166 @@ export default function CheckoutPage() {
         );
 
       razorpay.open();
-    } catch (error: any) {
+    } catch (error) {
       console.error(
-        "Online payment failed:",
         error
       );
 
       alert(
-        error?.message ||
-          "Unable to start online payment"
+        "Online payment failed"
       );
-
+    } finally {
       setLoading(false);
     }
   };
 
-  // ==============================
-  // EMPTY CART
-  // ==============================
-
-  if (
-    !cart ||
-    cart.length === 0
-  ) {
-    return (
-      <main className="min-h-screen bg-black px-4 py-20 text-white">
-        <div className="mx-auto max-w-md text-center">
-
-          <div className="text-7xl">
-            🛒
-          </div>
-
-          <h1 className="mt-6 text-3xl font-black">
-            Cart is Empty
-          </h1>
-
-          <p className="mt-3 text-zinc-400">
-            Add some products before checkout.
-          </p>
-
-          <Link href="/">
-            <button className="mt-8 rounded-xl bg-yellow-400 px-8 py-3 font-bold text-black">
-              Start Shopping
-            </button>
-          </Link>
-
-        </div>
-      </main>
-    );
-  }
-
-  // ==============================
-  // PAGE
-  // ==============================
+  // =====================================
+  // UI
+  // =====================================
 
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white">
+    <main className="min-h-screen bg-black px-3 py-5 pb-10 text-white">
 
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-5xl">
 
-        <Link href="/cart">
-          <button className="rounded-lg bg-zinc-800 px-4 py-2 font-semibold">
-            ← Back to Cart
-          </button>
-        </Link>
+        {/* HEADER */}
 
-        <h1 className="mt-6 text-3xl font-black">
-          Checkout
-        </h1>
+        <div className="mb-5 flex items-center justify-between">
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px]">
+          <div>
+            <Link
+              href="/cart"
+              className="text-xs font-bold text-zinc-500"
+            >
+              ← Back to Cart
+            </Link>
+
+            <h1 className="mt-2 text-3xl font-black">
+              Checkout
+            </h1>
+          </div>
+
+          <div className="rounded-2xl bg-yellow-400 px-4 py-2 text-black">
+
+            <p className="text-[9px] font-bold">
+              TOTAL
+            </p>
+
+            <p className="text-lg font-black">
+              ₹{grandTotal}
+            </p>
+
+          </div>
+
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
 
           {/* DELIVERY DETAILS */}
 
-          <div className="rounded-2xl bg-zinc-900 p-6">
+          <section className="rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
 
-            <h2 className="mb-6 text-xl font-bold">
-              Delivery Details
-            </h2>
+            <div className="flex items-center justify-between">
 
-            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-black">
+                  Delivery Address
+                </h2>
+
+                <p className="mt-1 text-xs text-zinc-500">
+                  Where should we deliver?
+                </p>
+              </div>
+
+              {savedAddresses.length >
+                0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowAddresses(
+                      !showAddresses
+                    )
+                  }
+                  className="rounded-xl bg-yellow-400 px-3 py-2 text-[10px] font-black text-black"
+                >
+                  📍 Saved Addresses
+                </button>
+              )}
+
+            </div>
+
+            {/* SAVED ADDRESS */}
+
+            {showAddresses && (
+              <div className="mt-4 space-y-2">
+
+                {savedAddresses.map(
+                  (item) => (
+                    <button
+                      key={
+                        item.id
+                      }
+                      type="button"
+                      onClick={() =>
+                        selectAddress(
+                          item
+                        )
+                      }
+                      className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-left hover:border-yellow-400"
+                    >
+
+                      <p className="text-xs font-black">
+                        {item.label ||
+                          "Saved Address"}
+                      </p>
+
+                      <p className="mt-1 text-xs text-zinc-400">
+                        {
+                          item.address
+                        }
+                        {item.city
+                          ? `, ${item.city}`
+                          : ""}
+                        {item.pincode
+                          ? ` - ${item.pincode}`
+                          : ""}
+                      </p>
+
+                    </button>
+                  )
+                )}
+
+              </div>
+            )}
+
+            <div className="mt-5 space-y-3">
 
               <input
-                type="text"
-                placeholder="Full Name"
                 value={name}
                 onChange={(e) =>
                   setName(
                     e.target.value
                   )
                 }
-                className="w-full rounded-xl bg-zinc-800 p-4 outline-none"
+                placeholder="Full Name"
+                className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
               />
 
               <input
-                type="tel"
-                placeholder="Phone Number"
-                maxLength={10}
                 value={phone}
                 onChange={(e) =>
                   setPhone(
                     e.target.value.replace(
                       /\D/g,
                       ""
-                    )
+                    ).slice(0, 10)
                   )
                 }
-                className="w-full rounded-xl bg-zinc-800 p-4 outline-none"
+                placeholder="10 Digit Mobile Number"
+                className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
               />
 
               <textarea
-                placeholder="Delivery Address"
                 rows={4}
                 value={address}
                 onChange={(e) =>
@@ -790,81 +629,90 @@ export default function CheckoutPage() {
                     e.target.value
                   )
                 }
-                className="w-full rounded-xl bg-zinc-800 p-4 outline-none"
+                placeholder="House / Flat / Building / Street"
+                className="w-full resize-none rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
               />
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
 
                 <input
-                  type="text"
-                  placeholder="City"
                   value={city}
                   onChange={(e) =>
                     setCity(
                       e.target.value
                     )
                   }
-                  className="w-full rounded-xl bg-zinc-800 p-4 outline-none"
+                  placeholder="City"
+                  className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
                 />
 
                 <input
-                  type="text"
-                  placeholder="Pincode"
-                  maxLength={6}
                   value={pincode}
                   onChange={(e) =>
                     setPincode(
-                      e.target.value.replace(
-                        /\D/g,
-                        ""
-                      )
+                      e.target.value
+                        .replace(
+                          /\D/g,
+                          ""
+                        )
+                        .slice(
+                          0,
+                          6
+                        )
                     )
                   }
-                  className="w-full rounded-xl bg-zinc-800 p-4 outline-none"
+                  placeholder="Pincode"
+                  className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
                 />
 
               </div>
 
             </div>
 
-          </div>
+          </section>
 
           {/* ORDER SUMMARY */}
 
-          <div className="h-fit rounded-2xl bg-zinc-900 p-6">
+          <section className="h-fit rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
 
-            <h2 className="text-xl font-bold">
+            <h2 className="text-lg font-black">
               Order Summary
             </h2>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-4 space-y-3">
 
               {cart.map(
                 (item: any) => (
                   <div
-                    key={item.id}
-                    className="flex justify-between border-b border-zinc-800 pb-3"
+                    key={
+                      item.id
+                    }
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-zinc-900 p-3"
                   >
 
-                    <div className="min-w-0 pr-3">
+                    <div className="min-w-0">
 
-                      <p className="font-semibold">
-                        {item.name}
+                      <p className="truncate text-xs font-black">
+                        {
+                          item.name
+                        }
                       </p>
 
-                      <p className="text-sm text-zinc-400">
-                        {item.quantity ||
-                          1}
-                        {" × "}
-                        ₹{item.price}
+                      <p className="mt-1 text-[10px] text-zinc-500">
+                        Qty:{" "}
+                        {
+                          item.quantity ||
+                            1
+                        }
                       </p>
 
                     </div>
 
-                    <p className="shrink-0 font-bold">
+                    <p className="shrink-0 text-xs font-black">
                       ₹
                       {Number(
-                        item.price || 0
+                        item.price ||
+                          0
                       ) *
                         Number(
                           item.quantity ||
@@ -876,153 +724,77 @@ export default function CheckoutPage() {
                 )
               )}
 
-              {/* COUPON */}
+            </div>
 
-              <div className="pt-2">
+            <div className="my-5 h-px bg-zinc-800" />
 
-                <p className="mb-2 text-sm text-zinc-400">
-                  Coupon Code
-                </p>
-
-                <div className="flex gap-2">
-
-                  <input
-                    value={couponCode}
-                    onChange={(e) =>
-                      setCouponCode(
-                        e.target.value.toUpperCase()
-                      )
-                    }
-                    placeholder="Enter coupon"
-                    disabled={
-                      couponDiscount > 0
-                    }
-                    className="min-w-0 flex-1 rounded-lg bg-zinc-800 px-3 py-3 outline-none"
-                  />
-
-                  {couponDiscount >
-                  0 ? (
-                    <button
-                      onClick={
-                        removeCoupon
-                      }
-                      className="rounded-lg bg-red-600 px-4 font-bold"
-                    >
-                      Remove
-                    </button>
-                  ) : (
-                    <button
-                      onClick={
-                        applyCoupon
-                      }
-                      className="rounded-lg bg-yellow-400 px-4 font-bold text-black"
-                    >
-                      Apply
-                    </button>
-                  )}
-
-                </div>
-
-                {couponMessage && (
-                  <p
-                    className={`mt-2 text-sm ${
-                      couponDiscount >
-                      0
-                        ? "text-green-400"
-                        : "text-red-400"
-                    }`}
-                  >
-                    {couponMessage}
-                  </p>
-                )}
-
-              </div>
-
-              {/* TOTALS */}
+            <div className="space-y-3 text-sm">
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">
-                  Subtotal
+                <span className="text-zinc-500">
+                  Items
                 </span>
 
-                <span>
+                <span className="font-bold">
                   ₹{cartTotal}
                 </span>
               </div>
 
-              {discountAmount >
-                0 && (
-                <div className="flex justify-between text-green-400">
-
-                  <span>
-                    Coupon Discount
-                  </span>
-
-                  <span>
-                    -₹
-                    {discountAmount}
-                  </span>
-
-                </div>
-              )}
-
               <div className="flex justify-between">
-
-                <span className="text-zinc-400">
+                <span className="text-zinc-500">
                   Delivery
                 </span>
 
-                <span>
+                <span className="font-bold text-green-400">
                   {delivery === 0
                     ? "FREE"
                     : `₹${delivery}`}
                 </span>
-
               </div>
 
-              <div className="border-t border-zinc-700 pt-4">
+              <div className="flex justify-between border-t border-zinc-800 pt-3 text-lg">
+                <span className="font-black">
+                  Total
+                </span>
 
-                <div className="flex justify-between text-xl font-black">
-
-                  <span>
-                    Total
-                  </span>
-
-                  <span className="text-yellow-400">
-                    ₹{grandTotal}
-                  </span>
-
-                </div>
-
+                <span className="font-black text-yellow-400">
+                  ₹{grandTotal}
+                </span>
               </div>
 
             </div>
 
-            {/* ONLINE PAYMENT */}
+            {/* PAYMENT */}
 
-            <button
-              onClick={payOnline}
-              disabled={loading}
-              className="mt-6 w-full rounded-xl bg-yellow-400 py-4 font-black text-black disabled:opacity-50"
-            >
-              {loading
-                ? "Processing..."
-                : `Pay Online • ₹${grandTotal}`}
-            </button>
+            <div className="mt-6">
 
-            {/* COD */}
+              <p className="mb-3 text-xs font-black text-zinc-500">
+                PAYMENT METHOD
+              </p>
 
-            <button
-              onClick={
-                placeCODOrder
-              }
-              disabled={loading}
-              className="mt-3 w-full rounded-xl bg-zinc-800 py-4 font-bold disabled:opacity-50"
-            >
-              Cash on Delivery
-            </button>
+              <button
+                disabled={loading}
+                onClick={
+                  payOnline
+                }
+                className="w-full rounded-2xl bg-yellow-400 py-4 text-sm font-black text-black disabled:opacity-50"
+              >
+                💳 Pay Online
+              </button>
 
-          </div>
+              <button
+                disabled={loading}
+                onClick={
+                  placeCOD
+                }
+                className="mt-3 w-full rounded-2xl border border-zinc-700 bg-zinc-900 py-4 text-sm font-black disabled:opacity-50"
+              >
+                💵 Cash on Delivery
+              </button>
+
+            </div>
+
+          </section>
 
         </div>
 

@@ -12,9 +12,18 @@ import { useParams } from "next/navigation";
 import {
   doc,
   getDoc,
+  setDoc,
+  deleteDoc,
 } from "firebase/firestore";
 
-import { db } from "../../lib/firebase";
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
+
+import {
+  auth,
+  db,
+} from "../../lib/firebase";
 import { useCart } from "../../context/CartContext";
 
 // =====================================================
@@ -94,6 +103,9 @@ export default function ProductPage() {
 
   const [loading, setLoading] =
     useState(true);
+
+const [user, setUser] =
+  useState<any>(null);
 
   const [error, setError] =
     useState("");
@@ -410,49 +422,67 @@ export default function ProductPage() {
   // LIKE
   // ===================================================
 
-  const toggleLike = () => {
-    try {
-      const wishlist =
-        JSON.parse(
-          localStorage.getItem(
-            "nightnow_wishlist"
-          ) || "[]"
-        );
+  const toggleLike = async () => {
+  if (!user) {
+    alert(
+      "Wishlist use karne ke liye login karein."
+    );
 
-      const index =
-        wishlist.indexOf(
-          product.id
-        );
+    return;
+  }
 
-      if (index === -1) {
-        wishlist.push(
-          product.id
-        );
-
-        setLiked(true);
-      } else {
-        wishlist.splice(
-          index,
-          1
-        );
-
-        setLiked(false);
-      }
-
-      localStorage.setItem(
-        "nightnow_wishlist",
-        JSON.stringify(
-          wishlist
-        )
+  try {
+    const wishlistRef =
+      doc(
+        db,
+        "users",
+        user.uid,
+        "wishlist",
+        product.id
       );
-    } catch (err) {
-      console.error(
-        "Wishlist error:",
-        err
+
+    if (liked) {
+      await deleteDoc(
+        wishlistRef
       );
+
+      setLiked(false);
+    } else {
+      await setDoc(
+        wishlistRef,
+        {
+          productId:
+            product.id,
+
+          productName:
+            product.name || "",
+
+          image:
+            product.image || "",
+
+          price:
+            Number(
+              product.price || 0
+            ),
+
+          addedAt:
+            new Date(),
+        }
+      );
+
+      setLiked(true);
     }
-  };
+  } catch (error) {
+    console.error(
+      "Wishlist error:",
+      error
+    );
 
+    alert(
+      "Wishlist update failed."
+    );
+  }
+};
   // ===================================================
   // ADD PRODUCT
   // ===================================================

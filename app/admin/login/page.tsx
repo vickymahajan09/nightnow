@@ -2,357 +2,200 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
 import {
   checkUser,
-  loginUser,
   googleLogin,
-  resetPassword,
 } from "../../services/authService";
 
 export default function AdminLoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
   useEffect(() => {
-    const unsubscribe = checkUser((user: any) => {
-      if (!user) return;
+    const unsubscribe =
+      checkUser(
+        (user: any) => {
+          if (!user) return;
 
-      const adminEmail =
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL
-          ?.trim()
-          .toLowerCase();
+          const adminEmail =
+            process.env
+              .NEXT_PUBLIC_ADMIN_EMAIL
+              ?.trim()
+              .toLowerCase();
 
-      if (
-        adminEmail &&
-        user.email &&
-        user.email.toLowerCase() === adminEmail
-      ) {
-        router.replace("/admin");
-      }
-    });
+          if (
+            adminEmail &&
+            user.email
+              ?.trim()
+              .toLowerCase() ===
+              adminEmail
+          ) {
+            router.replace(
+              "/admin"
+            );
+          }
+        }
+      );
 
-    return () => {
-      if (typeof unsubscribe === "function") {
-        unsubscribe();
-      }
-    };
+    return () =>
+      unsubscribe();
   }, [router]);
 
-  const login = async () => {
-    const cleanEmail = email.trim().toLowerCase();
+  const loginWithGoogle =
+    async () => {
+      if (loading) return;
 
-    if (!cleanEmail || !password) {
-      alert("Email aur password dono bhariye.");
-      return;
-    }
+      setLoading(true);
 
-    const adminEmail =
-      process.env.NEXT_PUBLIC_ADMIN_EMAIL
-        ?.trim()
-        .toLowerCase();
+      try {
+        const result =
+          await googleLogin();
 
-    if (!adminEmail) {
-      alert(
-        "Admin configuration missing. Vercel Environment Variables check karein."
-      );
-      return;
-    }
+        const loggedEmail =
+          result.user.email
+            ?.trim()
+            .toLowerCase();
 
-    if (cleanEmail !== adminEmail) {
-      alert("Ye admin account nahi hai.");
-      return;
-    }
+        const adminEmail =
+          process.env
+            .NEXT_PUBLIC_ADMIN_EMAIL
+            ?.trim()
+            .toLowerCase();
 
-    setLoading(true);
-
-    try {
-      const result = await loginUser(
-        cleanEmail,
-        password
-      );
-
-      if (!result?.user) {
-        throw new Error("Login failed");
-      }
-
-      if (
-        result.user.email?.toLowerCase() !==
-        adminEmail
-      ) {
-        alert("Admin access denied.");
-        return;
-      }
-
-      router.replace("/admin");
-    } catch (error: any) {
-      console.error(
-        "ADMIN LOGIN ERROR:",
-        error
-      );
-
-      switch (error?.code) {
-        case "auth/invalid-credential":
-        case "auth/wrong-password":
-        case "auth/user-not-found":
+        if (
+          !adminEmail
+        ) {
           alert(
-            "Email ya password incorrect hai."
+            "NEXT_PUBLIC_ADMIN_EMAIL missing hai."
           );
-          break;
+          return;
+        }
 
-        case "auth/too-many-requests":
+        if (
+          loggedEmail !==
+          adminEmail
+        ) {
           alert(
-            "Bahut baar login attempts hue hain. Thodi der baad try karein."
+            "Ye Google account Admin account nahi hai."
           );
-          break;
 
-        case "auth/network-request-failed":
-          alert(
-            "Internet connection check karein."
-          );
-          break;
+          return;
+        }
 
-        default:
-          alert(
-            error?.message ||
-              "Admin login failed."
-          );
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ==============================
-  // FORGOT PASSWORD
-  // ==============================
-
-  const forgotPassword = async () => {
-    const cleanEmail = email.trim().toLowerCase();
-
-    const adminEmail =
-      process.env.NEXT_PUBLIC_ADMIN_EMAIL
-        ?.trim()
-        .toLowerCase();
-
-    if (!cleanEmail) {
-      alert("Pehle admin email enter karein.");
-      return;
-    }
-
-    if (!adminEmail) {
-      alert(
-        "Admin configuration missing. Vercel Environment Variables check karein."
-      );
-      return;
-    }
-
-    if (cleanEmail !== adminEmail) {
-      alert("Ye admin account nahi hai.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await resetPassword(cleanEmail);
-
-      alert(
-        "Password reset link aapke email par bhej diya gaya hai."
-      );
-    } catch (error: any) {
-      console.error(
-        "PASSWORD RESET ERROR:",
-        error
-      );
-
-      switch (error?.code) {
-        case "auth/user-not-found":
-          alert(
-            "Is email se Firebase account nahi mila."
-          );
-          break;
-
-        case "auth/invalid-email":
-          alert("Invalid email address.");
-          break;
-
-        case "auth/network-request-failed":
-          alert(
-            "Internet connection check karein."
-          );
-          break;
-
-        default:
-          alert(
-            error?.message ||
-              "Password reset failed."
-          );
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ==============================
-  // GOOGLE LOGIN
-  // ==============================
-
-  const loginWithGoogle = async () => {
-    setLoading(true);
-
-    try {
-      const result = await googleLogin();
-
-      const adminEmail =
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL
-          ?.trim()
-          .toLowerCase();
-
-      const loggedInEmail =
-        result.user.email
-          ?.trim()
-          .toLowerCase();
-
-      if (
-        !adminEmail ||
-        loggedInEmail !== adminEmail
-      ) {
-        alert(
-          "This Google account is not an admin account."
+        router.replace(
+          "/admin"
         );
-        return;
+      } catch (error: any) {
+        console.error(
+          "Google Admin Login Error:",
+          error
+        );
+
+        if (
+          error?.code ===
+          "auth/popup-closed-by-user"
+        ) {
+          return;
+        }
+
+        if (
+          error?.code ===
+          "auth/popup-blocked"
+        ) {
+          alert(
+            "Browser ne Google popup block kiya hai. Please popup allow karein."
+          );
+
+          return;
+        }
+
+        alert(
+          error?.message ||
+            "Google Admin Login Failed"
+        );
+      } finally {
+        setLoading(false);
       }
-
-      router.replace("/admin");
-    } catch (error: any) {
-      console.error(
-        "GOOGLE LOGIN ERROR:",
-        error
-      );
-
-      alert(
-        error?.message ||
-          "Google Login Failed"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black px-4 text-white">
-      <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-zinc-950 px-4 text-white">
 
-        {/* LOGO */}
+      {/* BACKGROUND */}
 
-        <div className="mb-8 text-center">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-yellow-400 text-4xl text-black">
-            ⚡
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#3f3f46,transparent_55%)]" />
+
+      <div className="relative w-full max-w-md">
+
+        <div className="overflow-hidden rounded-[32px] border border-zinc-800 bg-zinc-900/95 p-6 shadow-2xl">
+
+          {/* LOGO */}
+
+          <div className="text-center">
+
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-yellow-400 text-4xl text-black shadow-lg">
+              🌙
+            </div>
+
+            <h1 className="mt-5 text-3xl font-black">
+              Night
+              <span className="text-yellow-400">
+                Now
+              </span>
+            </h1>
+
+            <p className="mt-2 text-sm text-zinc-500">
+              Primary Admin Login
+            </p>
           </div>
 
-          <h1 className="mt-5 text-3xl font-black text-yellow-400">
-            Night Now
-          </h1>
+          {/* GOOGLE */}
 
-          <p className="mt-2 text-zinc-400">
-            Admin Panel
-          </p>
-        </div>
-
-        {/* EMAIL */}
-
-        <label className="mb-2 block text-sm font-semibold text-zinc-300">
-          Admin Email
-        </label>
-
-        <input
-          type="email"
-          value={email}
-          onChange={(e) =>
-            setEmail(e.target.value)
-          }
-          placeholder="Enter admin email"
-          autoComplete="email"
-          className="mb-4 w-full rounded-xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none transition focus:border-yellow-400"
-        />
-
-        {/* PASSWORD */}
-
-        <label className="mb-2 block text-sm font-semibold text-zinc-300">
-          Password
-        </label>
-
-        <input
-          type="password"
-          value={password}
-          onChange={(e) =>
-            setPassword(e.target.value)
-          }
-          placeholder="Enter admin password"
-          autoComplete="current-password"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              login();
-            }
-          }}
-          className="w-full rounded-xl border border-zinc-700 bg-zinc-800 p-4 text-white outline-none transition focus:border-yellow-400"
-        />
-
-        {/* FORGOT PASSWORD */}
-
-        <div className="mb-5 mt-3 text-right">
           <button
             type="button"
-            onClick={forgotPassword}
+            onClick={
+              loginWithGoogle
+            }
             disabled={loading}
-            className="text-sm font-semibold text-yellow-400 hover:text-yellow-300 disabled:opacity-50"
+            className="mt-8 flex w-full items-center justify-center gap-3 rounded-2xl bg-white py-4 font-black text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Forgot Password?
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-lg">
+              G
+            </span>
+
+            {loading
+              ? "Opening Google..."
+              : "Continue with Google"}
           </button>
+
+          <div className="mt-5 rounded-2xl border border-yellow-500/20 bg-yellow-400/5 p-4">
+
+            <p className="text-center text-xs leading-5 text-zinc-400">
+              Primary Admin ke liye
+              Gmail/password enter
+              karne ki zarurat nahi hai.
+              <br />
+              <span className="font-bold text-yellow-400">
+                Google Account select
+                karein.
+              </span>
+            </p>
+
+          </div>
+
+          <button
+            onClick={() =>
+              router.push("/")
+            }
+            className="mt-5 w-full rounded-xl bg-zinc-800 py-3 text-sm font-bold text-zinc-300 hover:bg-zinc-700"
+          >
+            ← Back to Night Now
+          </button>
+
         </div>
-
-        {/* LOGIN */}
-
-        <button
-          onClick={login}
-          disabled={loading}
-          className="w-full rounded-xl bg-yellow-400 py-4 font-bold text-black transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading
-            ? "Processing..."
-            : "Admin Login"}
-        </button>
-
-        {/* DIVIDER */}
-
-        <div className="my-5 flex items-center gap-3">
-          <div className="h-px flex-1 bg-zinc-700" />
-
-          <span className="text-sm text-zinc-500">
-            OR
-          </span>
-
-          <div className="h-px flex-1 bg-zinc-700" />
-        </div>
-
-        {/* GOOGLE LOGIN */}
-
-        <button
-          type="button"
-          onClick={loginWithGoogle}
-          disabled={loading}
-          className="w-full rounded-xl bg-white py-3 font-bold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          🔵 Continue with Google
-        </button>
-
-        <p className="mt-5 text-center text-xs text-zinc-500">
-          Night Now Admin Panel
-        </p>
-
       </div>
     </main>
   );
