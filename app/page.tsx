@@ -22,62 +22,40 @@ type Product = {
   description?: string;
 };
 
+const categories = [
+  { name: "All", icon: "🛍️" },
+  { name: "Medicines", icon: "💊" },
+  { name: "Grocery", icon: "🛒" },
+  { name: "Dairy", icon: "🥛" },
+  { name: "Personal Care", icon: "🧴" },
+];
+
 export default function HomePage() {
-  const {
-    addToCart,
-    cart,
-  } = useCart();
+  const { addToCart, cart } = useCart();
 
-  const [products, setProducts] =
-    useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
 
-  const [search, setSearch] =
-    useState("");
-
-  const [selectedCategory, setSelectedCategory] =
-    useState("All");
-
-  const [showNeed, setShowNeed] =
-    useState(false);
-
-  const [needText, setNeedText] =
-    useState("");
-
-  const [theme, setTheme] =
-    useState("dark");
-
-  // ==========================================
-  // LOAD PRODUCTS
-  // ==========================================
+  const [showNeed, setShowNeed] = useState(false);
+  const [needText, setNeedText] = useState("");
 
   useEffect(() => {
     const loadProducts = async () => {
       try {
         setLoading(true);
 
-        const data =
-          await getProducts();
+        const data = await getProducts();
 
-        const clean =
-          Array.isArray(data)
-            ? data.filter(
-                (item: any) =>
-                  item?.active !== false
-              )
-            : [];
+        const clean = Array.isArray(data)
+          ? data.filter((item: any) => item?.active !== false)
+          : [];
 
-        setProducts(
-          clean as Product[]
-        );
+        setProducts(clean as Product[]);
       } catch (error) {
-        console.error(
-          "Homepage product loading error:",
-          error
-        );
-
+        console.error("Homepage product loading error:", error);
         setProducts([]);
       } finally {
         setLoading(false);
@@ -87,247 +65,93 @@ export default function HomePage() {
     loadProducts();
   }, []);
 
-  // ==========================================
-  // CART COUNT
-  // ==========================================
-
   const cartCount = useMemo(() => {
     return cart.reduce(
-      (
-        total: number,
-        item: any
-      ) =>
-        total +
-        Number(
-          item?.quantity || 1
-        ),
+      (total: number, item: any) =>
+        total + Number(item?.quantity || 1),
       0
     );
   }, [cart]);
 
-  // ==========================================
-  // CATEGORIES
-  // ==========================================
+  const filteredProducts = useMemo(() => {
+    const text = search.trim().toLowerCase();
 
-  const categories = [
-    {
-      name: "All",
-      icon: "🛍️",
-    },
-    {
-      name: "Medicines",
-      icon: "💊",
-    },
-    {
-      name: "Grocery",
-      icon: "🛒",
-    },
-    {
-      name: "Dairy",
-      icon: "🥛",
-    },
-    {
-      name: "Personal Care",
-      icon: "🧴",
-    },
-  ];
+    return products.filter((product) => {
+      const name = String(product.name || "").toLowerCase();
+      const brand = String(product.brandName || "").toLowerCase();
+      const category = String(product.category || "").toLowerCase();
 
-  // ==========================================
-  // FILTER PRODUCTS
-  // ==========================================
+      const matchesSearch =
+        !text ||
+        name.includes(text) ||
+        brand.includes(text) ||
+        category.includes(text);
 
-  const filteredProducts =
-    useMemo(() => {
-      const text =
-        search
-          .trim()
-          .toLowerCase();
-
-      return products.filter(
-        (product) => {
-          const name =
-            String(
-              product.name || ""
-            ).toLowerCase();
-
-          const brand =
-            String(
-              product.brandName ||
-                ""
-            ).toLowerCase();
-
-          const category =
-            String(
-              product.category ||
-                ""
-            ).toLowerCase();
-
-          const matchesSearch =
-            !text ||
-            name.includes(text) ||
-            brand.includes(text) ||
-            category.includes(text);
-
-          if (
-            selectedCategory ===
-            "All"
-          ) {
-            return matchesSearch;
-          }
-
-          const selected =
-            selectedCategory.toLowerCase();
-
-          const categoryMatch =
-            category.includes(
-              selected
-            );
-
-          const nameMatch =
-            name.includes(
-              selected
-            );
-
-          return (
-            matchesSearch &&
-            (categoryMatch ||
-              nameMatch)
-          );
-        }
-      );
-    }, [
-      products,
-      search,
-      selectedCategory,
-    ]);
-
-  // ==========================================
-  // TOP BRANDS
-  // ==========================================
-
-  const topBrands =
-    useMemo(() => {
-      const map =
-        new Map<
-          string,
-          Product
-        >();
-
-      products
-        .filter(
-          (product) =>
-            product.topBrand ===
-              true &&
-            product.active !==
-              false
-        )
-        .forEach((product) => {
-          const key =
-            product.brandId ||
-            product.brandName ||
-            product.name ||
-            product.id;
-
-          if (!map.has(key)) {
-            map.set(
-              key,
-              product
-            );
-          }
-        });
-
-      return Array.from(
-        map.values()
-      );
-    }, [products]);
-
-  // ==========================================
-  // NEED SEARCH
-  // ==========================================
-
-  const needSuggestions =
-    useMemo(() => {
-      const text =
-        needText
-          .trim()
-          .toLowerCase();
-
-      if (!text) {
-        return [];
+      if (selectedCategory === "All") {
+        return matchesSearch;
       }
 
-      return products
-        .filter((product) => {
-          const name =
-            String(
-              product.name || ""
-            ).toLowerCase();
+      const selected = selectedCategory.toLowerCase();
 
-          const brand =
-            String(
-              product.brandName ||
-                ""
-            ).toLowerCase();
+      return (
+        matchesSearch &&
+        (category.includes(selected) ||
+          name.includes(selected))
+      );
+    });
+  }, [products, search, selectedCategory]);
 
-          const description =
-            String(
-              product.description ||
-                ""
-            ).toLowerCase();
+  const topBrands = useMemo(() => {
+    const map = new Map<string, Product>();
 
-          return (
-            name.includes(text) ||
-            brand.includes(text) ||
-            description.includes(
-              text
-            )
-          );
-        })
-        .slice(0, 6);
-    }, [
-      products,
-      needText,
-    ]);
+    products
+      .filter(
+        (product) =>
+          product.topBrand === true &&
+          product.active !== false
+      )
+      .forEach((product) => {
+        const key =
+          product.brandId ||
+          product.brandName ||
+          product.id;
 
-  // ==========================================
-  // ADD CART
-  // ==========================================
+        if (!map.has(key)) {
+          map.set(key, product);
+        }
+      });
 
-  const handleAddToCart = (
-    product: Product
-  ) => {
-    if (
-      Number(
-        product.stock || 0
-      ) <= 0
-    ) {
-      return;
-    }
+    return Array.from(map.values());
+  }, [products]);
 
-    addToCart({
-      ...product,
-      quantity: 1,
-    } as any);
-  };
+  const needSuggestions = useMemo(() => {
+    const text = needText.trim().toLowerCase();
 
-  // ==========================================
-  // IMAGE
-  // ==========================================
+    if (!text) return [];
 
-  const getProductImage = (
-    product: Product
-  ) => {
-    if (
-      product.image
-    ) {
-      return product.image;
-    }
+    return products
+      .filter((product) => {
+        const name = String(product.name || "").toLowerCase();
+        const brand = String(product.brandName || "").toLowerCase();
+        const description = String(
+          product.description || ""
+        ).toLowerCase();
+
+        return (
+          name.includes(text) ||
+          brand.includes(text) ||
+          description.includes(text)
+        );
+      })
+      .slice(0, 6);
+  }, [products, needText]);
+
+  const getProductImage = (product: Product) => {
+    if (product.image) return product.image;
 
     if (
-      Array.isArray(
-        product.images
-      ) &&
-      product.images.length
+      Array.isArray(product.images) &&
+      product.images.length > 0
     ) {
       return product.images[0];
     }
@@ -335,23 +159,54 @@ export default function HomePage() {
     return "";
   };
 
+  const startVoiceSearch = () => {
+    const Recognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!Recognition) {
+      alert(
+        "Voice search is not supported in this browser."
+      );
+      return;
+    }
+
+    const recognition = new Recognition();
+
+    recognition.lang = "en-IN";
+
+    recognition.onresult = (event: any) => {
+      setSearch(
+        event.results?.[0]?.[0]?.transcript || ""
+      );
+    };
+
+    recognition.start();
+  };
+
+  const handleAddToCart = (product: Product) => {
+    if (Number(product.stock || 0) <= 0) return;
+
+    addToCart({
+      ...product,
+      quantity: 1,
+    } as any);
+  };
+
   return (
-    <main className="min-h-screen bg-black text-white">
+    <main className="min-h-screen bg-white text-zinc-900">
 
-      {/* =====================================
+      {/* =================================================
           HEADER
-      ====================================== */}
+      ================================================= */}
 
-      <header className="sticky top-0 z-50 border-b border-zinc-800 bg-black/95 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur">
 
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-3">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
 
           {/* LOGO */}
 
-          <Link
-            href="/"
-            className="shrink-0"
-          >
+          <Link href="/" className="shrink-0">
             <div className="flex items-center gap-2">
 
               <div className="text-2xl">
@@ -360,14 +215,11 @@ export default function HomePage() {
 
               <div>
                 <div className="text-xl font-black leading-none">
-                  Night
-                  <span className="text-yellow-400">
-                    Now
-                  </span>
+                  Night<span className="text-yellow-500">Now</span>
                 </div>
 
-                <div className="mt-1 text-[8px] font-bold tracking-widest text-zinc-500">
-                  FAST DELIVERY
+                <div className="mt-1 text-[8px] font-bold tracking-[0.18em] text-zinc-400">
+                  15 MIN DELIVERY
                 </div>
               </div>
 
@@ -378,95 +230,56 @@ export default function HomePage() {
 
           <button
             type="button"
-            className="hidden min-w-0 flex-1 text-left sm:block"
-            onClick={() => {
-              alert(
-                "Location selector header me available hai."
-              );
-            }}
+            className="hidden min-w-0 text-left md:block"
+            onClick={() =>
+              alert("Location selector open karein.")
+            }
           >
-            <p className="text-[9px] font-bold text-zinc-500">
+            <p className="text-[8px] font-medium text-zinc-400">
               DELIVER TO
             </p>
 
             <p className="truncate text-xs font-black">
-              📍 Select delivery location
+              📍 Your Location ▼
             </p>
           </button>
 
-          {/* SEARCH */}
+          {/* HEADER SEARCH */}
 
-          <div className="hidden min-w-0 flex-1 md:block">
+          <div className="hidden min-w-0 flex-1 max-w-2xl md:flex">
 
-            <div className="flex items-center rounded-2xl border border-zinc-700 bg-zinc-900 px-3">
+            <div className="flex w-full items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3">
 
-              <span className="text-zinc-500">
+              <span className="text-zinc-400">
                 🔍
               </span>
 
               <input
                 value={search}
                 onChange={(e) =>
-                  setSearch(
-                    e.target.value
-                  )
+                  setSearch(e.target.value)
                 }
-                placeholder="Search medicines, grocery, dairy..."
-                className="h-11 min-w-0 flex-1 bg-transparent px-3 text-sm font-semibold outline-none placeholder:text-zinc-600"
+                placeholder="Search products..."
+                className="h-11 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-400"
               />
 
               {search && (
                 <button
                   type="button"
-                  onClick={() =>
-                    setSearch("")
-                  }
-                  className="text-zinc-500"
+                  onClick={() => setSearch("")}
+                  className="mr-2 text-zinc-400"
                 >
                   ×
                 </button>
               )}
 
-              {/* VOICE */}
+              {/* VOICE SEARCH */}
 
               <button
                 type="button"
-                onClick={() => {
-                  const Recognition =
-                    (window as any)
-                      .SpeechRecognition ||
-                    (window as any)
-                      .webkitSpeechRecognition;
-
-                  if (
-                    !Recognition
-                  ) {
-                    alert(
-                      "Voice search browser me supported nahi hai."
-                    );
-                    return;
-                  }
-
-                  const recognition =
-                    new Recognition();
-
-                  recognition.lang =
-                    "en-IN";
-
-                  recognition.onresult =
-                    (
-                      event: any
-                    ) => {
-                      setSearch(
-                        event.results?.[0]?.[0]
-                          ?.transcript ||
-                          ""
-                      );
-                    };
-
-                  recognition.start();
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400 text-black"
+                onClick={startVoiceSearch}
+                title="Voice Search"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400 text-sm"
               >
                 🎙️
               </button>
@@ -479,7 +292,7 @@ export default function HomePage() {
 
           <Link
             href="/orders"
-            className="hidden rounded-xl px-2 py-2 text-xs font-black text-zinc-300 hover:bg-zinc-900 sm:block"
+            className="hidden rounded-xl bg-zinc-100 px-4 py-2 text-xs font-black sm:block"
           >
             📦 Orders
           </Link>
@@ -488,16 +301,13 @@ export default function HomePage() {
 
           <Link
             href="/cart"
-            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-yellow-400 text-lg text-black"
+            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-lg text-white"
           >
             🛒
 
             {cartCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-black text-white">
-                {cartCount >
-                99
-                  ? "99+"
-                  : cartCount}
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-400 px-1 text-[9px] font-black text-black">
+                {cartCount > 99 ? "99+" : cartCount}
               </span>
             )}
           </Link>
@@ -506,7 +316,7 @@ export default function HomePage() {
 
           <Link
             href="/login"
-            className="hidden rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black sm:block"
+            className="rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black"
           >
             Login
           </Link>
@@ -515,63 +325,27 @@ export default function HomePage() {
 
         {/* MOBILE SEARCH */}
 
-        <div className="px-3 pb-3 md:hidden">
+        <div className="px-4 pb-3 md:hidden">
 
-          <div className="flex items-center rounded-2xl border border-zinc-700 bg-zinc-900 px-3">
+          <div className="flex items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3">
 
-            <span>
+            <span className="text-zinc-400">
               🔍
             </span>
 
             <input
               value={search}
               onChange={(e) =>
-                setSearch(
-                  e.target.value
-                )
+                setSearch(e.target.value)
               }
-              placeholder="Search medicines, grocery, dairy..."
-              className="h-11 min-w-0 flex-1 bg-transparent px-3 text-xs font-semibold outline-none placeholder:text-zinc-600"
+              placeholder="Search products..."
+              className="h-11 min-w-0 flex-1 bg-transparent px-3 text-xs outline-none"
             />
 
             <button
               type="button"
-              onClick={() => {
-                const Recognition =
-                  (window as any)
-                    .SpeechRecognition ||
-                  (window as any)
-                    .webkitSpeechRecognition;
-
-                if (
-                  !Recognition
-                ) {
-                  alert(
-                    "Voice search browser me supported nahi hai."
-                  );
-                  return;
-                }
-
-                const recognition =
-                  new Recognition();
-
-                recognition.lang =
-                  "en-IN";
-
-                recognition.onresult =
-                  (
-                    event: any
-                  ) => {
-                    setSearch(
-                      event.results?.[0]?.[0]
-                        ?.transcript ||
-                        ""
-                    );
-                  };
-
-                recognition.start();
-              }}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400 text-black"
+              onClick={startVoiceSearch}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400"
             >
               🎙️
             </button>
@@ -582,112 +356,104 @@ export default function HomePage() {
 
       </header>
 
-      {/* =====================================
+      {/* =================================================
           HERO
-      ====================================== */}
+      ================================================= */}
 
-      <section className="mx-auto max-w-7xl px-3 pt-5">
+      <section className="bg-gradient-to-b from-white via-white to-yellow-50/40">
 
-        <div className="overflow-hidden rounded-[28px] border border-zinc-800 bg-zinc-950">
+        <div className="mx-auto max-w-7xl px-4 py-6 md:py-10">
 
-          <div className="grid items-center gap-6 p-6 md:grid-cols-2 md:p-10">
+          <div className="overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-sm">
 
-            <div>
+            <div className="grid items-center gap-8 p-7 md:grid-cols-2 md:p-12">
 
-              <span className="inline-flex rounded-full border border-yellow-400/40 bg-yellow-400/10 px-3 py-1 text-xs font-black text-yellow-400">
-                ⚡ 15 Minute Delivery
-              </span>
+              {/* LEFT */}
 
-              <h1 className="mt-5 text-4xl font-black leading-tight md:text-6xl">
-                सब कुछ जो आपको चाहिए,
-                <br />
-                <span className="text-yellow-400">
-                  15 मिनट में,
-                </span>
-                <br />
-                आपके दरवाजे पर।
-              </h1>
+              <div>
 
-              <p className="mt-4 max-w-xl text-sm leading-6 text-zinc-400 md:text-base">
-                दवाइयाँ, किराना, डेयरी और
-                रोजमर्रा की जरूरतें —
-                Night Now आपके साथ हर वक्त।
-              </p>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    document
-                      .getElementById(
-                        "products"
-                      )
-                      ?.scrollIntoView({
-                        behavior:
-                          "smooth",
-                      })
-                  }
-                  className="rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-black text-black"
-                >
-                  🛍️ Start Shopping
-                </button>
-
-                <Link
-                  href="/orders"
-                  className="rounded-2xl bg-zinc-800 px-5 py-3 text-sm font-black"
-                >
-                  📦 My Orders
-                </Link>
-
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-4">
-                <p className="text-sm font-bold text-zinc-200">
-                  “रात हो या दिन,
-                  आपकी जरूरत”
+                <p className="text-sm font-black tracking-[0.25em] text-yellow-600">
+                  NIGHT NOW
                 </p>
 
-                <p className="mt-1 text-sm font-black text-yellow-400">
-                  हमारी ज़िम्मेदारी।
-                </p>
-              </div>
-
-            </div>
-
-            {/* DELIVERY PANEL */}
-
-            <div className="relative overflow-hidden rounded-3xl bg-zinc-900 p-6 text-center">
-
-              <div className="text-2xl font-black">
-                Night
-                <span className="text-yellow-400">
-                  Now
-                </span>
-              </div>
-
-              <div className="mt-2">
-
-                <span className="text-7xl font-black text-yellow-400">
-                  15
-                </span>
-
-                <span className="ml-2 text-xl font-black">
-                  Minute
+                <h1 className="mt-4 text-4xl font-black leading-[1.05] tracking-tight md:text-6xl">
+                  आपकी जरूरत,
                   <br />
-                  Delivery
-                </span>
+                  <span className="text-yellow-500">
+                    हमारी जिम्मेदारी।
+                  </span>
+                </h1>
 
-              </div>
-
-              <div className="mt-5 text-7xl">
-                🛵
-              </div>
-
-              <div className="mt-3 rounded-2xl bg-black p-3">
-                <p className="text-xs font-bold text-zinc-500">
-                  FAST • RELIABLE • NIGHT DELIVERY
+                <p className="mt-5 max-w-xl text-sm leading-6 text-zinc-500 md:text-base">
+                  Groceries, snacks, beverages,
+                  personal care और daily
+                  essentials एक ही जगह।
                 </p>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      document
+                        .getElementById("products")
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                        })
+                    }
+                    className="rounded-2xl bg-yellow-400 px-6 py-3 text-sm font-black shadow-sm transition hover:bg-yellow-500"
+                  >
+                    Shop Now →
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowNeed(true)}
+                    className="rounded-2xl border border-zinc-200 bg-white px-5 py-3 text-sm font-bold"
+                  >
+                    आपकी जरूरत 🧠
+                  </button>
+
+                </div>
+
+              </div>
+
+              {/* RIGHT */}
+
+              <div className="hidden md:block">
+
+                <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-yellow-100 via-white to-blue-50 p-8">
+
+                  <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-yellow-200/50 blur-2xl" />
+
+                  <p className="relative text-center text-xs font-black tracking-[0.2em] text-yellow-700">
+                    FAST DELIVERY
+                  </p>
+
+                  <div className="relative mt-2 text-center">
+
+                    <span className="text-8xl font-black text-yellow-500">
+                      15
+                    </span>
+
+                    <span className="ml-2 text-xl font-black">
+                      MIN
+                    </span>
+
+                  </div>
+
+                  <div className="relative mt-4 text-center text-7xl">
+                    🛵
+                  </div>
+
+                  <div className="relative mt-5 rounded-2xl bg-white/80 p-3 text-center shadow-sm">
+                    <p className="text-xs font-bold text-zinc-500">
+                      FAST • RELIABLE • NIGHT DELIVERY
+                    </p>
+                  </div>
+
+                </div>
+
               </div>
 
             </div>
@@ -698,220 +464,161 @@ export default function HomePage() {
 
       </section>
 
-      {/* =====================================
-          QUICK SEARCH / NEED
-      ====================================== */}
+      {/* =================================================
+          SMART NEED
+      ================================================= */}
 
-      <section className="mx-auto max-w-7xl px-3 pt-5">
+      <section className="mx-auto max-w-7xl px-4">
 
         <button
           type="button"
-          onClick={() =>
-            setShowNeed(true)
-          }
-          className="flex w-full items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-left transition hover:border-yellow-400"
+          onClick={() => setShowNeed(true)}
+          className="mx-auto flex w-full max-w-md items-center justify-between rounded-2xl bg-gradient-to-r from-yellow-300 to-yellow-500 px-5 py-4 text-left shadow-sm transition hover:shadow-md"
         >
 
-          <div>
-            <p className="text-[9px] font-bold text-zinc-500">
-              AAPKI ZARURAT?
-            </p>
+          <div className="flex items-center gap-3">
 
-            <p className="mt-1 text-sm font-black">
-              Jo chahiye bas bataiye...
-            </p>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-xl">
+              🤖
+            </div>
+
+            <div>
+              <p className="text-[9px] font-black text-zinc-700">
+                NIGHT NOW SMART
+              </p>
+
+              <p className="text-sm font-black">
+                आपकी जरूरत?
+              </p>
+            </div>
+
           </div>
 
-          <span className="rounded-xl bg-yellow-400 px-3 py-2 text-xs font-black text-black">
-            Find
+          <span className="text-2xl font-black">
+            +
           </span>
 
         </button>
 
       </section>
 
-      {/* =====================================
-          PROMO
-      ====================================== */}
+      {/* =================================================
+          CATEGORIES
+      ================================================= */}
 
-      <section className="mx-auto max-w-7xl px-3 pt-5">
+      <section className="mx-auto max-w-7xl px-4 pt-10">
 
-        <div className="flex items-center justify-between gap-4 rounded-3xl bg-yellow-400 p-5 text-black">
+        <div>
+          <h2 className="text-xl font-black">
+            Shop by Category
+          </h2>
 
-          <div>
+          <p className="mt-1 text-xs text-zinc-400">
+            Choose what you need
+          </p>
+        </div>
 
-            <p className="text-xs font-black">
-              NIGHT NOW OFFER
-            </p>
+        <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
 
-            <h2 className="mt-1 text-2xl font-black">
-              Free Delivery
-            </h2>
+          {categories.map((category) => (
+            <button
+              key={category.name}
+              type="button"
+              onClick={() =>
+                setSelectedCategory(category.name)
+              }
+              className={[
+                "min-w-[105px] rounded-2xl border p-4 text-center transition",
+                selectedCategory === category.name
+                  ? "border-yellow-400 bg-yellow-400 text-black"
+                  : "border-zinc-200 bg-white hover:border-yellow-300",
+              ].join(" ")}
+            >
 
-            <p className="mt-1 text-xs font-bold">
-              On orders above ₹299
-            </p>
+              <div className="text-2xl">
+                {category.icon}
+              </div>
 
-          </div>
+              <p className="mt-2 text-xs font-black">
+                {category.name}
+              </p>
 
-          <div className="hidden rounded-2xl bg-white px-5 py-3 text-center sm:block">
-            <div className="text-xl">
-              ⚡
-            </div>
-
-            <p className="text-xs font-black">
-              15 Min
-            </p>
-
-            <p className="text-[9px] text-zinc-500">
-              Lightning Fast
-            </p>
-          </div>
+            </button>
+          ))}
 
         </div>
 
       </section>
 
-      {/* =====================================
-          CATEGORIES
-      ====================================== */}
+      {/* =================================================
+          TOP BRANDS
+      ================================================= */}
 
-      <section className="mx-auto max-w-7xl px-3 pt-8">
-
-        <div className="flex items-end justify-between">
+      {topBrands.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pt-10">
 
           <div>
             <h2 className="text-xl font-black">
-              Shop by Category
+              ⭐ Top Brands
             </h2>
 
-            <p className="mt-1 text-xs text-zinc-500">
-              Choose what you need
+            <p className="mt-1 text-xs text-zinc-400">
+              Popular brands on Night Now
             </p>
           </div>
 
-        </div>
+          <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
 
-        <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
-
-          {categories.map(
-            (category) => (
-              <button
-                key={
-                  category.name
-                }
-                type="button"
-                onClick={() =>
-                  setSelectedCategory(
-                    category.name
-                  )
-                }
-                className={[
-                  "min-w-[105px] rounded-2xl border p-4 text-center transition",
-                  selectedCategory ===
-                    category.name
-                    ? "border-yellow-400 bg-yellow-400 text-black"
-                    : "border-zinc-800 bg-zinc-900 text-white",
-                ].join(" ")}
+            {topBrands.map((product) => (
+              <Link
+                key={product.id}
+                href={`/product/${product.id}`}
+                className="min-w-[135px] rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm transition hover:border-yellow-400"
               >
 
-                <div className="text-2xl">
-                  {category.icon}
+                <div className="flex h-20 items-center justify-center rounded-xl bg-zinc-50">
+
+                  {getProductImage(product) ? (
+                    <img
+                      src={getProductImage(product)}
+                      alt={
+                        product.brandName ||
+                        product.name ||
+                        "Brand"
+                      }
+                      className="h-full w-full object-contain p-2"
+                    />
+                  ) : (
+                    <span className="text-2xl">
+                      🏷️
+                    </span>
+                  )}
+
                 </div>
 
-                <p className="mt-2 text-xs font-black">
-                  {
-                    category.name
-                  }
+                <p className="mt-3 truncate text-center text-xs font-black">
+                  {product.brandName ||
+                    product.name ||
+                    "Brand"}
                 </p>
 
-              </button>
-            )
-          )}
-
-        </div>
-
-      </section>
-
-      {/* =====================================
-          TOP BRANDS
-      ====================================== */}
-
-      {topBrands.length > 0 && (
-        <section className="mx-auto max-w-7xl px-3 pt-8">
-
-          <div className="flex items-end justify-between">
-
-            <div>
-              <h2 className="text-xl font-black">
-                ⭐ Top Brands
-              </h2>
-
-              <p className="mt-1 text-xs text-zinc-500">
-                Popular brands on Night Now
-              </p>
-            </div>
-
-          </div>
-
-          <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
-
-            {topBrands.map(
-              (product) => (
-                <Link
-                  key={product.id}
-                  href={`/product/${product.id}`}
-                  className="min-w-[130px] rounded-2xl border border-zinc-800 bg-zinc-900 p-3 transition hover:border-yellow-400"
-                >
-
-                  <div className="flex h-20 items-center justify-center rounded-xl bg-white">
-
-                    {getProductImage(
-                      product
-                    ) ? (
-                      <img
-                        src={getProductImage(
-                          product
-                        )}
-                        alt={
-                          product.brandName ||
-                          product.name ||
-                          "Brand"
-                        }
-                        className="h-full w-full object-contain p-2"
-                      />
-                    ) : (
-                      <span className="text-2xl">
-                        🏷️
-                      </span>
-                    )}
-
-                  </div>
-
-                  <p className="mt-3 truncate text-center text-xs font-black">
-                    {product.brandName ||
-                      product.name ||
-                      "Brand"}
-                  </p>
-
-                </Link>
-              )
-            )}
+              </Link>
+            ))}
 
           </div>
 
         </section>
       )}
 
-      {/* =====================================
+      {/* =================================================
           BUY 1 GET 2
-      ====================================== */}
+      ================================================= */}
 
-      <section className="mx-auto max-w-7xl px-3 pt-8">
+      <section className="mx-auto max-w-7xl px-4 pt-10">
 
         <Link
           href="/offers/buy-1-get-2"
-          className="flex items-center justify-between rounded-3xl border border-yellow-400/30 bg-gradient-to-r from-yellow-400 to-yellow-300 p-5 text-black"
+          className="flex items-center justify-between overflow-hidden rounded-3xl bg-gradient-to-r from-yellow-400 to-orange-300 p-5 text-black shadow-sm"
         >
 
           <div>
@@ -938,13 +645,13 @@ export default function HomePage() {
 
       </section>
 
-      {/* =====================================
-          PRODUCTS
-      ====================================== */}
+      {/* =================================================
+          POPULAR PRODUCTS
+      ================================================= */}
 
       <section
         id="products"
-        className="mx-auto max-w-7xl px-3 pb-12 pt-8"
+        className="mx-auto max-w-7xl px-4 pb-14 pt-10"
       >
 
         <div className="flex items-end justify-between">
@@ -954,7 +661,7 @@ export default function HomePage() {
               Popular Products
             </h2>
 
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-zinc-400">
               {loading
                 ? "Loading..."
                 : `${filteredProducts.length} Products`}
@@ -965,11 +672,9 @@ export default function HomePage() {
             type="button"
             onClick={() => {
               setSearch("");
-              setSelectedCategory(
-                "All"
-              );
+              setSelectedCategory("All");
             }}
-            className="text-xs font-black text-yellow-400"
+            className="text-xs font-black text-yellow-600"
           >
             View All →
           </button>
@@ -977,23 +682,20 @@ export default function HomePage() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 gap-3 pt-5 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
 
-            {Array.from({
-              length: 8,
-            }).map(
+            {Array.from({ length: 8 }).map(
               (_, index) => (
                 <div
                   key={index}
-                  className="h-64 animate-pulse rounded-2xl bg-zinc-900"
+                  className="h-64 animate-pulse rounded-2xl bg-zinc-100"
                 />
               )
             )}
 
           </div>
-        ) : filteredProducts.length ===
-          0 ? (
-          <div className="mt-5 rounded-3xl bg-zinc-900 p-10 text-center">
+        ) : filteredProducts.length === 0 ? (
+          <div className="mt-5 rounded-3xl bg-zinc-50 p-10 text-center">
 
             <div className="text-5xl">
               🔍
@@ -1004,13 +706,12 @@ export default function HomePage() {
             </h3>
 
             <button
+              type="button"
               onClick={() => {
                 setSearch("");
-                setSelectedCategory(
-                  "All"
-                );
+                setSelectedCategory("All");
               }}
-              className="mt-5 rounded-xl bg-yellow-400 px-5 py-3 text-xs font-black text-black"
+              className="mt-5 rounded-xl bg-yellow-400 px-5 py-3 text-xs font-black"
             >
               Clear Search
             </button>
@@ -1019,163 +720,121 @@ export default function HomePage() {
         ) : (
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
 
-            {filteredProducts.map(
-              (product) => {
-                const image =
-                  getProductImage(
-                    product
-                  );
+            {filteredProducts.map((product) => {
+              const image = getProductImage(product);
 
-                const stock =
-                  Number(
-                    product.stock ||
-                      0
-                  );
+              const stock = Number(product.stock || 0);
+              const price = Number(product.price || 0);
+              const mrp = Number(product.mrp || 0);
 
-                const price =
-                  Number(
-                    product.price ||
-                      0
-                  );
+              const discount =
+                mrp > price && mrp > 0
+                  ? Math.round(
+                      ((mrp - price) / mrp) * 100
+                    )
+                  : 0;
 
-                const mrp =
-                  Number(
-                    product.mrp ||
-                      0
-                  );
+              return (
+                <div
+                  key={product.id}
+                  className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                >
 
-                const discount =
-                  mrp > price &&
-                  mrp > 0
-                    ? Math.round(
-                        ((mrp -
-                          price) /
-                          mrp) *
-                          100
-                      )
-                    : 0;
+                  <Link href={`/product/${product.id}`}>
 
-                return (
-                  <div
-                    key={product.id}
-                    className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900"
-                  >
+                    <div className="relative flex h-40 items-center justify-center bg-zinc-50">
 
-                    {/* IMAGE */}
-
-                    <Link
-                      href={`/product/${product.id}`}
-                    >
-                      <div className="relative flex h-40 items-center justify-center bg-white">
-
-                        {image ? (
-                          <img
-                            src={image}
-                            alt={
-                              product.name ||
-                              "Product"
-                            }
-                            className="h-full w-full object-contain p-3"
-                          />
-                        ) : (
-                          <span className="text-zinc-400">
-                            No Image
-                          </span>
-                        )}
-
-                        {discount >
-                          0 && (
-                          <span className="absolute left-2 top-2 rounded-full bg-green-500 px-2 py-1 text-[9px] font-black text-white">
-                            {discount}%
-                            OFF
-                          </span>
-                        )}
-
-                      </div>
-                    </Link>
-
-                    {/* CONTENT */}
-
-                    <div className="p-3">
-
-                      <Link
-                        href={`/product/${product.id}`}
-                      >
-                        <h3 className="line-clamp-2 min-h-[36px] text-sm font-black">
-                          {product.name ||
-                            "Product"}
-                        </h3>
-                      </Link>
-
-                      {product.brandName && (
-                        <p className="mt-1 truncate text-[10px] font-bold text-yellow-400">
-                          {
-                            product.brandName
-                          }
-                        </p>
+                      {image ? (
+                        <img
+                          src={image}
+                          alt={product.name || "Product"}
+                          className="h-full w-full object-contain p-3"
+                        />
+                      ) : (
+                        <span className="text-xs text-zinc-400">
+                          No Image
+                        </span>
                       )}
 
-                      <div className="mt-2 flex items-end gap-2">
-
-                        <p className="font-black text-green-400">
-                          ₹{price}
-                        </p>
-
-                        {mrp >
-                          price && (
-                          <p className="text-[10px] text-zinc-600 line-through">
-                            ₹{mrp}
-                          </p>
-                        )}
-
-                      </div>
-
-                      {stock <=
-                      0 ? (
-                        <div className="mt-3 rounded-xl bg-zinc-800 py-2.5 text-center text-[10px] font-black text-zinc-500">
-                          Out of Stock
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleAddToCart(
-                              product
-                            )
-                          }
-                          className="mt-3 w-full rounded-xl bg-yellow-400 py-2.5 text-[10px] font-black text-black"
-                        >
-                          🛒 Add to Cart
-                        </button>
+                      {discount > 0 && (
+                        <span className="absolute left-2 top-2 rounded-full bg-green-500 px-2 py-1 text-[9px] font-black text-white">
+                          {discount}% OFF
+                        </span>
                       )}
 
                     </div>
 
+                  </Link>
+
+                  <div className="p-3">
+
+                    <Link href={`/product/${product.id}`}>
+
+                      <h3 className="line-clamp-2 min-h-[34px] text-sm font-black">
+                        {product.name || "Product"}
+                      </h3>
+
+                    </Link>
+
+                    {product.brandName && (
+                      <p className="mt-1 truncate text-[10px] font-bold text-yellow-600">
+                        {product.brandName}
+                      </p>
+                    )}
+
+                    <div className="mt-2 flex items-end gap-2">
+
+                      <p className="font-black text-green-600">
+                        ₹{price}
+                      </p>
+
+                      {mrp > price && (
+                        <p className="text-[10px] text-zinc-400 line-through">
+                          ₹{mrp}
+                        </p>
+                      )}
+
+                    </div>
+
+                    {stock <= 0 ? (
+                      <div className="mt-3 rounded-xl bg-zinc-100 py-2.5 text-center text-[10px] font-black text-zinc-400">
+                        Out of Stock
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleAddToCart(product)
+                        }
+                        className="mt-3 w-full rounded-xl bg-yellow-400 py-2.5 text-[10px] font-black text-black transition hover:bg-yellow-500"
+                      >
+                        🛒 Add to Cart
+                      </button>
+                    )}
+
                   </div>
-                );
-              }
-            )}
+
+                </div>
+              );
+            })}
 
           </div>
         )}
 
       </section>
 
-      {/* =====================================
+      {/* =================================================
           FOOTER
-      ====================================== */}
+      ================================================= */}
 
-      <footer className="border-t border-zinc-800 bg-zinc-950">
+      <footer className="border-t border-zinc-200 bg-zinc-50">
 
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-3">
 
           <div>
 
             <div className="text-2xl font-black">
-              Night
-              <span className="text-yellow-400">
-                Now
-              </span>
+              Night<span className="text-yellow-500">Now</span>
             </div>
 
             <p className="mt-2 text-sm text-zinc-500">
@@ -1183,50 +842,21 @@ export default function HomePage() {
               at your doorstep.
             </p>
 
-            <div className="mt-4 flex gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900">
-                💬
-              </span>
-
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900">
-                📷
-              </span>
-
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900">
-                👍
-              </span>
-            </div>
-
           </div>
 
           <div>
 
-            <h3 className="font-black text-yellow-400">
+            <h3 className="font-black">
               Quick Links
             </h3>
 
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-zinc-500">
 
-              <Link href="/">
-                Home
-              </Link>
-
-              <Link href="/orders">
-                Orders
-              </Link>
-
-              <Link href="/cart">
-                Cart
-              </Link>
-
-              <Link href="/profile">
-                Profile
-              </Link>
-
-              <Link href="/wishlist">
-                Wishlist
-              </Link>
-
+              <Link href="/">Home</Link>
+              <Link href="/orders">Orders</Link>
+              <Link href="/cart">Cart</Link>
+              <Link href="/profile">Profile</Link>
+              <Link href="/wishlist">Wishlist</Link>
               <Link href="/offers/buy-1-get-2">
                 Offers
               </Link>
@@ -1237,64 +867,53 @@ export default function HomePage() {
 
           <div>
 
-            <h3 className="font-black text-yellow-400">
+            <h3 className="font-black">
               Support
             </h3>
 
-            <p className="mt-4 text-sm text-zinc-500">
+            <p className="mt-3 text-sm text-zinc-500">
               Need help with your order?
             </p>
 
-            <button
-              type="button"
-              onClick={() =>
-                alert(
-                  "Night Now Support"
-                )
-              }
-              className="mt-4 rounded-xl border border-green-500 px-4 py-3 text-sm font-black text-green-400"
+            <Link
+              href="/support"
+              className="mt-4 inline-block rounded-xl border border-green-500 px-4 py-3 text-sm font-black text-green-600"
             >
-              💬 WhatsApp Support
-            </button>
+              💬 Customer Support
+            </Link>
 
           </div>
 
         </div>
 
-        <div className="border-t border-zinc-800 px-4 py-5">
+        <div className="border-t border-zinc-200 px-4 py-5">
 
           <div className="mx-auto grid max-w-7xl grid-cols-3 gap-2 text-center">
 
             <div>
-              <div>
-                🔒
-              </div>
-              <p className="mt-1 text-[9px] font-bold text-zinc-500">
+              🔒
+              <p className="mt-1 text-[9px] font-bold text-zinc-400">
                 Secure Payment
               </p>
             </div>
 
             <div>
-              <div>
-                ⚡
-              </div>
-              <p className="mt-1 text-[9px] font-bold text-zinc-500">
-                On-time Delivery
+              ⚡
+              <p className="mt-1 text-[9px] font-bold text-zinc-400">
+                Fast Delivery
               </p>
             </div>
 
             <div>
-              <div>
-                ❤️
-              </div>
-              <p className="mt-1 text-[9px] font-bold text-zinc-500">
+              ❤️
+              <p className="mt-1 text-[9px] font-bold text-zinc-400">
                 Customer First
               </p>
             </div>
 
           </div>
 
-          <p className="mt-5 text-center text-[10px] text-zinc-700">
+          <p className="mt-5 text-center text-[10px] text-zinc-400">
             © 2026 Night Now. All rights reserved.
           </p>
 
@@ -1302,32 +921,34 @@ export default function HomePage() {
 
       </footer>
 
-      {/* =====================================
+      {/* =================================================
           AAPKI ZARURAT MODAL
-      ====================================== */}
+      ================================================= */}
 
       {showNeed && (
-        <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/70 px-3 pt-16 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/50 px-3 pt-16 backdrop-blur-sm">
 
-          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
 
-            <div className="flex items-center justify-between border-b border-zinc-800 p-4">
+            <div className="flex items-center justify-between border-b border-zinc-200 p-4">
 
               <div>
                 <h2 className="font-black">
                   Aapki Zarurat?
                 </h2>
 
-                <p className="mt-1 text-[10px] text-zinc-500">
+                <p className="mt-1 text-[10px] text-zinc-400">
                   Jo chahiye type karein
                 </p>
               </div>
 
               <button
-                onClick={() =>
-                  setShowNeed(false)
-                }
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-xl"
+                type="button"
+                onClick={() => {
+                  setShowNeed(false);
+                  setNeedText("");
+                }}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl"
               >
                 ×
               </button>
@@ -1336,11 +957,9 @@ export default function HomePage() {
 
             <div className="p-4">
 
-              {/* ONLY CUSTOMER NEED SEARCH */}
+              <div className="flex items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3">
 
-              <div className="flex items-center rounded-2xl border border-zinc-700 bg-zinc-900 px-3">
-
-                <span>
+                <span className="text-zinc-400">
                   🔍
                 </span>
 
@@ -1348,9 +967,7 @@ export default function HomePage() {
                   autoFocus
                   value={needText}
                   onChange={(e) =>
-                    setNeedText(
-                      e.target.value
-                    )
+                    setNeedText(e.target.value)
                   }
                   placeholder="Mujhe milk, paracetamol..."
                   className="h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none"
@@ -1358,10 +975,9 @@ export default function HomePage() {
 
                 {needText && (
                   <button
-                    onClick={() =>
-                      setNeedText("")
-                    }
-                    className="text-zinc-500"
+                    type="button"
+                    onClick={() => setNeedText("")}
+                    className="text-zinc-400"
                   >
                     ×
                   </button>
@@ -1369,92 +985,66 @@ export default function HomePage() {
 
               </div>
 
-              {/* SUGGESTIONS */}
-
               {needText &&
-                needSuggestions.length >
-                  0 && (
+                needSuggestions.length > 0 && (
                   <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
 
-                    {needSuggestions.map(
-                      (
-                        product
-                      ) => (
-                        <div
-                          key={
-                            product.id
-                          }
-                          className="flex items-center gap-3 rounded-2xl bg-zinc-900 p-3"
-                        >
+                    {needSuggestions.map((product) => (
 
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white">
+                      <div
+                        key={product.id}
+                        className="flex items-center gap-3 rounded-2xl bg-zinc-50 p-3"
+                      >
 
-                            {getProductImage(
-                              product
-                            ) ? (
-                              <img
-                                src={getProductImage(
-                                  product
-                                )}
-                                alt={
-                                  product.name
-                                }
-                                className="h-full w-full object-contain p-2"
-                              />
-                            ) : (
-                              <span>
-                                📦
-                              </span>
-                            )}
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white">
 
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-
-                            <p className="truncate text-xs font-black">
-                              {
-                                product.name
-                              }
-                            </p>
-
-                            <p className="mt-1 text-xs font-bold text-green-400">
-                              ₹
-                              {
-                                product.price
-                              }
-                            </p>
-
-                          </div>
-
-                          <button
-                            onClick={() =>
-                              handleAddToCart(
-                                product
-                              )
-                            }
-                            disabled={
-                              Number(
-                                product.stock ||
-                                  0
-                              ) <=
-                              0
-                            }
-                            className="rounded-xl bg-yellow-400 px-3 py-2 text-[10px] font-black text-black disabled:bg-zinc-800 disabled:text-zinc-600"
-                          >
-                            Add
-                          </button>
+                          {getProductImage(product) ? (
+                            <img
+                              src={getProductImage(product)}
+                              alt={product.name || "Product"}
+                              className="h-full w-full object-contain p-2"
+                            />
+                          ) : (
+                            "📦"
+                          )}
 
                         </div>
-                      )
-                    )}
+
+                        <div className="min-w-0 flex-1">
+
+                          <p className="truncate text-xs font-black">
+                            {product.name}
+                          </p>
+
+                          <p className="mt-1 text-xs font-bold text-green-600">
+                            ₹{product.price}
+                          </p>
+
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleAddToCart(product)
+                          }
+                          disabled={
+                            Number(product.stock || 0) <= 0
+                          }
+                          className="rounded-xl bg-yellow-400 px-3 py-2 text-[10px] font-black disabled:bg-zinc-200 disabled:text-zinc-400"
+                        >
+                          Add
+                        </button>
+
+                      </div>
+
+                    ))}
 
                   </div>
                 )}
 
               {needText &&
-                needSuggestions.length ===
-                  0 && (
-                  <div className="py-8 text-center text-sm text-zinc-500">
+                needSuggestions.length === 0 && (
+                  <div className="py-8 text-center text-sm text-zinc-400">
                     Relevant product nahi mila.
                   </div>
                 )}
