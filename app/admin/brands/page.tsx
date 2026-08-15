@@ -11,6 +11,7 @@ import {
   updateBrand,
   type Brand,
 } from "../../services/brandService";
+
 export default function BrandsPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
 
@@ -21,7 +22,6 @@ export default function BrandsPage() {
   const [topBrand, setTopBrand] = useState(false);
 
   const [editingId, setEditingId] = useState("");
-
   const [search, setSearch] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -37,18 +37,18 @@ export default function BrandsPage() {
 
       const data = await getBrands();
 
-      setBrands(data);
- } catch (error: any) {
-  console.error("BRAND LOAD ERROR:", error);
+      setBrands(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error("BRAND LOAD ERROR:", error);
 
-  alert(
-    `Failed to load brands.\n\n${
-      error?.code || "Unknown error"
-    }\n\n${
-      error?.message || "Check Firebase Firestore rules."
-    }`
-  );
-} finally {
+      alert(
+        `Failed to load brands.\n\n${
+          error?.code || "Unknown error"
+        }\n\n${
+          error?.message || "Check Firebase Firestore rules."
+        }`
+      );
+    } finally {
       setLoading(false);
     }
   };
@@ -62,7 +62,10 @@ export default function BrandsPage() {
   };
 
   const saveBrand = async () => {
-    if (!name.trim()) {
+    const cleanName = name.trim();
+    const cleanLogo = logo.trim();
+
+    if (!cleanName) {
       alert("Please enter brand name.");
       return;
     }
@@ -72,8 +75,8 @@ export default function BrandsPage() {
 
       if (editingId) {
         await updateBrand(editingId, {
-          name,
-          logo,
+          name: cleanName,
+          logo: cleanLogo,
           active,
           topBrand,
         });
@@ -81,8 +84,8 @@ export default function BrandsPage() {
         alert("Brand updated successfully.");
       } else {
         await addBrand(
-          name,
-          logo,
+          cleanName,
+          cleanLogo,
           active,
           topBrand
         );
@@ -94,7 +97,7 @@ export default function BrandsPage() {
 
       await loadBrands();
     } catch (error) {
-      console.error(error);
+      console.error("SAVE BRAND ERROR:", error);
       alert("Failed to save brand.");
     } finally {
       setSaving(false);
@@ -106,8 +109,8 @@ export default function BrandsPage() {
 
     setName(brand.name || "");
     setLogo(brand.logo || "");
-    setActive(brand.active);
-    setTopBrand(brand.topBrand);
+    setActive(brand.active !== false);
+    setTopBrand(brand.topBrand === true);
 
     window.scrollTo({
       top: 0,
@@ -116,11 +119,11 @@ export default function BrandsPage() {
   };
 
   const removeBrand = async (id: string) => {
-    const confirmDelete = confirm(
+    const confirmed = window.confirm(
       "Are you sure you want to delete this brand?"
     );
 
-    if (!confirmDelete) return;
+    if (!confirmed) return;
 
     try {
       await deleteBrand(id);
@@ -135,18 +138,18 @@ export default function BrandsPage() {
 
       alert("Brand deleted successfully.");
     } catch (error) {
-      console.error(error);
+      console.error("DELETE BRAND ERROR:", error);
       alert("Failed to delete brand.");
     }
   };
 
-  const changeActive = async (
-    brand: Brand
-  ) => {
+  const changeActive = async (brand: Brand) => {
     try {
+      const newValue = !brand.active;
+
       await toggleBrand(
         brand.id,
-        !brand.active
+        newValue
       );
 
       setBrands((old) =>
@@ -154,14 +157,17 @@ export default function BrandsPage() {
           item.id === brand.id
             ? {
                 ...item,
-                active: !brand.active,
+                active: newValue,
               }
             : item
         )
       );
     } catch (error) {
-      console.error(error);
-      alert("Failed to update brand status.");
+      console.error("ACTIVE BRAND ERROR:", error);
+
+      alert(
+        "Failed to update brand status."
+      );
     }
   };
 
@@ -169,9 +175,11 @@ export default function BrandsPage() {
     brand: Brand
   ) => {
     try {
+      const newValue = !brand.topBrand;
+
       await toggleTopBrand(
         brand.id,
-        !brand.topBrand
+        newValue
       );
 
       setBrands((old) =>
@@ -179,22 +187,30 @@ export default function BrandsPage() {
           item.id === brand.id
             ? {
                 ...item,
-                topBrand: !brand.topBrand,
+                topBrand: newValue,
               }
             : item
         )
       );
     } catch (error) {
-      console.error(error);
-      alert("Failed to update Top Brand.");
+      console.error(
+        "TOP BRAND ERROR:",
+        error
+      );
+
+      alert(
+        "Failed to update Top Brand."
+      );
     }
   };
 
   const filteredBrands = brands.filter(
     (brand) =>
-      brand.name
+      String(brand.name || "")
         .toLowerCase()
-        .includes(search.toLowerCase())
+        .includes(
+          search.toLowerCase().trim()
+        )
   );
 
   return (
@@ -217,7 +233,7 @@ export default function BrandsPage() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
 
-          <div className="mb-5 flex items-center justify-between">
+          <div className="mb-5 flex items-center justify-between gap-3">
             <h2 className="text-xl font-black">
               {editingId
                 ? "Edit Brand"
@@ -226,6 +242,7 @@ export default function BrandsPage() {
 
             {editingId && (
               <button
+                type="button"
                 onClick={clearForm}
                 className="rounded-lg bg-zinc-800 px-3 py-2 text-xs font-bold"
               >
@@ -236,7 +253,7 @@ export default function BrandsPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
 
-            {/* BRAND NAME */}
+            {/* NAME */}
 
             <div>
               <label className="mb-2 block text-xs font-bold text-zinc-400">
@@ -272,10 +289,11 @@ export default function BrandsPage() {
 
           </div>
 
-          {/* PREVIEW */}
+          {/* LOGO PREVIEW */}
 
-          {logo && (
+          {logo.trim() && (
             <div className="mt-4 flex items-center gap-3 rounded-xl bg-zinc-900 p-3">
+
               <img
                 src={logo}
                 alt={name || "Brand"}
@@ -295,6 +313,7 @@ export default function BrandsPage() {
                   Logo Preview
                 </p>
               </div>
+
             </div>
           )}
 
@@ -342,7 +361,7 @@ export default function BrandsPage() {
               </p>
 
               <p className="mt-1 text-xs text-zinc-500">
-                Show this brand in Top Brands section.
+                Show this brand in Top Brands.
               </p>
             </button>
 
@@ -351,6 +370,7 @@ export default function BrandsPage() {
           {/* SAVE */}
 
           <button
+            type="button"
             onClick={saveBrand}
             disabled={saving}
             className="mt-5 w-full rounded-xl bg-yellow-400 py-3 font-black text-black hover:bg-yellow-300 disabled:opacity-50"
@@ -377,11 +397,12 @@ export default function BrandsPage() {
           />
         </div>
 
-        {/* BRAND LIST */}
+        {/* LIST */}
 
         <section className="mt-5">
 
           <div className="mb-4 flex items-center justify-between">
+
             <h2 className="text-xl font-black">
               All Brands
             </h2>
@@ -389,6 +410,7 @@ export default function BrandsPage() {
             <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-bold text-zinc-400">
               {filteredBrands.length} Brands
             </span>
+
           </div>
 
           {loading ? (
@@ -408,8 +430,6 @@ export default function BrandsPage() {
                     key={brand.id}
                     className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
                   >
-
-                    {/* BRAND TOP */}
 
                     <div className="flex items-center gap-3">
 
@@ -456,15 +476,17 @@ export default function BrandsPage() {
                           )}
 
                         </div>
+
                       </div>
 
                     </div>
 
-                    {/* ACTIONS */}
+                    {/* EDIT DELETE */}
 
                     <div className="mt-4 grid grid-cols-2 gap-2">
 
                       <button
+                        type="button"
                         onClick={() =>
                           editBrand(brand)
                         }
@@ -474,6 +496,7 @@ export default function BrandsPage() {
                       </button>
 
                       <button
+                        type="button"
                         onClick={() =>
                           removeBrand(
                             brand.id
@@ -486,9 +509,12 @@ export default function BrandsPage() {
 
                     </div>
 
+                    {/* STATUS */}
+
                     <div className="mt-2 grid grid-cols-2 gap-2">
 
                       <button
+                        type="button"
                         onClick={() =>
                           changeActive(
                             brand
@@ -502,6 +528,7 @@ export default function BrandsPage() {
                       </button>
 
                       <button
+                        type="button"
                         onClick={() =>
                           changeTopBrand(
                             brand

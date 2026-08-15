@@ -14,7 +14,10 @@ type Product = {
   id: string;
   name?: string;
   brand?: string;
+  brandId?: string;
+  brandName?: string;
   category?: string;
+  categoryName?: string;
   price?: number;
   mrp?: number;
   stock?: number;
@@ -68,7 +71,9 @@ export default function ProductListPage() {
       [
         product.name,
         product.brand,
+        product.brandName,
         product.category,
+        product.categoryName,
       ]
         .filter(Boolean)
         .join(" ")
@@ -184,7 +189,7 @@ export default function ProductListPage() {
                     </h2>
 
                     <p className="mt-2 text-sm font-bold text-slate-500">
-                      {product.brand}
+                      {product.brandName || product.brand}
                     </p>
 
                     <div className="mt-3 flex items-center gap-2">

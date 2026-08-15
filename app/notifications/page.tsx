@@ -5,77 +5,114 @@ import { useEffect, useState } from "react";
 import {
   collection,
   getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 
-import { db } from "../lib/firebase";
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
+
+import {
+  auth,
+  db,
+} from "../lib/firebase";
 
 type Notification = {
   id: string;
   title?: string;
   message?: string;
   active?: boolean;
+  read?: boolean;
   createdAt?: any;
+  orderId?: string;
+  type?: string;
 };
 
 export default function NotificationsPage() {
   const [
     notifications,
     setNotifications,
-  ] = useState<
-    Notification[]
-  >([]);
+  ] = useState<Notification[]>([]);
 
   const [loading, setLoading] =
     useState(true);
 
   useEffect(() => {
-    const load =
-      async () => {
-        try {
-          const snapshot =
-            await getDocs(
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (user) => {
+          if (!user) {
+            setNotifications([]);
+            setLoading(false);
+            return;
+          }
+
+          try {
+            setLoading(true);
+
+            const notificationsRef =
               collection(
                 db,
                 "notifications"
+              );
+
+            const userQuery = query(
+              notificationsRef,
+              where(
+                "userId",
+                "==",
+                user.uid
               )
             );
 
-          const data =
-            snapshot.docs
-              .map(
-                (item) => ({
-                  id: item.id,
-                  ...item.data(),
-                })
-              )
-              .filter(
-                (item: any) =>
-                  item.active !==
-                  false
-              )
-              .sort(
-                (a: any, b: any) =>
-                  getTime(
-                    b.createdAt
-                  ) -
-                  getTime(
-                    a.createdAt
-                  )
-              ) as Notification[];
+            const snapshot =
+              await getDocs(
+                userQuery
+              );
 
-          setNotifications(
-            data
-          );
-        } catch (error) {
-          console.error(
-            error
-          );
-        } finally {
-          setLoading(false);
+            const data =
+              snapshot.docs
+                .map(
+                  (item) => ({
+                    id: item.id,
+                    ...item.data(),
+                  })
+                )
+                .filter(
+                  (item: any) =>
+                    item.active !==
+                    false
+                )
+                .sort(
+                  (a: any, b: any) =>
+                    getTime(
+                      b.createdAt
+                    ) -
+                    getTime(
+                      a.createdAt
+                    )
+                ) as Notification[];
+
+            setNotifications(
+              data
+            );
+          } catch (error) {
+            console.error(
+              "Notifications load error:",
+              error
+            );
+
+            setNotifications([]);
+          } finally {
+            setLoading(false);
+          }
         }
-      };
+      );
 
-    load();
+    return () =>
+      unsubscribe();
   }, []);
 
   return (
@@ -96,14 +133,11 @@ export default function NotificationsPage() {
         </div>
 
         {loading ? (
-
           <div className="py-20 text-center font-bold">
             Loading...
           </div>
-
         ) : notifications.length ===
           0 ? (
-
           <div className="mt-5 rounded-3xl bg-white p-10 text-center shadow-sm">
 
             <div className="text-5xl">
@@ -115,17 +149,13 @@ export default function NotificationsPage() {
             </p>
 
           </div>
-
         ) : (
-
           <div className="mt-5 space-y-3">
 
             {notifications.map(
               (item) => (
                 <div
-                  key={
-                    item.id
-                  }
+                  key={item.id}
                   className="rounded-3xl bg-white p-5 shadow-sm"
                 >
 
@@ -146,6 +176,16 @@ export default function NotificationsPage() {
                         {item.message}
                       </p>
 
+                      {item.orderId && (
+                        <p className="mt-2 text-xs font-bold text-slate-500">
+                          Order: #
+                          {item.orderId.slice(
+                            0,
+                            8
+                          )}
+                        </p>
+                      )}
+
                       <p className="mt-2 text-xs text-slate-400">
                         {formatDate(
                           item.createdAt
@@ -161,7 +201,6 @@ export default function NotificationsPage() {
             )}
 
           </div>
-
         )}
 
       </div>
@@ -170,9 +209,7 @@ export default function NotificationsPage() {
   );
 }
 
-function getTime(
-  value: any
-) {
+function getTime(value: any) {
   if (!value) return 0;
 
   if (
@@ -183,28 +220,31 @@ function getTime(
   }
 
   if (
-    value?.seconds
+    value instanceof Date
   ) {
-    return value.seconds * 1000;
+    return value.getTime();
   }
 
-  return (
-    new Date(value).getTime() ||
-    0
-  );
+  const time = new Date(
+    value
+  ).getTime();
+
+  return Number.isNaN(time)
+    ? 0
+    : time;
 }
 
 function formatDate(
   value: any
 ) {
-  const time =
-    getTime(value);
+  const time = getTime(value);
 
   if (!time) return "";
 
   return new Date(
     time
-  ).toLocaleString(
-    "en-IN"
-  );
+  ).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }

@@ -1,0 +1,16 @@
+NIGHT NOW – CURRENT CONSOLIDATED BUILD
+
+This package is the latest uploaded Night Now project with targeted fixes for:
+- Faster admin auth when Firebase already has a logged-in admin session.
+- Aapki Zarurat / Need data loading.
+- Need -> product matching by selected product IDs.
+- Need -> brand matching by brand document ID OR brand name.
+- SmartNeeds first-search stale-data issue.
+- Expanded Firestore rules for brands, needs, offers, wishlist, user addresses/wallet, orders, reviews and notifications.
+
+IMPORTANT:
+1. Keep the included .env.local private. Do not upload it to GitHub or share it publicly.
+2. After replacing the project, run: npm install
+3. Start locally with: npm run dev
+4. Deploy app/firestore.rules in Firebase Console if the live Firestore rules are older than this file.
+5. WhatsApp Cloud/API credentials and true background mobile push (FCM/VAPID) are not present in the uploaded project environment, so those external credentials/integrations still need to be configured before claiming production-ready automatic WhatsApp/background push notifications.

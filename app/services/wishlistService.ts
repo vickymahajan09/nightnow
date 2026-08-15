@@ -10,24 +10,67 @@ import {
 
 import { db } from "../lib/firebase";
 
-export const addWishlist = async (data: any) => {
-  return await addDoc(collection(db, "wishlist"), data);
+export type WishlistItem = {
+  id: string;
+  userId: string;
+  productId: string;
+  name?: string;
+  price?: number;
+  mrp?: number;
+  image?: string;
+  createdAt?: any;
 };
 
-export const getWishlist = async (email: string) => {
-  const q = query(
+export const addWishlist = async (
+  data: Omit<WishlistItem, "id">
+) => {
+  const existingQuery = query(
     collection(db, "wishlist"),
-    where("email", "==", email)
+    where("userId", "==", data.userId),
+    where("productId", "==", data.productId)
   );
 
-  const snapshot = await getDocs(q);
+  const existing =
+    await getDocs(existingQuery);
 
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  }));
+  if (!existing.empty) {
+    return existing.docs[0];
+  }
+
+  return await addDoc(
+    collection(db, "wishlist"),
+    {
+      ...data,
+      createdAt: new Date(),
+    }
+  );
 };
 
-export const deleteWishlist = async (id: string) => {
-  await deleteDoc(doc(db, "wishlist", id));
+export const getWishlist = async (
+  userId: string
+): Promise<WishlistItem[]> => {
+  if (!userId) return [];
+
+  const q = query(
+    collection(db, "wishlist"),
+    where("userId", "==", userId)
+  );
+
+  const snapshot =
+    await getDocs(q);
+
+  return snapshot.docs.map(
+    (item) => ({
+      id: item.id,
+      ...item.data(),
+    }) as WishlistItem
+  );
+};
+
+export const deleteWishlist = async (
+  id: string
+) => {
+  await deleteDoc(
+    doc(db, "wishlist", id)
+  );
 };

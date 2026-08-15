@@ -7,7 +7,7 @@ interface OrderStatusProps {
 const statuses = [
   "Pending",
   "Confirmed",
-  "Preparing",
+  "Packed",
   "Out for Delivery",
   "Delivered",
 ];
@@ -15,37 +15,64 @@ const statuses = [
 export default function OrderStatus({
   status = "Pending",
 }: OrderStatusProps) {
+  const normalizedStatus =
+    status === "Preparing"
+      ? "Packed"
+      : status;
+
   const currentIndex =
-    statuses.indexOf(status);
+    statuses.indexOf(
+      normalizedStatus
+    );
+
+  const safeIndex =
+    currentIndex >= 0
+      ? currentIndex
+      : 0;
+
+  if (
+    normalizedStatus ===
+    "Cancelled"
+  ) {
+    return (
+      <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
+        <p className="font-black text-red-600 dark:text-red-400">
+          🔴 Order Cancelled
+        </p>
+
+        <p className="mt-1 text-sm text-red-500 dark:text-red-300">
+          This order has been cancelled.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-6">
-
-      <h3 className="mb-5 text-lg font-bold">
+      <h3 className="mb-5 text-lg font-black">
         Order Status
       </h3>
 
       <div className="space-y-4">
-
         {statuses.map(
           (item, index) => {
             const completed =
-              currentIndex >= index;
+              safeIndex >= index;
 
             const active =
-              status === item;
+              normalizedStatus ===
+              item;
 
             return (
               <div
                 key={item}
                 className="flex items-center gap-4"
               >
-
                 <div
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold ${
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-black ${
                     completed
-                      ? "bg-yellow-400 text-black"
-                      : "bg-zinc-800 text-zinc-500"
+                      ? "border-yellow-400 bg-yellow-400 text-black"
+                      : "border-zinc-300 bg-zinc-100 text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
                   }`}
                 >
                   {completed
@@ -57,41 +84,26 @@ export default function OrderStatus({
                   <p
                     className={`font-bold ${
                       active
-                        ? "text-yellow-400"
+                        ? "text-yellow-600 dark:text-yellow-400"
                         : completed
-                        ? "text-white"
-                        : "text-zinc-500"
+                          ? "text-zinc-900 dark:text-white"
+                          : "text-zinc-400"
                     }`}
                   >
                     {item}
                   </p>
 
                   {active && (
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-zinc-500">
                       Current order status
                     </p>
                   )}
                 </div>
-
               </div>
             );
           }
         )}
-
       </div>
-
-      {status === "Cancelled" && (
-        <div className="mt-5 rounded-xl bg-red-950 p-4 text-red-400">
-          <p className="font-bold">
-            Order Cancelled
-          </p>
-
-          <p className="mt-1 text-sm">
-            This order has been cancelled.
-          </p>
-        </div>
-      )}
-
     </div>
   );
 }

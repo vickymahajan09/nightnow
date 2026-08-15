@@ -25,6 +25,7 @@ import {
   db,
 } from "../../lib/firebase";
 import { useCart } from "../../context/CartContext";
+import ReviewSection from "../../components/ReviewSection";
 
 // =====================================================
 // TYPES
@@ -1090,6 +1091,10 @@ const [user, setUser] =
           </div>
 
         </section>
+
+        <div className="px-4">
+          <ReviewSection productId={product.id} />
+        </div>
 
       </div>
 

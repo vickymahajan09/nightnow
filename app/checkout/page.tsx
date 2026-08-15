@@ -22,6 +22,15 @@ import {
   addOrder,
 } from "../services/orderService";
 
+import {
+  getProductById,
+  decreaseProductStock,
+} from "../services/productService";
+
+import {
+  getCoupons,
+} from "../services/couponService";
+
 declare global {
   interface Window {
     Razorpay: any;
@@ -36,6 +45,15 @@ type SavedAddress = {
   city?: string;
   pincode?: string;
   label?: string;
+};
+
+type Coupon = {
+  id: string;
+  code: string;
+  discount: number;
+  minOrder?: number;
+  expiresAt?: string;
+  active?: boolean;
 };
 
 export default function CheckoutPage() {
@@ -72,11 +90,44 @@ export default function CheckoutPage() {
   const [loading, setLoading] =
     useState(false);
 
+  // =====================================
+  // COUPON STATES
+  // =====================================
+
+  const [couponCode, setCouponCode] =
+    useState("");
+
+  const [appliedCoupon, setAppliedCoupon] =
+    useState<Coupon | null>(null);
+
+  const [couponDiscount, setCouponDiscount] =
+    useState(0);
+
+  const [couponLoading, setCouponLoading] =
+    useState(false);
+
+  const [couponMessage, setCouponMessage] =
+    useState("");
+
+  const [couponError, setCouponError] =
+    useState("");
+
+  // =====================================
+  // TOTALS
+  // =====================================
+
   const delivery =
     cartTotal >= 299 ? 0 : 30;
 
+  const subtotalAfterCoupon =
+    Math.max(
+      0,
+      cartTotal - couponDiscount
+    );
+
   const grandTotal =
-    cartTotal + delivery;
+    subtotalAfterCoupon +
+    delivery;
 
   // =====================================
   // AUTH + SAVED ADDRESS
@@ -187,6 +238,190 @@ export default function CheckoutPage() {
   };
 
   // =====================================
+  // APPLY COUPON
+  // =====================================
+
+  const applyCoupon = async () => {
+    const cleanCode =
+      couponCode
+        .trim()
+        .toUpperCase();
+
+    setCouponError("");
+    setCouponMessage("");
+
+    if (!cleanCode) {
+      setCouponError(
+        "Please enter coupon code."
+      );
+      return;
+    }
+
+    if (cartTotal <= 0) {
+      setCouponError(
+        "Cart is empty."
+      );
+      return;
+    }
+
+    setCouponLoading(true);
+
+    try {
+      const coupons =
+        (await getCoupons()) as Coupon[];
+
+      const coupon =
+        coupons.find(
+          (item) =>
+            String(
+              item.code || ""
+            )
+              .trim()
+              .toUpperCase() ===
+            cleanCode
+        );
+
+      if (!coupon) {
+        setCouponError(
+          "Invalid coupon code."
+        );
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
+        return;
+      }
+
+      // ACTIVE CHECK
+
+      if (
+        coupon.active === false
+      ) {
+        setCouponError(
+          "This coupon is inactive."
+        );
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
+        return;
+      }
+
+      // MINIMUM ORDER CHECK
+
+      const minOrder =
+        Number(
+          coupon.minOrder || 0
+        );
+
+      if (
+        minOrder > 0 &&
+        cartTotal < minOrder
+      ) {
+        setCouponError(
+          `Minimum order value is ₹${minOrder}.`
+        );
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
+        return;
+      }
+
+      // EXPIRY CHECK
+
+      if (coupon.expiresAt) {
+        const expiryDate =
+          new Date(
+            coupon.expiresAt
+          );
+
+        if (
+          !Number.isNaN(
+            expiryDate.getTime()
+          ) &&
+          expiryDate <
+            new Date()
+        ) {
+          setCouponError(
+            "This coupon has expired."
+          );
+          setAppliedCoupon(null);
+          setCouponDiscount(0);
+          return;
+        }
+      }
+
+      // DISCOUNT
+
+      const discountPercent =
+        Number(
+          coupon.discount || 0
+        );
+
+      if (
+        discountPercent <= 0
+      ) {
+        setCouponError(
+          "Invalid coupon discount."
+        );
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
+        return;
+      }
+
+      const discountAmount =
+        Math.round(
+          (cartTotal *
+            discountPercent) /
+            100
+        );
+
+      const finalDiscount =
+        Math.min(
+          discountAmount,
+          cartTotal
+        );
+
+      setAppliedCoupon(
+        coupon
+      );
+
+      setCouponDiscount(
+        finalDiscount
+      );
+
+      setCouponCode(
+        coupon.code
+      );
+
+      setCouponMessage(
+        `Coupon applied! You saved ₹${finalDiscount}.`
+      );
+    } catch (error) {
+      console.error(
+        "Coupon apply error:",
+        error
+      );
+
+      setCouponError(
+        "Unable to apply coupon. Please try again."
+      );
+
+      setAppliedCoupon(null);
+      setCouponDiscount(0);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  // =====================================
+  // REMOVE COUPON
+  // =====================================
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponDiscount(0);
+    setCouponCode("");
+    setCouponMessage("");
+    setCouponError("");
+  };
+
+  // =====================================
   // VALIDATE
   // =====================================
 
@@ -236,7 +471,9 @@ export default function CheckoutPage() {
       !cart ||
       cart.length === 0
     ) {
-      alert("Cart is empty");
+      alert(
+        "Cart is empty"
+      );
       return false;
     }
 
@@ -251,6 +488,36 @@ export default function CheckoutPage() {
     paymentMethod: string,
     paymentData: any = {}
   ) => {
+    // VERIFY LIVE STOCK BEFORE CREATING THE ORDER
+    for (const item of cart) {
+      const productId = String(item?.id || "").trim();
+      const quantity = Number(item?.quantity || 1);
+
+      if (!productId || quantity <= 0) {
+        throw new Error("Invalid cart item.");
+      }
+
+      const liveProduct = await getProductById(productId);
+
+      if (!liveProduct) {
+        throw new Error(`Product not found: ${item?.name || productId}`);
+      }
+
+      const liveStock = Number(liveProduct.stock || 0);
+
+      if (liveStock < quantity) {
+        throw new Error(
+          `${liveProduct.name || item?.name || "Product"} has only ${liveStock} item(s) in stock.`
+        );
+      }
+
+      if (liveProduct.active === false) {
+        throw new Error(
+          `${liveProduct.name || item?.name || "Product"} is currently unavailable.`
+        );
+      }
+    }
+
     const order = {
       customer: {
         name,
@@ -264,13 +531,37 @@ export default function CheckoutPage() {
 
       subtotal: cartTotal,
 
+      coupon: appliedCoupon
+        ? {
+            id:
+              appliedCoupon.id,
+            code:
+              appliedCoupon.code,
+            discountPercent:
+              Number(
+                appliedCoupon.discount ||
+                  0
+              ),
+            discountAmount:
+              couponDiscount,
+          }
+        : null,
+
+      couponCode:
+        appliedCoupon?.code ||
+        null,
+
+      couponDiscount:
+        couponDiscount,
+
       delivery,
 
       total: grandTotal,
 
       paymentMethod,
 
-      payment: paymentData,
+      payment:
+        paymentData,
 
       userId:
         user?.uid || null,
@@ -284,9 +575,16 @@ export default function CheckoutPage() {
         new Date(),
     };
 
-    await addOrder(
-      order
-    );
+    const orderRef = await addOrder(order);
+
+    // Reduce live inventory only after the order has been created.
+    // The stock was verified immediately above to avoid ordering unavailable items.
+    for (const item of cart) {
+      await decreaseProductStock(
+        String(item.id),
+        Number(item.quantity || 1)
+      );
+    }
 
     cart.forEach(
       (item: any) => {
@@ -304,176 +602,185 @@ export default function CheckoutPage() {
   // COD
   // =====================================
 
-  const placeCOD = async () => {
-    if (!validate()) {
-      return;
-    }
+  const placeCOD =
+    async () => {
+      if (!validate()) {
+        return;
+      }
 
-    setLoading(true);
+      setLoading(true);
 
-    try {
-      await saveOrder(
-        "COD"
-      );
-    } catch (error) {
-      console.error(error);
+      try {
+        await saveOrder(
+          "COD"
+        );
+      } catch (error) {
+        console.error(
+          error
+        );
 
-      alert(
-        "Order Failed"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        alert(
+          "Order Failed"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   // =====================================
   // ONLINE PAYMENT
   // =====================================
 
-  const payOnline = async () => {
-    if (!validate()) {
-      return;
-    }
+  const payOnline =
+    async () => {
+      if (!validate()) {
+        return;
+      }
 
-    setLoading(true);
+      setLoading(true);
 
-    try {
-      if (
-        !window.Razorpay
-      ) {
-        const script =
-          document.createElement(
-            "script"
+      try {
+        if (
+          !window.Razorpay
+        ) {
+          const script =
+            document.createElement(
+              "script"
+            );
+
+          script.src =
+            "https://checkout.razorpay.com/v1/checkout.js";
+
+          script.async = true;
+
+          document.body.appendChild(
+            script
           );
 
-        script.src =
-          "https://checkout.razorpay.com/v1/checkout.js";
+          await new Promise(
+            (
+              resolve,
+              reject
+            ) => {
+              script.onload =
+                resolve;
 
-        script.async = true;
-
-        document.body.appendChild(
-          script
-        );
-
-        await new Promise(
-          (
-            resolve,
-            reject
-          ) => {
-            script.onload =
-              resolve;
-
-            script.onerror =
-              reject;
-          }
-        );
-      }
-
-      const response =
-        await fetch(
-          "/api/razorpay/create-order",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify(
-              {
-                amount:
-                  grandTotal,
-              }
-            ),
-          }
-        );
-
-      const razorpayOrder =
-        await response.json();
-
-      if (
-        !response.ok
-      ) {
-        throw new Error(
-          "Razorpay order creation failed"
-        );
-      }
-
-      const options = {
-        key:
-          process.env
-            .NEXT_PUBLIC_RAZORPAY_KEY_ID,
-
-        amount:
-          razorpayOrder.amount,
-
-        currency: "INR",
-
-        name: "Night Now",
-
-        description:
-          "Night Now Order",
-
-        order_id:
-          razorpayOrder.id,
-
-        prefill: {
-          name,
-          contact:
-            `+91${phone}`,
-        },
-
-        notes: {
-          address,
-          city,
-          pincode,
-        },
-
-        theme: {
-          color:
-            "#facc15",
-        },
-
-        handler:
-          async (
-            paymentResponse: any
-          ) => {
-            try {
-              await saveOrder(
-                "Online",
-                paymentResponse
-              );
-            } catch (error) {
-              console.error(
-                error
-              );
-
-              alert(
-                "Payment successful but order saving failed. Please contact support."
-              );
+              script.onerror =
+                reject;
             }
-          },
-      };
+          );
+        }
 
-      const razorpay =
-        new window.Razorpay(
-          options
+        const response =
+          await fetch(
+            "/api/razorpay/create-order",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify(
+                {
+                  amount:
+                    grandTotal,
+                }
+              ),
+            }
+          );
+
+        const razorpayOrder =
+          await response.json();
+
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            "Razorpay order creation failed"
+          );
+        }
+
+        const options = {
+          key:
+            process.env
+              .NEXT_PUBLIC_RAZORPAY_KEY_ID,
+
+          amount:
+            razorpayOrder.amount,
+
+          currency: "INR",
+
+          name: "Night Now",
+
+          description:
+            "Night Now Order",
+
+          order_id:
+            razorpayOrder.id,
+
+          prefill: {
+            name,
+
+            contact:
+              `+91${phone}`,
+          },
+
+          notes: {
+            address,
+            city,
+            pincode,
+
+            coupon:
+              appliedCoupon?.code ||
+              "",
+          },
+
+          theme: {
+            color:
+              "#facc15",
+          },
+
+          handler:
+            async (
+              paymentResponse: any
+            ) => {
+              try {
+                await saveOrder(
+                  "Online",
+                  paymentResponse
+                );
+              } catch (error) {
+                console.error(
+                  error
+                );
+
+                alert(
+                  "Payment successful but order saving failed. Please contact support."
+                );
+              }
+            },
+        };
+
+        const razorpay =
+          new window.Razorpay(
+            options
+          );
+
+        razorpay.open();
+      } catch (error) {
+        console.error(
+          error
         );
 
-      razorpay.open();
-    } catch (error) {
-      console.error(
-        error
-      );
-
-      alert(
-        "Online payment failed"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        alert(
+          "Online payment failed"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   // =====================================
   // UI
@@ -489,6 +796,7 @@ export default function CheckoutPage() {
         <div className="mb-5 flex items-center justify-between">
 
           <div>
+
             <Link
               href="/cart"
               className="text-xs font-bold text-zinc-500"
@@ -499,6 +807,7 @@ export default function CheckoutPage() {
             <h1 className="mt-2 text-3xl font-black">
               Checkout
             </h1>
+
           </div>
 
           <div className="rounded-2xl bg-yellow-400 px-4 py-2 text-black">
@@ -524,6 +833,7 @@ export default function CheckoutPage() {
             <div className="flex items-center justify-between">
 
               <div>
+
                 <h2 className="text-lg font-black">
                   Delivery Address
                 </h2>
@@ -531,6 +841,7 @@ export default function CheckoutPage() {
                 <p className="mt-1 text-xs text-zinc-500">
                   Where should we deliver?
                 </p>
+
               </div>
 
               {savedAddresses.length >
@@ -579,9 +890,11 @@ export default function CheckoutPage() {
                         {
                           item.address
                         }
+
                         {item.city
                           ? `, ${item.city}`
                           : ""}
+
                         {item.pincode
                           ? ` - ${item.pincode}`
                           : ""}
@@ -611,10 +924,15 @@ export default function CheckoutPage() {
                 value={phone}
                 onChange={(e) =>
                   setPhone(
-                    e.target.value.replace(
-                      /\D/g,
-                      ""
-                    ).slice(0, 10)
+                    e.target.value
+                      .replace(
+                        /\D/g,
+                        ""
+                      )
+                      .slice(
+                        0,
+                        10
+                      )
                   )
                 }
                 placeholder="10 Digit Mobile Number"
@@ -726,11 +1044,149 @@ export default function CheckoutPage() {
 
             </div>
 
+            {/* =================================
+                COUPON
+            ================================== */}
+
+            <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+
+              <div className="flex items-center gap-2">
+
+                <span className="text-xl">
+                  🎟️
+                </span>
+
+                <div>
+
+                  <p className="text-sm font-black">
+                    Apply Coupon
+                  </p>
+
+                  <p className="text-[10px] text-zinc-500">
+                    Save more on your order
+                  </p>
+
+                </div>
+
+              </div>
+
+              {!appliedCoupon ? (
+                <>
+
+                  <div className="mt-3 flex gap-2">
+
+                    <input
+                      value={
+                        couponCode
+                      }
+                      onChange={(
+                        e
+                      ) => {
+                        setCouponCode(
+                          e.target.value.toUpperCase()
+                        );
+
+                        setCouponError(
+                          ""
+                        );
+
+                        setCouponMessage(
+                          ""
+                        );
+                      }}
+                      onKeyDown={(
+                        e
+                      ) => {
+                        if (
+                          e.key ===
+                          "Enter"
+                        ) {
+                          applyCoupon();
+                        }
+                      }}
+                      placeholder="Enter coupon code"
+                      className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-black px-3 py-3 text-xs font-black uppercase outline-none focus:border-yellow-400"
+                    />
+
+                    <button
+                      type="button"
+                      disabled={
+                        couponLoading
+                      }
+                      onClick={
+                        applyCoupon
+                      }
+                      className="rounded-xl bg-yellow-400 px-4 py-3 text-xs font-black text-black disabled:opacity-50"
+                    >
+                      {couponLoading
+                        ? "..."
+                        : "APPLY"}
+                    </button>
+
+                  </div>
+
+                  {couponError && (
+                    <p className="mt-2 text-[10px] font-bold text-red-400">
+                      ❌{" "}
+                      {
+                        couponError
+                      }
+                    </p>
+                  )}
+
+                  {couponMessage && (
+                    <p className="mt-2 text-[10px] font-bold text-green-400">
+                      ✅{" "}
+                      {
+                        couponMessage
+                      }
+                    </p>
+                  )}
+
+                </>
+              ) : (
+                <div className="mt-3 flex items-center justify-between rounded-xl border border-green-700/50 bg-green-950/30 p-3">
+
+                  <div>
+
+                    <p className="text-xs font-black text-green-400">
+                      {appliedCoupon.code}
+                    </p>
+
+                    <p className="mt-1 text-[10px] text-green-500">
+                      {appliedCoupon.discount}% OFF
+                      {" • "}
+                      Saved ₹
+                      {
+                        couponDiscount
+                      }
+                    </p>
+
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={
+                      removeCoupon
+                    }
+                    className="rounded-lg bg-red-500/10 px-3 py-2 text-[10px] font-black text-red-400"
+                  >
+                    Remove
+                  </button>
+
+                </div>
+              )}
+
+            </div>
+
             <div className="my-5 h-px bg-zinc-800" />
+
+            {/* PRICE BREAKDOWN */}
 
             <div className="space-y-3 text-sm">
 
               <div className="flex justify-between">
+
                 <span className="text-zinc-500">
                   Items
                 </span>
@@ -738,21 +1194,44 @@ export default function CheckoutPage() {
                 <span className="font-bold">
                   ₹{cartTotal}
                 </span>
+
               </div>
 
+              {couponDiscount >
+                0 && (
+                <div className="flex justify-between">
+
+                  <span className="text-green-400">
+                    Coupon Discount
+                  </span>
+
+                  <span className="font-black text-green-400">
+                    -₹
+                    {
+                      couponDiscount
+                    }
+                  </span>
+
+                </div>
+              )}
+
               <div className="flex justify-between">
+
                 <span className="text-zinc-500">
                   Delivery
                 </span>
 
                 <span className="font-bold text-green-400">
-                  {delivery === 0
+                  {delivery ===
+                  0
                     ? "FREE"
                     : `₹${delivery}`}
                 </span>
+
               </div>
 
               <div className="flex justify-between border-t border-zinc-800 pt-3 text-lg">
+
                 <span className="font-black">
                   Total
                 </span>
@@ -760,6 +1239,7 @@ export default function CheckoutPage() {
                 <span className="font-black text-yellow-400">
                   ₹{grandTotal}
                 </span>
+
               </div>
 
             </div>
@@ -773,7 +1253,9 @@ export default function CheckoutPage() {
               </p>
 
               <button
-                disabled={loading}
+                disabled={
+                  loading
+                }
                 onClick={
                   payOnline
                 }
@@ -783,7 +1265,9 @@ export default function CheckoutPage() {
               </button>
 
               <button
-                disabled={loading}
+                disabled={
+                  loading
+                }
                 onClick={
                   placeCOD
                 }

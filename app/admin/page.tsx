@@ -216,6 +216,7 @@ export default function AdminPage() {
 
         {/* MAIN ACTIONS */}
 
+
         <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
           <Link href="/admin/orders">
@@ -265,6 +266,21 @@ export default function AdminPage() {
               </p>
             </div>
           </Link>
+          <Link href="/admin/brands">
+  <div className="rounded-2xl bg-orange-600 p-6 hover:bg-orange-500">
+    <div className="text-4xl">
+      🏷️
+    </div>
+
+    <h2 className="mt-4 text-xl font-black">
+      Brand Master
+    </h2>
+
+    <p className="mt-1 text-sm text-orange-100">
+      Manage product brands
+    </p>
+  </div>
+</Link>
 
           <Link href="/orders">
             <div className="rounded-2xl bg-zinc-800 p-6 hover:bg-zinc-700">

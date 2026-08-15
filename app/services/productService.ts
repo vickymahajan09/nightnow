@@ -198,6 +198,45 @@ export const updateProductStock =
   };
 
 // ==============================
+// VALIDATE LIVE STOCK
+// ==============================
+
+export const validateProductStock = async (
+  id: string,
+  quantity: number
+) => {
+  const product = await getProductById(id);
+
+  if (!product) {
+    throw new Error("Product not found");
+  }
+
+  const qty = Number(quantity || 0);
+
+  if (qty <= 0) {
+    throw new Error("Invalid quantity");
+  }
+
+  if (product.active === false) {
+    throw new Error(`${product.name} is currently unavailable`);
+  }
+
+  const stock = Number(product.stock || 0);
+
+  if (stock < qty) {
+    throw new Error(
+      `${product.name} has only ${stock} item(s) in stock`
+    );
+  }
+
+  return {
+    product,
+    stock,
+    remainingStock: stock - qty,
+  };
+};
+
+// ==============================
 // DECREASE STOCK BY QUANTITY
 // ==============================
 

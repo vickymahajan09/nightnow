@@ -6,31 +6,31 @@ import {
   type Brand,
 } from "../services/brandService";
 
-type Props = {
-  value: string;
-  onChange: (value: string) => void;
+type BrandSelectorProps = {
+  value?: string;
+  onChange: (brandId: string, brandName: string) => void;
 };
 
-export default function BrandSelect({
-  value,
+export default function BrandSelector({
+  value = "",
   onChange,
-}: Props) {
+}: BrandSelectorProps) {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const load = async () => {
+    const loadBrands = async () => {
       try {
         const data = await getBrands();
 
         setBrands(
           data.filter(
-            (brand) => brand.active
+            (brand) => brand.active !== false
           )
         );
       } catch (error) {
         console.error(
-          "Brand loading error:",
+          "Brand loading failed:",
           error
         );
       } finally {
@@ -38,22 +38,35 @@ export default function BrandSelect({
       }
     };
 
-    load();
+    loadBrands();
   }, []);
+
+  const selectedBrand = brands.find(
+    (brand) => brand.id === value
+  );
 
   return (
     <div>
-      <label className="mb-2 block text-sm font-bold">
+      <label className="mb-2 block text-sm font-bold text-zinc-300">
         Brand
       </label>
 
       <select
         value={value}
-        onChange={(e) =>
-          onChange(e.target.value)
-        }
+        onChange={(e) => {
+          const brandId = e.target.value;
+
+          const brand = brands.find(
+            (item) => item.id === brandId
+          );
+
+          onChange(
+            brandId,
+            brand?.name || ""
+          );
+        }}
         disabled={loading}
-        className="w-full rounded-xl border border-zinc-300 bg-white p-3 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900"
+        className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-yellow-400"
       >
         <option value="">
           {loading
@@ -64,12 +77,25 @@ export default function BrandSelect({
         {brands.map((brand) => (
           <option
             key={brand.id}
-            value={brand.name}
+            value={brand.id}
           >
             {brand.name}
           </option>
         ))}
       </select>
+
+      {!loading &&
+        brands.length === 0 && (
+          <p className="mt-2 text-xs text-red-400">
+            Pehle Brand Master mein brand add karo.
+          </p>
+        )}
+
+      {selectedBrand && (
+        <p className="mt-2 text-xs text-zinc-500">
+          Selected: {selectedBrand.name}
+        </p>
+      )}
     </div>
   );
 }

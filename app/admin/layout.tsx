@@ -1,8 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
+import AdminPushNotification from "../components/AdminPushNotification";
+
+import {
+  registerAdminPushNotifications,
+  listenForForegroundMessages,
+} from "../lib/messaging";
+
 import AdminGuard from "./AdminGuard";
+
+import AdminNotificationBell from "../components/AdminNotificationBell";
+
+import { auth } from "../lib/firebase";
+import { registerPushToken } from "../services/pushNotificationService";
 
 export default function AdminLayout({
   children,
@@ -11,8 +25,35 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
 
-  // ADMIN LOGIN PUBLIC
-  if (pathname === "/admin/login") {
+  useEffect(() => {
+    if (pathname === "/admin/login") {
+      return;
+    }
+
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (user) => {
+          if (!user) {
+            return;
+          }
+
+          await registerPushToken(
+            user.uid,
+            "admin"
+          );
+        }
+      );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [pathname]);
+
+  if (
+    pathname ===
+    "/admin/login"
+  ) {
     return <>{children}</>;
   }
 
@@ -36,6 +77,11 @@ export default function AdminLayout({
       href: "/admin/categories",
       label: "Categories",
       icon: "🗂️",
+    },
+    {
+      href: "/admin/needs",
+      label: "Aapki Zarurat",
+      icon: "💡",
     },
     {
       href: "/admin/orders",
@@ -76,11 +122,11 @@ export default function AdminLayout({
 
   return (
     <AdminGuard>
+      <AdminPushNotification />
+
       <div className="min-h-screen bg-black text-white">
 
-        {/* =================================
-            ADMIN HEADER
-        ================================== */}
+        {/* HEADER */}
 
         <header className="sticky top-0 z-50 border-b border-zinc-800 bg-black/95 shadow-xl backdrop-blur">
 
@@ -94,7 +140,6 @@ export default function AdminLayout({
                 href="/admin"
                 className="flex shrink-0 items-center gap-2 rounded-2xl border border-yellow-400/20 bg-zinc-950 px-3 py-2"
               >
-
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-400 text-lg">
                   🌙
                 </div>
@@ -113,7 +158,6 @@ export default function AdminLayout({
                   </div>
 
                 </div>
-
               </Link>
 
               {/* NAVIGATION */}
@@ -166,6 +210,10 @@ export default function AdminLayout({
 
               </nav>
 
+              {/* NOTIFICATION */}
+
+              <AdminNotificationBell />
+
               {/* LOGOUT */}
 
               <Link
@@ -187,9 +235,7 @@ export default function AdminLayout({
 
         </header>
 
-        {/* =================================
-            ADMIN CONTENT
-        ================================== */}
+        {/* CONTENT */}
 
         <main className="min-h-[calc(100vh-72px)] bg-black">
 
@@ -199,9 +245,7 @@ export default function AdminLayout({
 
         </main>
 
-        {/* =================================
-            MOBILE ADMIN BAR
-        ================================== */}
+        {/* MOBILE BAR */}
 
         <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-black/95 px-2 py-2 backdrop-blur md:hidden">
 
@@ -212,7 +256,7 @@ export default function AdminLayout({
               className={[
                 "rounded-xl p-2 text-center text-[9px] font-black",
                 pathname ===
-                  "/admin"
+                "/admin"
                   ? "bg-yellow-400 text-black"
                   : "text-zinc-500",
               ].join(" ")}
@@ -258,6 +302,23 @@ export default function AdminLayout({
             </Link>
 
             <Link
+              href="/admin/needs"
+              className={[
+                "rounded-xl p-2 text-center text-[9px] font-black",
+                pathname.startsWith(
+                  "/admin/needs"
+                )
+                  ? "bg-yellow-400 text-black"
+                  : "text-zinc-500",
+              ].join(" ")}
+            >
+              <div className="text-base">
+                💡
+              </div>
+              Needs
+            </Link>
+
+            <Link
               href="/admin/orders"
               className={[
                 "rounded-xl p-2 text-center text-[9px] font-black",
@@ -272,23 +333,6 @@ export default function AdminLayout({
                 🛍️
               </div>
               Orders
-            </Link>
-
-            <Link
-              href="/admin/settings"
-              className={[
-                "rounded-xl p-2 text-center text-[9px] font-black",
-                pathname.startsWith(
-                  "/admin/settings"
-                )
-                  ? "bg-yellow-400 text-black"
-                  : "text-zinc-500",
-              ].join(" ")}
-            >
-              <div className="text-base">
-                ⚙️
-              </div>
-              Settings
             </Link>
 
           </div>

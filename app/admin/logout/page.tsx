@@ -12,7 +12,7 @@ export default function LogoutPage() {
       try {
         await logoutUser();
       } catch (error) {
-        console.error(error);
+        console.error("Logout error:", error);
       } finally {
         router.replace("/login");
       }

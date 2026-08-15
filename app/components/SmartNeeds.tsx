@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useCart } from "../context/CartContext";
+import { getNeeds, type Need } from "../services/needService";
+import { getBrands, type Brand } from "../services/brandService";
 
 const scenarios = [
   {
@@ -86,6 +88,12 @@ export default function SmartNeeds() {
   const [loading, setLoading] =
     useState(false);
 
+  const [needs, setNeeds] =
+    useState<Need[]>([]);
+
+  const [brands, setBrands] =
+    useState<Brand[]>([]);
+
   const {
     addToCart,
     removeFromCart,
@@ -97,7 +105,7 @@ export default function SmartNeeds() {
   // =====================================================
 
   const loadProducts = async () => {
-    if (products.length > 0) return;
+    if (products.length > 0 && needs.length > 0) return products;
 
     try {
       setLoading(true);
@@ -108,10 +116,12 @@ export default function SmartNeeds() {
       const { db } =
         await import("../lib/firebase");
 
-      const snapshot =
-        await getDocs(
-          collection(db, "products")
-        );
+      const [snapshot, needData, brandData] =
+        await Promise.all([
+          getDocs(collection(db, "products")),
+          getNeeds(),
+          getBrands(),
+        ]);
 
       const data =
         snapshot.docs.map((doc) => ({
@@ -120,6 +130,15 @@ export default function SmartNeeds() {
         })) as Product[];
 
       setProducts(data);
+      setNeeds(
+        needData.filter(
+          (item) => item.active !== false
+        )
+      );
+      setBrands(
+        brandData.filter((item) => item.active !== false)
+      );
+      return data;
     } catch (error) {
       console.error(
         "SmartNeeds products error:",
@@ -134,13 +153,13 @@ export default function SmartNeeds() {
   // PRODUCT SEARCH TEXT
   // =====================================================
 
-  const productText = (
-    product: Product
-  ) => {
+  const productText = (product: Product) => {
     return [
       product.name,
       product.category,
+      product.categoryName,
       product.brand,
+      product.brandName,
       product.description,
       product.searchKeywords,
       product.size,
@@ -153,23 +172,71 @@ export default function SmartNeeds() {
   };
 
   // =====================================================
+  // BRAND MATCHING
+  // =====================================================
+
+  const productMatchesBrand = (
+    product: Product,
+    brandId: string
+  ) => {
+    const brand = brands.find(
+      (item) => String(item.id) === String(brandId)
+    );
+    const brandName = text(brand?.name || brandId);
+    const productBrandId = String(product.brandId || "");
+    const productBrandName = text(
+      product.brandName || product.brand || ""
+    );
+
+    return (
+      productBrandId === String(brandId) ||
+      (!!brandName && productBrandName === brandName) ||
+      (!!brandName && productBrandName.includes(brandName))
+    );
+  };
+
+  // =====================================================
   // MATCH PRODUCTS
   // =====================================================
 
   const matchingProducts = useMemo(() => {
     if (!selected) return [];
 
-    const keywords =
-      selected.keywords || [];
+    const keywords = Array.isArray(selected.keywords)
+      ? selected.keywords.map((keyword: string) => keyword.toLowerCase().trim()).filter(Boolean)
+      : [];
 
-    if (!keywords.length) return [];
+    const selectedProductIds = Array.isArray(selected.productIds)
+      ? selected.productIds.map(String)
+      : [];
+
+    const selectedBrandIds = Array.isArray(selected.brandIds)
+      ? selected.brandIds.map(String)
+      : [];
+
+    if (!keywords.length && !selectedProductIds.length && !selectedBrandIds.length) {
+      return [];
+    }
 
     return products
+      .filter((product) => product.active !== false)
       .map((product) => {
         const searchable =
           productText(product);
 
         let score = 0;
+
+        if (selectedProductIds.includes(String(product.id))) {
+          score += 100;
+        }
+
+        if (
+          selectedBrandIds.some((brandId: string) =>
+            productMatchesBrand(product, brandId)
+          )
+        ) {
+          score += 50;
+        }
 
         keywords.forEach(
           (keyword: string) => {
@@ -206,6 +273,7 @@ export default function SmartNeeds() {
   }, [
     products,
     selected,
+    brands,
   ]);
 
   // =====================================================
@@ -213,7 +281,12 @@ export default function SmartNeeds() {
   // =====================================================
 
   const findProducts = async () => {
-    await loadProducts();
+    const loadedProducts = await loadProducts();
+
+    const sourceProducts =
+      loadedProducts && loadedProducts.length > 0
+        ? loadedProducts
+        : products;
 
     const searchText =
       search.trim().toLowerCase();
@@ -224,7 +297,7 @@ export default function SmartNeeds() {
       searchText.split(/\s+/);
 
     const results =
-      products
+      sourceProducts
         .map((product) => {
           const searchable =
             productText(product);
@@ -460,35 +533,35 @@ export default function SmartNeeds() {
 
             <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
 
-              {scenarios.map(
-                (scenario) => (
-                  <button
-                    key={scenario.id}
-                    type="button"
-                    onClick={() =>
-                      choose(
-                        scenario
-                      )
-                    }
-                    className={`rounded-2xl border p-4 text-left transition ${
-                      selected?.id ===
-                      scenario.id
-                        ? "border-yellow-400 bg-yellow-50"
-                        : "border-zinc-200 bg-white hover:border-yellow-300"
-                    }`}
-                  >
-
-                    <div className="text-3xl">
-                      {scenario.icon}
-                    </div>
-
-                    <p className="mt-3 text-sm font-black">
-                      {scenario.title}
-                    </p>
-
-                  </button>
-                )
-              )}
+              {(needs.length > 0
+                ? needs.map((need) => ({
+                    id: need.id,
+                    icon: need.icon,
+                    title: need.title,
+                    keywords: need.keywords,
+                    brandIds: need.brandIds,
+                    productIds: need.productIds,
+                  }))
+                : scenarios
+              ).map((scenario: any) => (
+                <button
+                  key={scenario.id}
+                  type="button"
+                  onClick={() => choose(scenario)}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    selected?.id === scenario.id
+                      ? "border-yellow-400 bg-yellow-50"
+                      : "border-zinc-200 bg-white hover:border-yellow-300"
+                  }`}
+                >
+                  <div className="text-3xl">
+                    {scenario.icon}
+                  </div>
+                  <p className="mt-3 text-sm font-black">
+                    {scenario.title}
+                  </p>
+                </button>
+              ))}
 
             </div>
 

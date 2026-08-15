@@ -9,7 +9,7 @@ import {
 
 import { db } from "../lib/firebase";
 
-export type Brand = {
+export interface Brand {
   id: string;
   name: string;
   logo?: string;
@@ -17,91 +17,154 @@ export type Brand = {
   topBrand: boolean;
   createdAt?: any;
   updatedAt?: any;
-};
+}
 
-const brandsRef = collection(db, "brands");
+// ==============================
+// GET ALL BRANDS
+// ==============================
 
 export const getBrands = async (): Promise<Brand[]> => {
-  const snapshot = await getDocs(brandsRef);
+  const snapshot = await getDocs(
+    collection(db, "brands")
+  );
 
-  return snapshot.docs.map((item) => {
-    const data = item.data();
+  return snapshot.docs
+    .map((item) => {
+      const data = item.data();
 
-    return {
-      id: item.id,
-      name: data.name || data.brandName || "",
-      logo: data.logo || data.image || "",
-      active:
-        data.active !== undefined
-          ? Boolean(data.active)
-          : data.isActive !== undefined
-          ? Boolean(data.isActive)
-          : true,
-      topBrand:
-        data.topBrand !== undefined
-          ? Boolean(data.topBrand)
-          : data.isTopBrand !== undefined
-          ? Boolean(data.isTopBrand)
-          : false,
-      ...data,
-    };
-  });
+      return {
+        id: item.id,
+        name: String(data.name || "").trim(),
+        logo: String(data.logo || "").trim(),
+        active: data.active !== false,
+        topBrand: data.topBrand === true,
+        ...data,
+      } as Brand;
+    })
+    .filter((brand) => brand.name);
 };
+
+// ==============================
+// ADD BRAND
+// ==============================
 
 export const addBrand = async (
   name: string,
-  logo: string,
-  active: boolean,
-  topBrand: boolean
+  logo: string = "",
+  active: boolean = true,
+  topBrand: boolean = false
 ) => {
-  return await addDoc(brandsRef, {
-    name: name.trim(),
-    logo: logo.trim(),
-    active,
-    topBrand,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  const cleanName = String(name || "").trim();
+  const cleanLogo = String(logo || "").trim();
+
+  if (!cleanName) {
+    throw new Error("Brand name required");
+  }
+
+  const brands = await getBrands();
+
+  const alreadyExists = brands.some(
+    (brand) =>
+      brand.name.toLowerCase() ===
+      cleanName.toLowerCase()
+  );
+
+  if (alreadyExists) {
+    throw new Error("Brand already exists");
+  }
+
+  return await addDoc(
+    collection(db, "brands"),
+    {
+      name: cleanName,
+      logo: cleanLogo,
+      active,
+      topBrand,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+  );
 };
+
+// ==============================
+// UPDATE BRAND
+// ==============================
 
 export const updateBrand = async (
   id: string,
-  data: {
+  brand: {
     name: string;
-    logo: string;
-    active: boolean;
-    topBrand: boolean;
+    logo?: string;
+    active?: boolean;
+    topBrand?: boolean;
   }
 ) => {
-  await updateDoc(doc(db, "brands", id), {
-    name: data.name.trim(),
-    logo: data.logo.trim(),
-    active: data.active,
-    topBrand: data.topBrand,
-    updatedAt: new Date(),
-  });
+  const cleanName = String(
+    brand.name || ""
+  ).trim();
+
+  const cleanLogo = String(
+    brand.logo || ""
+  ).trim();
+
+  if (!cleanName) {
+    throw new Error("Brand name required");
+  }
+
+  await updateDoc(
+    doc(db, "brands", id),
+    {
+      name: cleanName,
+      logo: cleanLogo,
+      active: brand.active !== false,
+      topBrand: brand.topBrand === true,
+      updatedAt: new Date(),
+    }
+  );
 };
 
-export const deleteBrand = async (id: string) => {
-  await deleteDoc(doc(db, "brands", id));
-};
+// ==============================
+// TOGGLE BRAND ACTIVE
+// ==============================
 
 export const toggleBrand = async (
   id: string,
   active: boolean
 ) => {
-  await updateDoc(doc(db, "brands", id), {
-    active,
-    updatedAt: new Date(),
-  });
+  await updateDoc(
+    doc(db, "brands", id),
+    {
+      active,
+      updatedAt: new Date(),
+    }
+  );
 };
+
+// ==============================
+// TOGGLE TOP BRAND
+// ==============================
 
 export const toggleTopBrand = async (
   id: string,
   topBrand: boolean
 ) => {
-  await updateDoc(doc(db, "brands", id), {
-    topBrand,
-    updatedAt: new Date(),
-  });
+  await updateDoc(
+    doc(db, "brands", id),
+    {
+      topBrand,
+      updatedAt: new Date(),
+    }
+  );
+};
+
+// ==============================
+// DELETE BRAND
+// ==============================
+
+export const deleteBrand = async (
+  id: string
+) => {
+  await deleteDoc(
+    doc(db, "brands", id)
+  );
 };

@@ -10,6 +10,7 @@ import {
 
 type Order = {
   id: string;
+
   name?: string;
   phone?: string;
   address?: string;
@@ -40,7 +41,7 @@ type Order = {
 const STATUSES = [
   "Pending",
   "Confirmed",
-  "Preparing",
+  "Packed",
   "Out for Delivery",
   "Delivered",
   "Cancelled",
@@ -53,116 +54,107 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] =
     useState(true);
 
-  const loadOrders =
-    async () => {
-      try {
-        setLoading(true);
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
 
-        const data =
-          await getOrders();
+      const data = await getOrders();
 
-        const sorted =
-          (data as Order[]).sort(
-            (a, b) =>
-              getTime(
-                b.createdAt
-              ) -
-              getTime(
-                a.createdAt
-              )
-          );
+      const sorted = (
+        data as Order[]
+      ).sort(
+        (a, b) =>
+          getTime(b.createdAt) -
+          getTime(a.createdAt)
+      );
 
-        setOrders(sorted);
-      } catch (error) {
-        console.error(
-          error
-        );
+      setOrders(sorted);
+    } catch (error) {
+      console.error(
+        "Orders loading error:",
+        error
+      );
 
-        alert(
-          "Orders loading failed"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
+      alert("Orders loading failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadOrders();
   }, []);
 
-  const changeStatus =
-    async (
-      id: string,
-      status: string
-    ) => {
-      try {
-        await updateOrderStatus(
-          id,
-          status
-        );
+  const changeStatus = async (
+    id: string,
+    status: string
+  ) => {
+    try {
+      await updateOrderStatus(
+        id,
+        status
+      );
 
-        setOrders(
-          (current) =>
-            current.map(
-              (order) =>
-                order.id === id
-                  ? {
-                      ...order,
-                      status,
-                    }
-                  : order
-            )
-        );
-      } catch (error) {
-        console.error(
-          error
-        );
-
-        alert(
-          "Status update failed"
-        );
-      }
-    };
-
-  const removeOrder =
-    async (
-      id: string
-    ) => {
-      if (
-        !confirm(
-          "Delete this order?"
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === id
+            ? {
+                ...order,
+                status,
+              }
+            : order
         )
-      ) {
-        return;
-      }
+      );
+    } catch (error) {
+      console.error(
+        "Status update error:",
+        error
+      );
 
-      try {
-        await deleteOrder(
-          id
-        );
+      alert(
+        "Status update failed"
+      );
+    }
+  };
 
-        setOrders(
-          (current) =>
-            current.filter(
-              (order) =>
-                order.id !== id
-            )
-        );
-      } catch (error) {
-        console.error(
-          error
-        );
+  const removeOrder = async (
+    id: string
+  ) => {
+    if (
+      !window.confirm(
+        "Delete this order?"
+      )
+    ) {
+      return;
+    }
 
-        alert(
-          "Order delete failed"
-        );
-      }
-    };
+    try {
+      await deleteOrder(id);
+
+      setOrders((current) =>
+        current.filter(
+          (order) =>
+            order.id !== id
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Order delete error:",
+        error
+      );
+
+      alert(
+        "Order delete failed"
+      );
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 text-slate-900 md:p-8">
 
       <div className="mx-auto max-w-7xl">
+
+        {/* HEADER */}
 
         <div className="rounded-3xl bg-white p-6 shadow-sm">
 
@@ -180,17 +172,61 @@ export default function AdminOrdersPage() {
 
         </div>
 
+        {/* STATUS SUMMARY */}
+
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+
+          {STATUSES.map(
+            (status) => {
+              const count =
+                orders.filter(
+                  (order) =>
+                    normalizeStatus(
+                      order.status
+                    ) === status
+                ).length;
+
+              return (
+                <div
+                  key={status}
+                  className={`rounded-2xl border p-4 ${getStatusBoxClass(
+                    status
+                  )}`}
+                >
+
+                  <p className="text-[10px] font-black">
+                    {status}
+                  </p>
+
+                  <p className="mt-1 text-2xl font-black">
+                    {count}
+                  </p>
+
+                </div>
+              );
+            }
+          )}
+
+        </div>
+
+        {/* ORDERS */}
+
         {loading ? (
 
-          <div className="py-20 text-center font-bold">
+          <div className="mt-5 rounded-3xl bg-white py-20 text-center font-bold">
             Loading orders...
           </div>
 
-        ) : orders.length ===
-          0 ? (
+        ) : orders.length === 0 ? (
 
           <div className="mt-5 rounded-3xl bg-white p-10 text-center">
-            No orders found.
+            <div className="text-4xl">
+              📦
+            </div>
+
+            <p className="mt-3 font-black">
+              No orders found.
+            </p>
           </div>
 
         ) : (
@@ -201,44 +237,54 @@ export default function AdminOrdersPage() {
               (order) => {
 
                 const customerName =
-                  order.customer
-                    ?.name ||
+                  order.customer?.name ||
                   order.name ||
                   "Customer";
 
                 const phone =
-                  order.customer
-                    ?.phone ||
+                  order.customer?.phone ||
                   order.phone ||
                   "";
 
                 const address =
-                  order.customer
-                    ?.address ||
+                  order.customer?.address ||
                   order.address ||
                   "";
 
                 const city =
-                  order.customer
-                    ?.city ||
+                  order.customer?.city ||
                   "";
 
                 const pincode =
-                  order.customer
-                    ?.pincode ||
+                  order.customer?.pincode ||
                   "";
+
+                const status =
+                  normalizeStatus(
+                    order.status
+                  );
+
+                const total =
+                  Number(
+                    order.total ??
+                      order.subtotal ??
+                      0
+                  );
+
+                const payment =
+                  order.paymentMethod ||
+                  order.payment ||
+                  "COD";
 
                 return (
                   <div
-                    key={
-                      order.id
-                    }
+                    key={order.id}
                     className="rounded-3xl bg-white p-5 shadow-sm"
                   >
 
                     {/* TOP */}
 
-                    <div className="flex flex-col justify-between gap-4 lg:flex-row">
+                    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
 
                       <div>
 
@@ -246,7 +292,7 @@ export default function AdminOrdersPage() {
                           ORDER
                         </p>
 
-                        <h2 className="font-black">
+                        <h2 className="mt-1 font-black">
                           #{order.id}
                         </h2>
 
@@ -258,33 +304,28 @@ export default function AdminOrdersPage() {
 
                       </div>
 
+                      {/* STATUS */}
+
                       <select
-                        value={
-                          order.status ||
-                          "Pending"
-                        }
-                        onChange={(e) =>
+                        value={status}
+                        onChange={(event) =>
                           changeStatus(
                             order.id,
-                            e.target.value
+                            event.target.value
                           )
                         }
-                        className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-black outline-none"
+                        className={`h-11 rounded-xl border px-4 text-sm font-black outline-none ${getStatusSelectClass(
+                          status
+                        )}`}
                       >
 
                         {STATUSES.map(
-                          (
-                            status
-                          ) => (
+                          (item) => (
                             <option
-                              key={
-                                status
-                              }
-                              value={
-                                status
-                              }
+                              key={item}
+                              value={item}
                             >
-                              {status}
+                              {item}
                             </option>
                           )
                         )}
@@ -293,9 +334,11 @@ export default function AdminOrdersPage() {
 
                     </div>
 
-                    {/* CUSTOMER */}
+                    {/* CUSTOMER + LOCATION */}
 
                     <div className="mt-5 grid gap-4 lg:grid-cols-3">
+
+                      {/* CUSTOMER */}
 
                       <div className="rounded-2xl bg-slate-50 p-4">
 
@@ -307,14 +350,22 @@ export default function AdminOrdersPage() {
                           {customerName}
                         </p>
 
-                        <a
-                          href={`tel:${phone}`}
-                          className="mt-1 block text-sm font-bold text-blue-600"
-                        >
-                          📞 {phone}
-                        </a>
+                        {phone ? (
+                          <a
+                            href={`tel:${phone}`}
+                            className="mt-1 inline-block text-sm font-bold text-blue-600"
+                          >
+                            📞 {phone}
+                          </a>
+                        ) : (
+                          <p className="mt-1 text-xs text-slate-400">
+                            Phone not available
+                          </p>
+                        )}
 
                       </div>
+
+                      {/* LOCATION */}
 
                       <div className="rounded-2xl bg-slate-50 p-4 lg:col-span-2">
 
@@ -323,24 +374,44 @@ export default function AdminOrdersPage() {
                         </p>
 
                         <p className="mt-2 text-sm font-bold">
-                          📍 {address}
+                          📍{" "}
+                          {address ||
+                            "Address not available"}
                         </p>
 
-                        <p className="mt-1 text-sm text-slate-500">
-                          {city}{" "}
-                          {pincode}
-                        </p>
+                        {(city ||
+                          pincode) && (
+                          <p className="mt-1 text-sm text-slate-500">
+                            {city}
 
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                            `${address}, ${city}, ${pincode}`
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-3 inline-block rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black"
-                        >
-                          📍 Open Location
-                        </a>
+                            {city &&
+                            pincode
+                              ? " - "
+                              : ""}
+
+                            {pincode}
+                          </p>
+                        )}
+
+                        {address && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const query =
+                                `${address}, ${city}, ${pincode}`;
+
+                              window.open(
+                                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                  query
+                                )}`,
+                                "_blank"
+                              );
+                            }}
+                            className="mt-3 rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black"
+                          >
+                            📍 Open Location
+                          </button>
+                        )}
 
                       </div>
 
@@ -356,39 +427,55 @@ export default function AdminOrdersPage() {
 
                       <div className="mt-3 space-y-2">
 
-                        {(order.items ||
-                          []).map(
-                          (
-                            item,
-                            index
-                          ) => (
-                            <div
-                              key={`${item.id || index}-${index}`}
-                              className="flex justify-between border-b border-slate-100 py-2 last:border-0"
-                            >
+                        {(order.items || [])
+                          .map(
+                            (
+                              item,
+                              index
+                            ) => {
 
-                              <span className="text-sm font-bold">
-                                {item.name ||
-                                  "Product"}{" "}
-                                ×{" "}
-                                {item.quantity ||
-                                  1}
-                              </span>
+                              const quantity =
+                                Number(
+                                  item?.quantity ||
+                                    1
+                                );
 
-                              <span className="font-black">
-                                ₹
-                                {Number(
-                                  item.price ||
+                              const price =
+                                Number(
+                                  item?.price ||
                                     0
-                                ) *
-                                  Number(
-                                    item.quantity ||
-                                      1
-                                  )}
-                              </span>
+                                );
 
-                            </div>
-                          )
+                              return (
+                                <div
+                                  key={`${item?.id || index}-${index}`}
+                                  className="flex justify-between gap-3 border-b border-slate-100 py-2 last:border-0"
+                                >
+
+                                  <span className="text-sm font-bold">
+                                    {item?.name ||
+                                      "Product"}{" "}
+                                    ×{" "}
+                                    {quantity}
+                                  </span>
+
+                                  <span className="font-black">
+                                    ₹
+                                    {price *
+                                      quantity}
+                                  </span>
+
+                                </div>
+                              );
+                            }
+                          )}
+
+                        {(order.items ||
+                          []).length ===
+                          0 && (
+                          <p className="py-3 text-sm text-slate-400">
+                            No item details available.
+                          </p>
                         )}
 
                       </div>
@@ -406,9 +493,7 @@ export default function AdminOrdersPage() {
                         </p>
 
                         <p className="font-black">
-                          {order.paymentMethod ||
-                            order.payment ||
-                            "COD"}
+                          {payment}
                         </p>
 
                       </div>
@@ -420,15 +505,14 @@ export default function AdminOrdersPage() {
                         </p>
 
                         <p className="text-2xl font-black text-green-600">
-                          ₹
-                          {order.total ??
-                            order.subtotal ??
-                            0}
+                          ₹{total}
                         </p>
 
                       </div>
 
                     </div>
+
+                    {/* DELETE */}
 
                     <button
                       type="button"
@@ -437,7 +521,7 @@ export default function AdminOrdersPage() {
                           order.id
                         )
                       }
-                      className="mt-5 rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-600"
+                      className="mt-5 rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-600 hover:bg-red-100"
                     >
                       🗑️ Delete Order
                     </button>
@@ -457,10 +541,34 @@ export default function AdminOrdersPage() {
   );
 }
 
+/* ==========================================
+   STATUS NORMALIZE
+========================================== */
+
+function normalizeStatus(
+  status?: string
+) {
+  if (!status) {
+    return "Pending";
+  }
+
+  if (status === "Packed") {
+    return "Confirmed";
+  }
+
+  return status;
+}
+
+/* ==========================================
+   DATE
+========================================== */
+
 function getTime(
   value: any
 ) {
-  if (!value) return 0;
+  if (!value) {
+    return 0;
+  }
 
   if (
     typeof value?.toMillis ===
@@ -470,17 +578,25 @@ function getTime(
   }
 
   if (
-    value?.seconds
+    typeof value?.toDate ===
+    "function"
   ) {
-    return (
-      value.seconds * 1000
-    );
+    return value.toDate().getTime();
   }
 
-  return (
-    new Date(value).getTime() ||
-    0
-  );
+  if (
+    typeof value?.seconds ===
+    "number"
+  ) {
+    return value.seconds * 1000;
+  }
+
+  const time =
+    new Date(value).getTime();
+
+  return Number.isNaN(time)
+    ? 0
+    : time;
 }
 
 function formatDate(
@@ -489,11 +605,81 @@ function formatDate(
   const time =
     getTime(value);
 
-  if (!time) return "-";
+  if (!time) {
+    return "-";
+  }
 
   return new Date(
     time
-  ).toLocaleString(
-    "en-IN"
-  );
+  ).toLocaleString("en-IN");
+}
+
+/* ==========================================
+   STATUS COLORS
+========================================== */
+
+function getStatusBoxClass(
+  status: string
+) {
+  if (status === "Pending") {
+    return "border-yellow-200 bg-yellow-50 text-yellow-800";
+  }
+
+  if (status === "Confirmed") {
+    return "border-blue-200 bg-blue-50 text-blue-800";
+  }
+
+  if (status === "Packed") {
+    return "border-purple-200 bg-purple-50 text-purple-800";
+  }
+
+  if (
+    status ===
+    "Out for Delivery"
+  ) {
+    return "border-orange-200 bg-orange-50 text-orange-800";
+  }
+
+  if (status === "Delivered") {
+    return "border-green-200 bg-green-50 text-green-800";
+  }
+
+  if (status === "Cancelled") {
+    return "border-red-200 bg-red-50 text-red-800";
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-800";
+}
+
+function getStatusSelectClass(
+  status: string
+) {
+  if (status === "Pending") {
+    return "border-yellow-300 bg-yellow-100 text-yellow-800";
+  }
+
+  if (status === "Confirmed") {
+    return "border-blue-300 bg-blue-100 text-blue-800";
+  }
+
+  if (status === "Packed") {
+    return "border-purple-300 bg-purple-100 text-purple-800";
+  }
+
+  if (
+    status ===
+    "Out for Delivery"
+  ) {
+    return "border-orange-300 bg-orange-100 text-orange-800";
+  }
+
+  if (status === "Delivered") {
+    return "border-green-300 bg-green-100 text-green-800";
+  }
+
+  if (status === "Cancelled") {
+    return "border-red-300 bg-red-100 text-red-800";
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-800";
 }

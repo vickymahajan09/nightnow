@@ -1,276 +1,148 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
+import { auth } from "../../lib/firebase";
+
 import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
+  getOrderById,
+} from "../../services/orderService";
 
-import { db } from "../../lib/firebase";
-import { useCart } from "../../context/CartContext";
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
 
-
-// =====================================================
-// TYPES
-// =====================================================
-
-type ProductVariant = {
+type OrderItem = {
   id?: string;
   name?: string;
-
-  size?: string;
-  weight?: string;
-  volume?: string;
-  pack?: string;
-
+  image?: string;
   price?: number;
-  mrp?: number;
-  stock?: number;
+  quantity?: number;
 };
 
-type Product = {
+type Order = {
   id: string;
 
-  name?: string;
+  userId?: string;
 
-  description?: string;
+  customer?: {
+    uid?: string;
+    userId?: string;
+    name?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    pincode?: string;
+  };
 
-  category?: string;
+  items?: OrderItem[];
 
-  price?: number;
-  mrp?: number;
+  subtotal?: number;
+  delivery?: number;
+  deliveryCharge?: number;
+  total?: number;
 
-  stock?: number;
+  payment?: string;
+  paymentMethod?: string;
 
-  image?: string;
+  status?: string;
 
-  images?: string[];
-
-  variants?: ProductVariant[];
-
-  sizes?: ProductVariant[];
+  createdAt?: any;
 };
 
-
-// =====================================================
-// HELPERS
-// =====================================================
-
-function getVariantLabel(
-  variant: ProductVariant
-) {
-  return (
-    variant.name ||
-    variant.size ||
-    variant.weight ||
-    variant.volume ||
-    variant.pack ||
-    "Option"
-  );
-}
-
-
-// =====================================================
-// PAGE
-// =====================================================
-
-export default function ProductPage() {
-
+export default function CustomerOrderDetailPage() {
   const params = useParams();
 
-  const productId =
+  const orderId =
     String(params?.id || "");
 
-
-  const {
-    cart,
-    addToCart,
-    removeFromCart,
-    isInCart,
-    getItemQuantity,
-  } = useCart();
-
-
-  const [product, setProduct] =
-    useState<Product | null>(null);
-
+  const [order, setOrder] =
+    useState<Order | null>(null);
 
   const [loading, setLoading] =
     useState(true);
 
-
-  const [error, setError] =
-    useState("");
-
-
-  const [activeImage, setActiveImage] =
-    useState(0);
-
-
-  const [selectedVariant, setSelectedVariant] =
-    useState<ProductVariant | null>(null);
-
-
-  const [liked, setLiked] =
+  const [notAllowed, setNotAllowed] =
     useState(false);
 
-
-  // ===================================================
-  // LOAD PRODUCT
-  // ===================================================
-
   useEffect(() => {
+    if (!orderId) {
+      return;
+    }
 
-    if (!productId) return;
-
-
-    const loadProduct =
-      async () => {
-
-        try {
-
-          setLoading(true);
-
-          const productRef =
-            doc(
-              db,
-              "products",
-              productId
-            );
-
-
-          const snapshot =
-            await getDoc(
-              productRef
-            );
-
-
-          if (!snapshot.exists()) {
-
-            setError(
-              "Product not found."
-            );
-
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (user) => {
+          if (!user) {
+            setNotAllowed(true);
+            setLoading(false);
             return;
           }
 
-
-          const data =
-            snapshot.data();
-
-
-          const loadedProduct: Product = {
-            id: snapshot.id,
-            ...data,
-          };
-
-
-          setProduct(
-            loadedProduct
-          );
-
-
-          // ------------------------------------------
-          // DEFAULT VARIANT
-          // ------------------------------------------
-
-          const variants =
-            Array.isArray(
-              loadedProduct.variants
-            )
-              ? loadedProduct.variants
-              : Array.isArray(
-                  loadedProduct.sizes
-                )
-                ? loadedProduct.sizes
-                : [];
-
-
-          if (
-            variants.length > 0
-          ) {
-
-            setSelectedVariant(
-              variants[0]
-            );
-          }
-
-
-          // ------------------------------------------
-          // WISHLIST
-          // ------------------------------------------
-
           try {
-
-            const savedWishlist =
-              JSON.parse(
-                localStorage.getItem(
-                  "nightnow_wishlist"
-                ) || "[]"
+            const data =
+              await getOrderById(
+                orderId
               );
 
+            if (!data) {
+              setOrder(null);
+              setLoading(false);
+              return;
+            }
 
-            setLiked(
-              savedWishlist.includes(
-                productId
-              )
+            const loadedOrder =
+              data as Order;
+
+            const owner =
+              loadedOrder.userId ||
+              loadedOrder.customer?.uid ||
+              loadedOrder.customer?.userId ||
+              "";
+
+            if (
+              owner &&
+              owner !== user.uid
+            ) {
+              setNotAllowed(true);
+              setLoading(false);
+              return;
+            }
+
+            setOrder(
+              loadedOrder
             );
-
-          } catch {
-
-            setLiked(false);
-
+          } catch (error) {
+            console.error(
+              "Order detail error:",
+              error
+            );
+          } finally {
+            setLoading(false);
           }
-
-        } catch (err) {
-
-          console.error(
-            "Product loading error:",
-            err
-          );
-
-          setError(
-            "Unable to load product."
-          );
-
-        } finally {
-
-          setLoading(false);
-
         }
+      );
 
-      };
-
-
-    loadProduct();
-
-  }, [productId]);
-
-
-  // ===================================================
-  // LOADING
-  // ===================================================
+    return () => {
+      unsubscribe();
+    };
+  }, [orderId]);
 
   if (loading) {
-
     return (
-      <main className="min-h-screen bg-zinc-50 px-4 py-16 text-black">
+      <main className="min-h-screen bg-slate-50 p-5">
 
-        <div className="mx-auto max-w-xl text-center">
+        <div className="mx-auto max-w-3xl rounded-3xl bg-white p-10 text-center shadow-sm">
 
           <div className="text-5xl">
-            ⏳
+            📦
           </div>
 
-          <p className="mt-4 font-bold">
-            Loading product...
+          <p className="mt-4 font-black">
+            Loading order...
           </p>
 
         </div>
@@ -279,34 +151,29 @@ export default function ProductPage() {
     );
   }
 
-
-  // ===================================================
-  // ERROR
-  // ===================================================
-
-  if (
-    error ||
-    !product
-  ) {
-
+  if (notAllowed) {
     return (
-      <main className="min-h-screen bg-zinc-50 px-4 py-16 text-black">
+      <main className="min-h-screen bg-slate-50 p-5">
 
-        <div className="mx-auto max-w-md text-center">
+        <div className="mx-auto max-w-3xl rounded-3xl bg-white p-10 text-center shadow-sm">
 
-          <div className="text-6xl">
-            😕
+          <div className="text-5xl">
+            🔐
           </div>
 
-          <h1 className="mt-5 text-2xl font-black">
-            {error ||
-              "Product not found"}
+          <h1 className="mt-4 text-2xl font-black">
+            Login Required
           </h1>
 
-          <Link href="/">
-            <button className="mt-6 rounded-xl bg-yellow-400 px-7 py-3 font-black">
-              ← Back to Shopping
-            </button>
+          <p className="mt-2 text-sm text-slate-500">
+            Please login to view this order.
+          </p>
+
+          <Link
+            href="/login"
+            className="mt-6 inline-block rounded-2xl bg-yellow-400 px-6 py-3 font-black text-black"
+          >
+            Login
           </Link>
 
         </div>
@@ -315,731 +182,380 @@ export default function ProductPage() {
     );
   }
 
+  if (!order) {
+    return (
+      <main className="min-h-screen bg-slate-50 p-5">
 
-  // ===================================================
-  // IMAGES
-  // ===================================================
+        <div className="mx-auto max-w-3xl rounded-3xl bg-white p-10 text-center shadow-sm">
 
-  const productImages =
-    Array.isArray(
-      product.images
-    ) &&
-    product.images.length > 0
-      ? product.images
-      : product.image
-        ? [product.image]
-        : ["/no-image.png"];
+          <div className="text-5xl">
+            📦
+          </div>
 
-
-  // ===================================================
-  // VARIANTS
-  // ===================================================
-
-  const variants =
-    Array.isArray(
-      product.variants
-    )
-      ? product.variants
-      : Array.isArray(
-          product.sizes
-        )
-        ? product.sizes
-        : [];
-
-
-  // ===================================================
-  // CURRENT PRICE
-  // ===================================================
-
-  const currentPrice =
-    Number(
-      selectedVariant?.price ??
-      product.price ??
-      0
-    );
-
-
-  // ===================================================
-  // CURRENT MRP
-  // ===================================================
-
-  const currentMrp =
-    Number(
-      selectedVariant?.mrp ??
-      product.mrp ??
-      0
-    );
-
-
-  // ===================================================
-  // CURRENT STOCK
-  // ===================================================
-
-  const currentStock =
-    Number(
-      selectedVariant?.stock ??
-      product.stock ??
-      0
-    );
-
-
-  // ===================================================
-  // VARIANT ID
-  // ===================================================
-
-  const currentVariantId =
-    selectedVariant?.id ||
-    getVariantLabel(
-      selectedVariant || {}
-    );
-
-
-  // ===================================================
-  // CART QUANTITY
-  // ===================================================
-
-  const quantity =
-    getItemQuantity(
-      product.id,
-      currentVariantId
-    );
-
-
-  const inCart =
-    isInCart(
-      product.id,
-      currentVariantId
-    );
-
-
-  // ===================================================
-  // DISCOUNT
-  // ===================================================
-
-  const discount =
-    currentMrp > currentPrice &&
-    currentMrp > 0
-      ? Math.round(
-          ((currentMrp -
-            currentPrice) /
-            currentMrp) *
-            100
-        )
-      : 0;
-
-
-  // ===================================================
-  // LIKE
-  // ===================================================
-
-  const toggleLike =
-    () => {
-
-      try {
-
-        const wishlist =
-          JSON.parse(
-            localStorage.getItem(
-              "nightnow_wishlist"
-            ) || "[]"
-          );
-
-
-        const index =
-          wishlist.indexOf(
-            product.id
-          );
-
-
-        if (index === -1) {
-
-          wishlist.push(
-            product.id
-          );
-
-          setLiked(true);
-
-        } else {
-
-          wishlist.splice(
-            index,
-            1
-          );
-
-          setLiked(false);
-
-        }
-
-
-        localStorage.setItem(
-          "nightnow_wishlist",
-          JSON.stringify(
-            wishlist
-          )
-        );
-
-      } catch (err) {
-
-        console.error(
-          "Wishlist error:",
-          err
-        );
-
-      }
-
-    };
-
-
-  // ===================================================
-  // ADD PRODUCT
-  // ===================================================
-
-  const handleAdd =
-    () => {
-
-      if (
-        currentStock > 0 &&
-        quantity >= currentStock
-      ) {
-        return;
-      }
-
-
-      addToCart({
-
-        ...product,
-
-        id: product.id,
-
-        price:
-          currentPrice,
-
-        mrp:
-          currentMrp,
-
-        stock:
-          currentStock,
-
-        quantity: 1,
-
-        variantId:
-          currentVariantId,
-
-        variantName:
-          selectedVariant
-            ? getVariantLabel(
-                selectedVariant
-              )
-            : undefined,
-
-        size:
-          selectedVariant?.size,
-
-        weight:
-          selectedVariant?.weight,
-
-        volume:
-          selectedVariant?.volume,
-
-        pack:
-          selectedVariant?.pack,
-
-      });
-
-    };
-
-
-  // ===================================================
-  // REMOVE PRODUCT
-  // ===================================================
-
-  const handleRemove =
-    () => {
-
-      removeFromCart(
-        product.id,
-        currentVariantId
-      );
-
-    };
-
-
-  // ===================================================
-  // VARIANT SELECT
-  // ===================================================
-
-  const selectVariant =
-    (
-      variant: ProductVariant
-    ) => {
-
-      setSelectedVariant(
-        variant
-      );
-
-      setActiveImage(0);
-
-    };
-
-
-  // ===================================================
-  // UI
-  // ===================================================
-
-  return (
-    <main className="min-h-screen bg-zinc-50 pb-28 text-black">
-
-      <div className="mx-auto max-w-6xl">
-
-        {/* =========================================
-            TOP BAR
-        ========================================== */}
-
-        <div className="flex items-center justify-between px-4 py-4">
-
-          <Link
-            href="/"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl shadow-sm"
-          >
-            ←
-          </Link>
-
-
-          <h1 className="text-base font-black">
-            Product Details
+          <h1 className="mt-4 text-2xl font-black">
+            Order Not Found
           </h1>
 
-
           <Link
-            href="/cart"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-lg shadow-sm"
+            href="/orders"
+            className="mt-6 inline-block rounded-2xl bg-yellow-400 px-6 py-3 font-black text-black"
           >
-            🛒
+            ← My Orders
           </Link>
 
         </div>
 
+      </main>
+    );
+  }
 
-        {/* =========================================
-            PRODUCT IMAGE
-        ========================================== */}
+  const status =
+    order.status ||
+    "Pending";
 
-        <section className="px-4">
+  const customer =
+    order.customer || {};
 
-          <div className="relative overflow-hidden rounded-3xl bg-white">
+  const total =
+    Number(
+      order.total ??
+        order.subtotal ??
+        0
+    );
 
-            <div className="flex h-[380px] items-center justify-center bg-zinc-100">
+  const delivery =
+    Number(
+      order.delivery ??
+        order.deliveryCharge ??
+        0
+    );
 
-              <img
-                src={
-                  productImages[
-                    activeImage
-                  ]
-                }
-                alt={
-                  product.name ||
-                  "Product"
-                }
-                className="h-full w-full object-contain"
-              />
+  const itemCount =
+    (order.items || []).reduce(
+      (sum, item) =>
+        sum +
+        Number(
+          item.quantity || 1
+        ),
+      0
+    );
+
+  return (
+    <main className="min-h-screen bg-slate-50 px-4 py-5 pb-24 text-slate-900">
+
+      <div className="mx-auto max-w-3xl">
+
+        {/* HEADER */}
+
+        <section className="rounded-3xl bg-white p-5 shadow-sm">
+
+          <Link
+            href="/orders"
+            className="text-xs font-black text-slate-500"
+          >
+            ← My Orders
+          </Link>
+
+          <div className="mt-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+
+            <div>
+
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                ORDER ID
+              </p>
+
+              <h1 className="mt-1 break-all text-xl font-black">
+                #{order.id}
+              </h1>
+
+              <p className="mt-1 text-xs text-slate-400">
+                {formatDate(
+                  order.createdAt
+                )}
+              </p>
 
             </div>
 
-
-            {/* LIKE */}
-
-            <button
-              type="button"
-              onClick={
-                toggleLike
-              }
-              className={`absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl shadow-md ${
-                liked
-                  ? "text-red-500"
-                  : "text-zinc-700"
-              }`}
-            >
-              {liked
-                ? "♥"
-                : "♡"}
-            </button>
-
-
-            {/* DISCOUNT */}
-
-            {discount > 0 && (
-              <div className="absolute left-4 top-4 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-black text-white">
-                {discount}% OFF
-              </div>
-            )}
+            <Status
+              status={status}
+            />
 
           </div>
-
-
-          {/* =======================================
-              IMAGE THUMBNAILS
-          ======================================== */}
-
-          {productImages.length > 1 && (
-
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-
-              {productImages
-                .slice(0, 5)
-                .map(
-                  (
-                    image,
-                    index
-                  ) => (
-
-                    <button
-                      key={`${image}-${index}`}
-                      type="button"
-                      onClick={() =>
-                        setActiveImage(
-                          index
-                        )
-                      }
-                      className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-white ${
-                        activeImage ===
-                        index
-                          ? "border-yellow-400"
-                          : "border-transparent"
-                      }`}
-                    >
-
-                      <img
-                        src={image}
-                        alt={`Product image ${
-                          index + 1
-                        }`}
-                        className="h-full w-full object-cover"
-                      />
-
-                    </button>
-
-                  )
-                )}
-
-            </div>
-
-          )}
 
         </section>
 
+        {/* STATUS */}
 
-        {/* =========================================
-            PRODUCT INFO
-        ========================================== */}
+        <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
 
-        <section className="mt-5 rounded-t-3xl bg-white px-5 py-6">
-
-          {/* CATEGORY */}
-
-          {product.category && (
-            <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">
-              {product.category}
-            </p>
-          )}
-
-
-          {/* NAME */}
-
-          <h2 className="mt-2 text-2xl font-black leading-tight">
-            {product.name ||
-              "Product"}
+          <h2 className="text-lg font-black">
+            Order Status
           </h2>
 
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
 
-          {/* PRICE */}
+            <StatusStep
+              title="Pending"
+              active={
+                status ===
+                "Pending"
+              }
+              icon="🟡"
+            />
 
-          <div className="mt-4 flex items-center gap-3">
+            <StatusStep
+              title="Confirmed"
+              active={
+                status ===
+                  "Confirmed" ||
+                status ===
+                  "Preparing" ||
+                status ===
+                  "Out for Delivery" ||
+                status ===
+                  "Delivered"
+              }
+              icon="🔵"
+            />
 
-            <span className="text-3xl font-black text-green-600">
-              ₹{currentPrice}
+            <StatusStep
+              title="Preparing"
+              active={
+                status ===
+                  "Preparing" ||
+                status ===
+                  "Out for Delivery" ||
+                status ===
+                  "Delivered"
+              }
+              icon="🟣"
+            />
+
+            <StatusStep
+              title="Out for Delivery"
+              active={
+                status ===
+                  "Out for Delivery" ||
+                status ===
+                  "Delivered"
+              }
+              icon="🟠"
+            />
+
+            <StatusStep
+              title="Delivered"
+              active={
+                status ===
+                "Delivered"
+              }
+              icon="🟢"
+            />
+
+            <StatusStep
+              title="Cancelled"
+              active={
+                status ===
+                "Cancelled"
+              }
+              icon="🔴"
+            />
+
+          </div>
+
+        </section>
+
+        {/* CUSTOMER */}
+
+        <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
+
+          <h2 className="text-lg font-black">
+            Delivery Details
+          </h2>
+
+          <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+
+            <p className="font-black">
+              {customer.name ||
+                "Customer"}
+            </p>
+
+            {customer.phone && (
+              <a
+                href={`tel:${customer.phone}`}
+                className="mt-2 inline-block text-sm font-bold text-blue-600"
+              >
+                📞 {customer.phone}
+              </a>
+            )}
+
+            <p className="mt-3 text-sm font-bold">
+              📍{" "}
+              {customer.address ||
+                "Address not available"}
+            </p>
+
+            {(customer.city ||
+              customer.pincode) && (
+              <p className="mt-1 text-xs text-slate-500">
+
+                {customer.city}
+
+                {customer.city &&
+                customer.pincode
+                  ? " - "
+                  : ""}
+
+                {customer.pincode}
+
+              </p>
+            )}
+
+          </div>
+
+        </section>
+
+        {/* ITEMS */}
+
+        <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
+
+          <div className="flex items-center justify-between">
+
+            <h2 className="text-lg font-black">
+              Order Items
+            </h2>
+
+            <span className="text-xs font-bold text-slate-400">
+              {itemCount} items
             </span>
 
-
-            {currentMrp >
-              currentPrice && (
-              <span className="text-sm text-zinc-400 line-through">
-                ₹{currentMrp}
-              </span>
-            )}
-
           </div>
 
+          <div className="mt-4 space-y-3">
 
-          {/* =======================================
-              VARIANTS
-          ======================================== */}
+            {(order.items || [])
+              .map(
+                (
+                  item,
+                  index
+                ) => {
 
-          {variants.length > 0 && (
-
-            <div className="mt-7">
-
-              <div className="mb-3 flex items-center justify-between">
-
-                <h3 className="text-base font-black">
-                  Select Option
-                </h3>
-
-                {selectedVariant && (
-                  <span className="text-xs font-bold text-zinc-500">
-                    Selected:{" "}
-                    {getVariantLabel(
-                      selectedVariant
-                    )}
-                  </span>
-                )}
-
-              </div>
-
-
-              <div className="flex flex-wrap gap-2">
-
-                {variants.map(
-                  (
-                    variant,
-                    index
-                  ) => {
-
-                    const label =
-                      getVariantLabel(
-                        variant
-                      );
-
-
-                    const isSelected =
-                      selectedVariant ===
-                        variant ||
-                      selectedVariant?.id ===
-                        variant.id;
-
-
-                    return (
-
-                      <button
-                        key={
-                          variant.id ||
-                          `${label}-${index}`
-                        }
-                        type="button"
-                        onClick={() =>
-                          selectVariant(
-                            variant
-                          )
-                        }
-                        className={`min-w-[70px] rounded-xl border-2 px-4 py-3 text-sm font-black ${
-                          isSelected
-                            ? "border-yellow-400 bg-yellow-50"
-                            : "border-zinc-200 bg-white"
-                        }`}
-                      >
-
-                        <div>
-                          {label}
-                        </div>
-
-                        {variant.price !==
-                          undefined && (
-                          <div className="mt-1 text-xs text-zinc-500">
-                            ₹
-                            {Number(
-                              variant.price
-                            )}
-                          </div>
-                        )}
-
-                      </button>
-
+                  const quantity =
+                    Number(
+                      item.quantity ||
+                        1
                     );
 
-                  }
-                )}
+                  const price =
+                    Number(
+                      item.price ||
+                        0
+                    );
+
+                  return (
+                    <div
+                      key={`${item.id || index}-${index}`}
+                      className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
+                    >
+
+                      {item.image ? (
+                        <img
+                          src={
+                            item.image
+                          }
+                          alt={
+                            item.name ||
+                            "Product"
+                          }
+                          className="h-16 w-16 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-white text-2xl">
+                          📦
+                        </div>
+                      )}
+
+                      <div className="min-w-0 flex-1">
+
+                        <p className="font-black">
+                          {item.name ||
+                            "Product"}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-500">
+                          ₹{price} ×{" "}
+                          {quantity}
+                        </p>
+
+                      </div>
+
+                      <p className="font-black">
+                        ₹
+                        {price *
+                          quantity}
+                      </p>
+
+                    </div>
+                  );
+                }
+              )}
+
+          </div>
+
+        </section>
+
+        {/* PAYMENT */}
+
+        <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
+
+          <h2 className="text-lg font-black">
+            Payment Summary
+          </h2>
+
+          <div className="mt-4 space-y-3">
+
+            <div className="flex justify-between text-sm">
+
+              <span className="text-slate-500">
+                Payment
+              </span>
+
+              <span className="font-black">
+                {order.paymentMethod ||
+                  order.payment ||
+                  "COD"}
+              </span>
+
+            </div>
+
+            <div className="flex justify-between text-sm">
+
+              <span className="text-slate-500">
+                Delivery
+              </span>
+
+              <span className="font-black">
+                ₹{delivery}
+              </span>
+
+            </div>
+
+            <div className="border-t border-slate-100 pt-3">
+
+              <div className="flex justify-between">
+
+                <span className="font-black">
+                  Total
+                </span>
+
+                <span className="text-xl font-black text-green-600">
+                  ₹{total}
+                </span>
 
               </div>
 
             </div>
 
-          )}
-
-
-          {/* =======================================
-              CURRENT VARIANT DETAILS
-          ======================================== */}
-
-          {selectedVariant && (
-
-            <div className="mt-5 flex flex-wrap gap-2">
-
-              {selectedVariant.size && (
-                <span className="rounded-lg bg-zinc-100 px-3 py-2 text-xs font-bold">
-                  Size:{" "}
-                  {selectedVariant.size}
-                </span>
-              )}
-
-              {selectedVariant.weight && (
-                <span className="rounded-lg bg-zinc-100 px-3 py-2 text-xs font-bold">
-                  Weight:{" "}
-                  {selectedVariant.weight}
-                </span>
-              )}
-
-              {selectedVariant.volume && (
-                <span className="rounded-lg bg-zinc-100 px-3 py-2 text-xs font-bold">
-                  {selectedVariant.volume}
-                </span>
-              )}
-
-              {selectedVariant.pack && (
-                <span className="rounded-lg bg-zinc-100 px-3 py-2 text-xs font-bold">
-                  Pack:{" "}
-                  {selectedVariant.pack}
-                </span>
-              )}
-
-            </div>
-
-          )}
-
-
-          {/* =======================================
-              STOCK
-          ======================================== */}
-
-          <div className="mt-5">
-
-            {currentStock > 0 ? (
-
-              <p className="text-sm font-bold text-green-600">
-                ✓ In Stock
-              </p>
-
-            ) : (
-
-              <p className="text-sm font-bold text-red-500">
-                Out of Stock
-              </p>
-
-            )}
-
           </div>
-
-
-          {/* =======================================
-              DESCRIPTION
-          ======================================== */}
-
-          {product.description && (
-
-            <div className="mt-7">
-
-              <h3 className="text-lg font-black">
-                About this product
-              </h3>
-
-              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-zinc-600">
-                {product.description}
-              </p>
-
-            </div>
-
-          )}
-
-
-          {/* =======================================
-              ADD / QUANTITY
-          ======================================== */}
-
-          <div className="mt-7">
-
-            {!inCart ? (
-
-              <button
-                type="button"
-                disabled={
-                  currentStock === 0
-                }
-                onClick={
-                  handleAdd
-                }
-                className="w-full rounded-xl bg-yellow-400 py-4 font-black text-black transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
-              >
-                {currentStock === 0
-                  ? "Out of Stock"
-                  : "ADD TO CART"}
-              </button>
-
-            ) : (
-
-              <div className="flex items-center gap-3">
-
-                <div className="flex h-14 flex-1 items-center justify-center overflow-hidden rounded-xl border border-green-600 bg-white">
-
-                  <button
-                    type="button"
-                    onClick={
-                      handleRemove
-                    }
-                    className="h-full w-14 bg-green-600 text-xl font-black text-white"
-                  >
-                    −
-                  </button>
-
-
-                  <span className="flex-1 text-center text-lg font-black">
-                    {quantity}
-                  </span>
-
-
-                  <button
-                    type="button"
-                    disabled={
-                      currentStock > 0 &&
-                      quantity >=
-                        currentStock
-                    }
-                    onClick={
-                      handleAdd
-                    }
-                    className="h-full w-14 bg-green-600 text-xl font-black text-white disabled:opacity-40"
-                  >
-                    +
-                  </button>
-
-                </div>
-
-
-                <Link
-                  href="/cart"
-                  className="flex h-14 flex-1 items-center justify-center rounded-xl bg-yellow-400 font-black"
-                >
-                  View Cart →
-                </Link>
-
-              </div>
-
-            )}
-
-          </div>
-
-
-          {/* =======================================
-              CART QUICK LINK
-          ======================================== */}
-
-          {inCart && (
-
-            <Link
-              href="/cart"
-              className="mt-3 block text-center text-sm font-bold text-zinc-500"
-            >
-              🛒 View your cart
-            </Link>
-
-          )}
 
         </section>
 
@@ -1047,4 +563,188 @@ export default function ProductPage() {
 
     </main>
   );
+}
+
+/* =====================================================
+   STATUS
+===================================================== */
+
+function Status({
+  status,
+}: {
+  status?: string;
+}) {
+  const value =
+    status || "Pending";
+
+  const config =
+    getStatusConfig(value);
+
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black ${config.className}`}
+    >
+      <span>
+        {config.icon}
+      </span>
+
+      {value}
+    </span>
+  );
+}
+
+/* =====================================================
+   STATUS STEP
+===================================================== */
+
+function StatusStep({
+  title,
+  active,
+  icon,
+}: {
+  title: string;
+  active: boolean;
+  icon: string;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-3 ${
+        active
+          ? "border-green-200 bg-green-50"
+          : "border-slate-200 bg-slate-50 opacity-50"
+      }`}
+    >
+
+      <div className="text-xl">
+        {icon}
+      </div>
+
+      <p className="mt-1 text-xs font-black">
+        {title}
+      </p>
+
+      {active && (
+        <p className="mt-1 text-[9px] font-bold text-green-600">
+          Active
+        </p>
+      )}
+
+    </div>
+  );
+}
+
+/* =====================================================
+   STATUS CONFIG
+===================================================== */
+
+function getStatusConfig(
+  status: string
+) {
+  switch (status) {
+    case "Pending":
+      return {
+        icon: "🟡",
+        className:
+          "border-yellow-300 bg-yellow-100 text-yellow-800",
+      };
+
+    case "Confirmed":
+      return {
+        icon: "🔵",
+        className:
+          "border-blue-300 bg-blue-100 text-blue-800",
+      };
+
+    case "Preparing":
+      return {
+        icon: "🟣",
+        className:
+          "border-purple-300 bg-purple-100 text-purple-800",
+      };
+
+    case "Out for Delivery":
+      return {
+        icon: "🟠",
+        className:
+          "border-orange-300 bg-orange-100 text-orange-800",
+      };
+
+    case "Delivered":
+      return {
+        icon: "🟢",
+        className:
+          "border-green-300 bg-green-100 text-green-800",
+      };
+
+    case "Cancelled":
+      return {
+        icon: "🔴",
+        className:
+          "border-red-300 bg-red-100 text-red-800",
+      };
+
+    default:
+      return {
+        icon: "⚪",
+        className:
+          "border-slate-300 bg-slate-100 text-slate-700",
+      };
+  }
+}
+
+/* =====================================================
+   DATE
+===================================================== */
+
+function getTime(
+  value: any
+) {
+  if (!value) {
+    return 0;
+  }
+
+  if (
+    typeof value?.toMillis ===
+    "function"
+  ) {
+    return value.toMillis();
+  }
+
+  if (
+    typeof value?.toDate ===
+    "function"
+  ) {
+    return value.toDate().getTime();
+  }
+
+  if (
+    typeof value?.seconds ===
+    "number"
+  ) {
+    return (
+      value.seconds * 1000
+    );
+  }
+
+  const time =
+    new Date(value).getTime();
+
+  return Number.isNaN(time)
+    ? 0
+    : time;
+}
+
+function formatDate(
+  value: any
+) {
+  const time =
+    getTime(value);
+
+  if (!time) {
+    return "-";
+  }
+
+  return new Date(
+    time
+  ).toLocaleString("en-IN");
 }
