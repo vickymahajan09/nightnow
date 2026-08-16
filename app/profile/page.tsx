@@ -29,6 +29,10 @@ import {
 
 import { auth, db, storage } from "../lib/firebase";
 import { logoutUser } from "../services/authService";
+import {
+  getNightNowTheme,
+  setNightNowTheme,
+} from "../components/ThemeProvider";
 
 type Address = {
   id: string;
@@ -44,6 +48,8 @@ type ThemeMode =
   | "light"
   | "dark"
   | "system";
+
+const NIGHT_NOW_WHATSAPP = "918989855637";
 
 export default function ProfilePage() {
   const [user, setUser] =
@@ -131,96 +137,12 @@ export default function ProfilePage() {
     useRef<HTMLInputElement | null>(null);
 
   // ==========================================
-  // APPLY THEME
-  // ==========================================
-
-  const applyTheme = (
-    value: ThemeMode
-  ) => {
-    if (
-      typeof window ===
-      "undefined"
-    ) {
-      return;
-    }
-
-    const root =
-      document.documentElement;
-
-    if (value === "dark") {
-      root.classList.add("dark");
-      return;
-    }
-
-    if (value === "light") {
-      root.classList.remove("dark");
-      return;
-    }
-
-    const systemDark =
-      window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
-
-    root.classList.toggle(
-      "dark",
-      systemDark
-    );
-  };
-
-  // ==========================================
   // LOAD SAVED THEME
   // ==========================================
 
   useEffect(() => {
-    if (
-      typeof window ===
-      "undefined"
-    ) {
-      return;
-    }
-
-    const saved =
-      localStorage.getItem(
-        "nightnow-theme"
-      ) as ThemeMode | null;
-
-    const initialTheme =
-      saved === "light" ||
-      saved === "dark" ||
-      saved === "system"
-        ? saved
-        : "system";
-
+    const initialTheme = getNightNowTheme();
     setTheme(initialTheme);
-    applyTheme(initialTheme);
-
-    const media =
-      window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      );
-
-    const handleSystemTheme =
-      () => {
-        if (
-          initialTheme ===
-          "system"
-        ) {
-          applyTheme("system");
-        }
-      };
-
-    media.addEventListener(
-      "change",
-      handleSystemTheme
-    );
-
-    return () => {
-      media.removeEventListener(
-        "change",
-        handleSystemTheme
-      );
-    };
   }, []);
 
   // ==========================================
@@ -337,12 +259,7 @@ export default function ProfilePage() {
               savedTheme === "system"
             ) {
               setTheme(savedTheme);
-              applyTheme(savedTheme);
-
-              localStorage.setItem(
-                "nightnow-theme",
-                savedTheme
-              );
+              setNightNowTheme(savedTheme);
             }
           } catch (error) {
             console.error(
@@ -364,18 +281,7 @@ export default function ProfilePage() {
     value: ThemeMode
   ) => {
     setTheme(value);
-
-    if (
-      typeof window !==
-      "undefined"
-    ) {
-      localStorage.setItem(
-        "nightnow-theme",
-        value
-      );
-    }
-
-    applyTheme(value);
+    setNightNowTheme(value);
 
     if (!user) {
       return;
@@ -572,30 +478,12 @@ export default function ProfilePage() {
       setCropZoom(1);
       setCropX(0);
       setCropY(0);
-      setUploadingPhoto(false);
       setCropOpen(true);
     };
 
     reader.readAsDataURL(file);
 
     event.target.value = "";
-  };
-
-  // ==========================================
-  // CLOSE CROP MODAL
-  // ==========================================
-
-  const closeCropModal = () => {
-    // IMPORTANT:
-    // Cancel must ALWAYS work,
-    // even if Firebase upload is stuck.
-    setUploadingPhoto(false);
-    setDraggingCrop(false);
-    setCropOpen(false);
-    setCropImage(null);
-    setCropZoom(1);
-    setCropX(0);
-    setCropY(0);
   };
 
   // ==========================================
@@ -651,13 +539,23 @@ export default function ProfilePage() {
       cropStartRef.current.y;
 
     setCropX(
-      cropStartRef.current.cropX +
-        dx
+      Math.max(
+        -280,
+        Math.min(
+          280,
+          cropStartRef.current.cropX + dx
+        )
+      )
     );
 
     setCropY(
-      cropStartRef.current.cropY +
-        dy
+      Math.max(
+        -280,
+        Math.min(
+          280,
+          cropStartRef.current.cropY + dy
+        )
+      )
     );
   };
 
@@ -710,43 +608,57 @@ export default function ProfilePage() {
           );
         }
 
-        // ======================================
-        // CROP CALCULATION
-        // ======================================
+        /*
+          Crop area UI is 280x280.
+          Image position is calculated
+          according to zoom and drag.
+        */
 
-        const sourceSize =
-          Math.min(
-            image.width,
-            image.height
-          );
-
-        const baseScale =
-          280 /
-          sourceSize;
+        // Match the preview: the image always covers the full
+        // 280x280 crop box before zoom/drag are applied.
+        const baseScale = Math.max(
+          280 / image.width,
+          280 / image.height
+        );
 
         const scale =
-          baseScale *
-          cropZoom;
+          baseScale * cropZoom;
 
         const scaledWidth =
-          image.width *
-          scale;
+          image.width * scale;
 
         const scaledHeight =
-          image.height *
-          scale;
+          image.height * scale;
+
+        const maxX =
+          Math.max(
+            0,
+            (scaledWidth - 280) / 2
+          );
+
+        const maxY =
+          Math.max(
+            0,
+            (scaledHeight - 280) / 2
+          );
+
+        const safeCropX = Math.max(
+          -maxX,
+          Math.min(maxX, cropX)
+        );
+
+        const safeCropY = Math.max(
+          -maxY,
+          Math.min(maxY, cropY)
+        );
 
         const drawX =
-          (280 -
-            scaledWidth) /
-            2 +
-          cropX;
+          (280 - scaledWidth) / 2 +
+          safeCropX;
 
         const drawY =
-          (280 -
-            scaledHeight) /
-            2 +
-          cropY;
+          (280 - scaledHeight) / 2 +
+          safeCropY;
 
         context.clearRect(
           0,
@@ -768,6 +680,11 @@ export default function ProfilePage() {
 
         context.clip();
 
+        /*
+          Convert the 280px preview
+          coordinates into 600px output.
+        */
+
         const outputScale =
           outputSize / 280;
 
@@ -785,37 +702,15 @@ export default function ProfilePage() {
 
         context.restore();
 
-        // ======================================
-        // CREATE JPEG
-        // ======================================
-
         const blob =
           await canvasToBlob(
             canvas
           );
 
-        if (!blob) {
-          throw new Error(
-            "Could not create image blob."
-          );
-        }
-
-        // ======================================
-        // FIREBASE STORAGE
-        // ======================================
-
-        const filePath =
-          `users/${user.uid}/profile-${Date.now()}.jpg`;
-
-        console.log(
-          "Uploading profile photo:",
-          filePath
-        );
-
         const storageRef =
           ref(
             storage,
-            filePath
+            `users/${user.uid}/profile-${Date.now()}.jpg`
           );
 
         await uploadBytes(
@@ -827,22 +722,10 @@ export default function ProfilePage() {
           }
         );
 
-        console.log(
-          "Profile photo uploaded successfully."
-        );
-
-        // ======================================
-        // GET DOWNLOAD URL
-        // ======================================
-
         const url =
           await getDownloadURL(
             storageRef
           );
-
-        // ======================================
-        // UPDATE FIREBASE AUTH PROFILE
-        // ======================================
 
         await updateProfile(
           user,
@@ -850,10 +733,6 @@ export default function ProfilePage() {
             photoURL: url,
           }
         );
-
-        // ======================================
-        // SAVE PHOTO URL IN FIRESTORE
-        // ======================================
 
         await setDoc(
           doc(
@@ -871,67 +750,28 @@ export default function ProfilePage() {
           }
         );
 
-        // ======================================
-        // UPDATE LOCAL UI
-        // ======================================
-
         setUser({
           ...user,
           photoURL: url,
         });
 
-        setUploadingPhoto(false);
         setCropOpen(false);
         setCropImage(null);
-        setCropZoom(1);
-        setCropX(0);
-        setCropY(0);
-        setDraggingCrop(false);
 
         alert(
           "Profile photo updated successfully."
         );
-      } catch (error: any) {
+      } catch (error) {
         console.error(
           "Photo crop/upload error:",
           error
         );
 
+        alert(
+          "Profile photo update failed."
+        );
+      } finally {
         setUploadingPhoto(false);
-
-        const errorCode =
-          error?.code || "";
-
-        const errorMessage =
-          error?.message || "";
-
-        if (
-          errorCode ===
-          "storage/unauthorized"
-        ) {
-          alert(
-            "Profile photo upload blocked by Firebase Storage rules."
-          );
-        } else if (
-          errorCode ===
-          "storage/cors-unsupported"
-        ) {
-          alert(
-            "Firebase Storage CORS error. Please check Firebase Storage configuration."
-          );
-        } else if (
-          errorMessage
-            .toLowerCase()
-            .includes("cors")
-        ) {
-          alert(
-            "Firebase Storage CORS error. Photo could not be uploaded."
-          );
-        } else {
-          alert(
-            `Profile photo update failed.\n\n${errorMessage || "Unknown error"}`
-          );
-        }
       }
     };
 
@@ -1208,6 +1048,8 @@ export default function ProfilePage() {
 
       <div className="mx-auto max-w-2xl">
 
+        {/* BACK */}
+
         <Link
           href="/"
           className="text-xs font-black text-zinc-500"
@@ -1341,7 +1183,6 @@ export default function ProfilePage() {
                 className="w-full rounded-xl bg-zinc-800 p-3 text-left text-sm text-white"
               >
                 🧾 GST Details
-
                 <span className="float-right text-yellow-400">
                   →
                 </span>
@@ -1786,6 +1627,7 @@ export default function ProfilePage() {
               </span>
 
               <div>
+
                 <p className="text-sm font-black">
                   Appearance
                 </p>
@@ -1793,6 +1635,7 @@ export default function ProfilePage() {
                 <p className="text-[10px] text-zinc-500">
                   Light / Dark / System
                 </p>
+
               </div>
 
             </div>
@@ -1865,6 +1708,7 @@ export default function ProfilePage() {
               </span>
 
               <div>
+
                 <p className="text-sm font-black">
                   Chat & Service
                 </p>
@@ -1872,6 +1716,7 @@ export default function ProfilePage() {
                 <p className="text-[10px] text-zinc-500">
                   Need help?
                 </p>
+
               </div>
 
             </div>
@@ -1904,12 +1749,17 @@ export default function ProfilePage() {
 
               <button
                 type="button"
-                onClick={() =>
-                  alert(
-                    "Contact Night Now."
-                  )
-                }
-                className="rounded-xl bg-zinc-100 p-3 text-[10px] font-black text-black"
+                onClick={() => {
+                  const message = encodeURIComponent(
+                    "Hello Night Now, I need help."
+                  );
+                  window.open(
+                    `https://wa.me/${NIGHT_NOW_WHATSAPP}?text=${message}`,
+                    "_blank",
+                    "noopener,noreferrer"
+                  );
+                }}
+                className="rounded-xl bg-green-100 p-3 text-[10px] font-black text-green-700"
               >
                 📩 Contact
               </button>
@@ -1984,7 +1834,6 @@ export default function ProfilePage() {
             href="/account/privacy"
             className="flex items-center gap-3 border-b border-zinc-200 p-4 text-left dark:border-zinc-800"
           >
-
             <span className="text-xl">
               🔐
             </span>
@@ -2004,7 +1853,6 @@ export default function ProfilePage() {
             <span>
               →
             </span>
-
           </Link>
 
           {/* LOGOUT */}
@@ -2016,7 +1864,6 @@ export default function ProfilePage() {
             }
             className="flex w-full items-center gap-3 p-4 text-left text-red-600"
           >
-
             <span className="text-xl">
               🚪
             </span>
@@ -2024,7 +1871,6 @@ export default function ProfilePage() {
             <span className="text-sm font-black">
               Logout
             </span>
-
           </button>
 
         </section>
@@ -2060,7 +1906,6 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between">
 
               <div>
-
                 <h2 className="text-xl font-black">
                   🧾 GST Details
                 </h2>
@@ -2068,7 +1913,6 @@ export default function ProfilePage() {
                 <p className="mt-1 text-xs text-zinc-500">
                   Add your business GST number.
                 </p>
-
               </div>
 
               <button
@@ -2144,7 +1988,6 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between">
 
                 <div>
-
                   <h2 className="text-xl font-black">
                     Crop Profile Photo
                   </h2>
@@ -2152,18 +1995,15 @@ export default function ProfilePage() {
                   <p className="mt-1 text-xs text-zinc-500">
                     Drag image and adjust zoom.
                   </p>
-
                 </div>
-
-                {/* IMPORTANT:
-                    NOT DISABLED
-                */}
 
                 <button
                   type="button"
-                  onClick={
-                    closeCropModal
-                  }
+                  disabled={uploadingPhoto}
+                  onClick={() => {
+                    setCropOpen(false);
+                    setCropImage(null);
+                  }}
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl font-black dark:bg-zinc-800"
                 >
                   ×
@@ -2204,20 +2044,9 @@ export default function ProfilePage() {
                     src={cropImage}
                     alt="Crop preview"
                     draggable={false}
-                    className="pointer-events-none absolute max-w-none select-none"
+                    className="pointer-events-none absolute left-1/2 top-1/2 h-full w-full max-w-none select-none object-cover"
                     style={{
-                      width: `${Math.max(
-                        280,
-                        cropImage
-                          ? 280 *
-                              cropZoom *
-                              1.25
-                          : 280
-                      )}px`,
-                      height: "auto",
-                      left: `${cropX}px`,
-                      top: `${cropY}px`,
-                      minWidth: "280px",
+                      transform: `translate(calc(-50% + ${cropX}px), calc(-50% + ${cropY}px)) scale(${cropZoom})`,
                     }}
                   />
 
@@ -2271,19 +2100,20 @@ export default function ProfilePage() {
 
               </div>
 
-              {/* BUTTONS */}
-
               <div className="mt-5 grid grid-cols-2 gap-3">
-
-                {/* IMPORTANT:
-                    Cancel is NEVER disabled.
-                */}
 
                 <button
                   type="button"
-                  onClick={
-                    closeCropModal
+                  disabled={
+                    uploadingPhoto
                   }
+                  onClick={() => {
+                    setCropOpen(false);
+                    setCropImage(null);
+                    setCropZoom(1);
+                    setCropX(0);
+                    setCropY(0);
+                  }}
                   className="rounded-2xl bg-zinc-100 py-3 text-sm font-black dark:bg-zinc-800"
                 >
                   Cancel
@@ -2330,12 +2160,7 @@ function loadImage(
       image.onload = () =>
         resolve(image);
 
-      image.onerror = () =>
-        reject(
-          new Error(
-            "Could not load image."
-          )
-        );
+      image.onerror = reject;
 
       image.src = src;
     }
