@@ -90,7 +90,11 @@ export default function OrderStatus({
                           : "text-zinc-400"
                     }`}
                   >
-                    {item}
+                    {item === "Confirmed"
+                      ? "Order Accepted"
+                      : item === "Packed"
+                        ? "Order Packed"
+                        : item}
                   </p>
 
                   {active && (

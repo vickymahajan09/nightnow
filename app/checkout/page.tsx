@@ -15,17 +15,13 @@ import {
 import { auth, db } from "../lib/firebase";
 
 import {
+  CartProvider,
   useCart,
 } from "../context/CartContext";
 
 import {
   addOrder,
 } from "../services/orderService";
-
-import {
-  getProductById,
-  decreaseProductStock,
-} from "../services/productService";
 
 import {
   getCoupons,
@@ -56,11 +52,11 @@ type Coupon = {
   active?: boolean;
 };
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const {
     cart,
     cartTotal,
-    deleteFromCart,
+    clearCart,
   } = useCart();
 
   const [user, setUser] =
@@ -488,36 +484,6 @@ export default function CheckoutPage() {
     paymentMethod: string,
     paymentData: any = {}
   ) => {
-    // VERIFY LIVE STOCK BEFORE CREATING THE ORDER
-    for (const item of cart) {
-      const productId = String(item?.id || "").trim();
-      const quantity = Number(item?.quantity || 1);
-
-      if (!productId || quantity <= 0) {
-        throw new Error("Invalid cart item.");
-      }
-
-      const liveProduct = await getProductById(productId);
-
-      if (!liveProduct) {
-        throw new Error(`Product not found: ${item?.name || productId}`);
-      }
-
-      const liveStock = Number(liveProduct.stock || 0);
-
-      if (liveStock < quantity) {
-        throw new Error(
-          `${liveProduct.name || item?.name || "Product"} has only ${liveStock} item(s) in stock.`
-        );
-      }
-
-      if (liveProduct.active === false) {
-        throw new Error(
-          `${liveProduct.name || item?.name || "Product"} is currently unavailable.`
-        );
-      }
-    }
-
     const order = {
       customer: {
         name,
@@ -575,24 +541,12 @@ export default function CheckoutPage() {
         new Date(),
     };
 
-    const orderRef = await addOrder(order);
-
-    // Reduce live inventory only after the order has been created.
-    // The stock was verified immediately above to avoid ordering unavailable items.
-    for (const item of cart) {
-      await decreaseProductStock(
-        String(item.id),
-        Number(item.quantity || 1)
-      );
-    }
-
-    cart.forEach(
-      (item: any) => {
-        deleteFromCart(
-          item.id
-        );
-      }
+    await addOrder(
+      order
     );
+
+    // Order successfully created: clear the whole cart in one atomic state update.
+    clearCart();
 
     window.location.href =
       "/orders";
@@ -1285,5 +1239,13 @@ export default function CheckoutPage() {
       </div>
 
     </main>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <CartProvider>
+      <CheckoutContent />
+    </CartProvider>
   );
 }

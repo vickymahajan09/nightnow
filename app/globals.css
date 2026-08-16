@@ -1,18 +1,30 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));@import "tailwindcss";
-
-
+@custom-variant dark (&:where(.dark, .dark *));
 
 html {
   scroll-behavior: smooth;
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
-  background: #ffffff;
-  color: #111111;
+  min-height: 100vh;
+  background: #f7f8fa;
+  color: #18181b;
   font-family: Arial, Helvetica, sans-serif;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+html.dark body {
+  background: #09090b;
+  color: #fafafa;
 }
 
 * {
@@ -26,6 +38,14 @@ a {
 
 button {
   cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+button:active {
+  transform: scale(0.97);
 }
 
 img {
@@ -37,54 +57,15 @@ img {
   color: #000000;
 }
 
-/* Hide scrollbar but keep horizontal scrolling */
+/* Horizontal scrollbar helpers */
 
-.no-scrollbar {
-  scrollbar-width: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-/* Mobile */
-
-@media (max-width: 767px) {
-  body {
-    padding-bottom: 68px;
-  }
-}
-/* =========================================
-   NIGHT NOW - LIGHT FRONT DESIGN
-========================================= */
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  background: #f7f8fa;
-  color: #18181b;
-}
-
-/* Hide horizontal scrollbar */
-
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-/* Category horizontal scrollbar */
-
+.no-scrollbar,
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
+.no-scrollbar::-webkit-scrollbar,
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
@@ -96,21 +77,134 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Product image */
+/*
+  Global Appearance support.
+  Pages that already use Tailwind dark:* classes keep their own
+  design. These rules also convert the most common light surfaces
+  when the user selects Dark from Profile.
+*/
 
-img {
-  max-width: 100%;
+html.dark .bg-white {
+  background-color: #18181b !important;
 }
 
-/* Smooth buttons */
-
-button {
-  transition:
-    transform 0.15s ease,
-    background-color 0.15s ease,
-    border-color 0.15s ease;
+html.dark .bg-zinc-50 {
+  background-color: #09090b !important;
 }
 
-button:active {
-  transform: scale(0.97);
+html.dark .bg-zinc-100 {
+  background-color: #27272a !important;
+}
+
+html.dark .bg-zinc-200 {
+  background-color: #3f3f46 !important;
+}
+
+html.dark .border-zinc-200 {
+  border-color: #3f3f46 !important;
+}
+
+html.dark .border-zinc-300 {
+  border-color: #52525b !important;
+}
+
+html.dark .text-zinc-900 {
+  color: #fafafa !important;
+}
+
+html.dark .text-zinc-800 {
+  color: #f4f4f5 !important;
+}
+
+/* Convert common hard-coded black text to readable dark-mode text. */
+html.dark .text-black {
+  color: #fafafa !important;
+}
+
+/*
+  Keep yellow CTA buttons and their intended black foreground.
+*/
+html.dark .bg-yellow-400.text-black,
+html.dark .bg-yellow-300.text-black {
+  color: #000000 !important;
+}
+
+html.dark .bg-black {
+  background-color: #000000 !important;
+}
+
+/* Mobile */
+
+@media (max-width: 767px) {
+  body {
+    padding-bottom: 68px;
+  }
+}
+
+/* =========================================================
+   NIGHT NOW ADMIN - LIGHT THEME
+========================================================= */
+
+.admin-light {
+  --admin-bg: #f7f8fa;
+  --admin-card: #ffffff;
+  --admin-soft: #f8fafc;
+  --admin-border: #e5e7eb;
+  --admin-text: #27272a;
+  --admin-muted: #71717a;
+}
+
+.admin-light .bg-black,
+.admin-light .bg-zinc-950,
+.admin-light .bg-zinc-900,
+.admin-light .bg-zinc-800 {
+  background-color: var(--admin-card) !important;
+}
+
+.admin-light .bg-black\/95 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+}
+
+.admin-light .bg-zinc-700,
+.admin-light .bg-zinc-600 {
+  background-color: #f4f4f5 !important;
+}
+
+.admin-light .text-white {
+  color: var(--admin-text) !important;
+}
+
+.admin-light .text-zinc-300,
+.admin-light .text-zinc-400 {
+  color: #52525b !important;
+}
+
+.admin-light .text-zinc-500 {
+  color: #71717a !important;
+}
+
+.admin-light .text-zinc-600 {
+  color: #52525b !important;
+}
+
+.admin-light .border-zinc-800,
+.admin-light .border-zinc-700,
+.admin-light .border-zinc-600 {
+  border-color: var(--admin-border) !important;
+}
+
+.admin-light .hover\:bg-zinc-800:hover,
+.admin-light .hover\:bg-zinc-700:hover {
+  background-color: #fefce8 !important;
+}
+
+.admin-light input,
+.admin-light select,
+.admin-light textarea {
+  color: #27272a;
+}
+
+.admin-light select option {
+  background: #ffffff;
+  color: #27272a;
 }

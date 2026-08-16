@@ -10,7 +10,10 @@ import { getProducts } from "../services/productService";
 import { getCategories } from "../services/categoryService";
 
 const ADMIN_EMAIL =
-  process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase();
+  (process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
+    "mahajanvicky04@gmail.com")
+    .trim()
+    .toLowerCase();
 
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
@@ -93,7 +96,7 @@ export default function AdminPage() {
             Admin access required.
           </p>
 
-          <Link href="/login">
+          <Link href="/admin/login">
             <button className="mt-6 w-full rounded-xl bg-yellow-400 py-3 font-bold text-black">
               Login
             </button>

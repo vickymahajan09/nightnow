@@ -3,6 +3,7 @@ import "./globals.css";
 
 import { CartProvider } from "./context/CartContext";
 import MobileNav from "./components/MobileNav";
+import ThemeProvider from "./components/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "Night Now | Fast Delivery",
@@ -16,12 +17,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      suppressHydrationWarning
+    >
       <body>
-        <CartProvider>
-          {children}
-          <MobileNav />
-        </CartProvider>
+        <ThemeProvider>
+          <CartProvider>
+            {children}
+            <MobileNav />
+          </CartProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

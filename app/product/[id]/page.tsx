@@ -121,6 +121,22 @@ const [user, setUser] =
     useState(false);
 
   // ===================================================
+  // AUTH
+  // Keep Firebase auth state in sync on the product page.
+  // ===================================================
+  useEffect(() => {
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        (currentUser) => {
+          setUser(currentUser);
+        }
+      );
+
+    return () => unsubscribe();
+  }, []);
+
+  // ===================================================
   // SWIPE
   // ===================================================
 

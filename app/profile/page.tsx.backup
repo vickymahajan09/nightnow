@@ -29,10 +29,6 @@ import {
 
 import { auth, db, storage } from "../lib/firebase";
 import { logoutUser } from "../services/authService";
-import {
-  getNightNowTheme,
-  setNightNowTheme,
-} from "../components/ThemeProvider";
 
 type Address = {
   id: string;
@@ -48,8 +44,6 @@ type ThemeMode =
   | "light"
   | "dark"
   | "system";
-
-const NIGHT_NOW_WHATSAPP = "918989855637";
 
 export default function ProfilePage() {
   const [user, setUser] =
@@ -137,12 +131,96 @@ export default function ProfilePage() {
     useRef<HTMLInputElement | null>(null);
 
   // ==========================================
+  // APPLY THEME
+  // ==========================================
+
+  const applyTheme = (
+    value: ThemeMode
+  ) => {
+    if (
+      typeof window ===
+      "undefined"
+    ) {
+      return;
+    }
+
+    const root =
+      document.documentElement;
+
+    if (value === "dark") {
+      root.classList.add("dark");
+      return;
+    }
+
+    if (value === "light") {
+      root.classList.remove("dark");
+      return;
+    }
+
+    const systemDark =
+      window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      ).matches;
+
+    root.classList.toggle(
+      "dark",
+      systemDark
+    );
+  };
+
+  // ==========================================
   // LOAD SAVED THEME
   // ==========================================
 
   useEffect(() => {
-    const initialTheme = getNightNowTheme();
+    if (
+      typeof window ===
+      "undefined"
+    ) {
+      return;
+    }
+
+    const saved =
+      localStorage.getItem(
+        "nightnow-theme"
+      ) as ThemeMode | null;
+
+    const initialTheme =
+      saved === "light" ||
+      saved === "dark" ||
+      saved === "system"
+        ? saved
+        : "system";
+
     setTheme(initialTheme);
+    applyTheme(initialTheme);
+
+    const media =
+      window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      );
+
+    const handleSystemTheme =
+      () => {
+        if (
+          initialTheme ===
+          "system"
+        ) {
+          applyTheme("system");
+        }
+      };
+
+    media.addEventListener(
+      "change",
+      handleSystemTheme
+    );
+
+    return () => {
+      media.removeEventListener(
+        "change",
+        handleSystemTheme
+      );
+    };
   }, []);
 
   // ==========================================
@@ -259,7 +337,12 @@ export default function ProfilePage() {
               savedTheme === "system"
             ) {
               setTheme(savedTheme);
-              setNightNowTheme(savedTheme);
+              applyTheme(savedTheme);
+
+              localStorage.setItem(
+                "nightnow-theme",
+                savedTheme
+              );
             }
           } catch (error) {
             console.error(
@@ -281,7 +364,18 @@ export default function ProfilePage() {
     value: ThemeMode
   ) => {
     setTheme(value);
-    setNightNowTheme(value);
+
+    if (
+      typeof window !==
+      "undefined"
+    ) {
+      localStorage.setItem(
+        "nightnow-theme",
+        value
+      );
+    }
+
+    applyTheme(value);
 
     if (!user) {
       return;
@@ -539,23 +633,13 @@ export default function ProfilePage() {
       cropStartRef.current.y;
 
     setCropX(
-      Math.max(
-        -280,
-        Math.min(
-          280,
-          cropStartRef.current.cropX + dx
-        )
-      )
+      cropStartRef.current.cropX +
+        dx
     );
 
     setCropY(
-      Math.max(
-        -280,
-        Math.min(
-          280,
-          cropStartRef.current.cropY + dy
-        )
-      )
+      cropStartRef.current.cropY +
+        dy
     );
   };
 
@@ -614,15 +698,19 @@ export default function ProfilePage() {
           according to zoom and drag.
         */
 
-        // Match the preview: the image always covers the full
-        // 280x280 crop box before zoom/drag are applied.
-        const baseScale = Math.max(
-          280 / image.width,
-          280 / image.height
-        );
+        const sourceSize =
+          Math.min(
+            image.width,
+            image.height
+          );
+
+        const baseScale =
+          280 /
+          sourceSize;
 
         const scale =
-          baseScale * cropZoom;
+          baseScale *
+          cropZoom;
 
         const scaledWidth =
           image.width * scale;
@@ -630,35 +718,17 @@ export default function ProfilePage() {
         const scaledHeight =
           image.height * scale;
 
-        const maxX =
-          Math.max(
-            0,
-            (scaledWidth - 280) / 2
-          );
-
-        const maxY =
-          Math.max(
-            0,
-            (scaledHeight - 280) / 2
-          );
-
-        const safeCropX = Math.max(
-          -maxX,
-          Math.min(maxX, cropX)
-        );
-
-        const safeCropY = Math.max(
-          -maxY,
-          Math.min(maxY, cropY)
-        );
-
         const drawX =
-          (280 - scaledWidth) / 2 +
-          safeCropX;
+          (280 -
+            scaledWidth) /
+            2 +
+          cropX;
 
         const drawY =
-          (280 - scaledHeight) / 2 +
-          safeCropY;
+          (280 -
+            scaledHeight) /
+            2 +
+          cropY;
 
         context.clearRect(
           0,
@@ -1749,17 +1819,12 @@ export default function ProfilePage() {
 
               <button
                 type="button"
-                onClick={() => {
-                  const message = encodeURIComponent(
-                    "Hello Night Now, I need help."
-                  );
-                  window.open(
-                    `https://wa.me/${NIGHT_NOW_WHATSAPP}?text=${message}`,
-                    "_blank",
-                    "noopener,noreferrer"
-                  );
-                }}
-                className="rounded-xl bg-green-100 p-3 text-[10px] font-black text-green-700"
+                onClick={() =>
+                  alert(
+                    "Contact Night Now."
+                  )
+                }
+                className="rounded-xl bg-zinc-100 p-3 text-[10px] font-black text-black"
               >
                 📩 Contact
               </button>
@@ -2044,9 +2109,20 @@ export default function ProfilePage() {
                     src={cropImage}
                     alt="Crop preview"
                     draggable={false}
-                    className="pointer-events-none absolute left-1/2 top-1/2 h-full w-full max-w-none select-none object-cover"
+                    className="pointer-events-none absolute max-w-none select-none"
                     style={{
-                      transform: `translate(calc(-50% + ${cropX}px), calc(-50% + ${cropY}px)) scale(${cropZoom})`,
+                      width: `${Math.max(
+                        280,
+                        cropImage
+                          ? 280 *
+                              cropZoom *
+                              1.25
+                          : 280
+                      )}px`,
+                      height: "auto",
+                      left: `${cropX}px`,
+                      top: `${cropY}px`,
+                      minWidth: "280px",
                     }}
                   />
 

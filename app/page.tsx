@@ -45,6 +45,19 @@ export default function HomePage() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] =
     useState("All");
+  const [selectedBrand, setSelectedBrand] =
+    useState("All");
+
+  // Product filters / sorting
+  const [sortBy, setSortBy] = useState<
+    "relevance" | "price-low" | "price-high" | "discount-high"
+  >("relevance");
+  const [priceFilter, setPriceFilter] = useState<
+    "all" | "under-100" | "100-300" | "300-500" | "500-plus"
+  >("all");
+  const [discountOnly, setDiscountOnly] = useState(false);
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [showProductFilters, setShowProductFilters] = useState(false);
 
   const [showNeed, setShowNeed] = useState(false);
   const [needText, setNeedText] = useState("");
@@ -393,7 +406,7 @@ export default function HomePage() {
     // Normal product search
     // ----------------------------------------
 
-    return products.filter(
+    const result = products.filter(
       (product) => {
         const searchable =
           productSearchText(
@@ -411,42 +424,151 @@ export default function HomePage() {
             searchable.includes(word)
           );
 
+        if (!matchesSearch) return false;
+
         if (
-          selectedCategory ===
+          selectedCategory !==
           "All"
         ) {
-          return matchesSearch;
+          const selected =
+            normalizeSearchText(
+              selectedCategory
+            );
+
+          const category =
+            normalizeSearchText(
+              product.category
+            );
+
+          if (
+            !(
+              category.includes(
+                selected
+              ) ||
+              searchable.includes(
+                selected
+              )
+            )
+          ) {
+            return false;
+          }
         }
 
-        const selected =
-          normalizeSearchText(
-            selectedCategory
-          );
+        if (selectedBrand !== "All") {
+          const brandName =
+            normalizeSearchText(
+              product.brandName ||
+              product.brand ||
+              product.brandId ||
+              ""
+            );
 
-        const category =
-          normalizeSearchText(
-            product.category
-          );
+          const selectedBrandName =
+            normalizeSearchText(
+              selectedBrand
+            );
 
-        return (
-          matchesSearch &&
-          (
-            category.includes(
-              selected
-            ) ||
-            searchable.includes(
-              selected
+          if (
+            !brandName.includes(
+              selectedBrandName
             )
-          )
+          ) {
+            return false;
+          }
+        }
+
+        const price = Number(
+          product.price || 0
         );
+        const mrp = Number(
+          product.mrp || 0
+        );
+        const stock = Number(
+          product.stock || 0
+        );
+
+        if (inStockOnly && stock <= 0) {
+          return false;
+        }
+
+        if (discountOnly && !(mrp > price && mrp > 0)) {
+          return false;
+        }
+
+        if (
+          priceFilter === "under-100" &&
+          price >= 100
+        ) {
+          return false;
+        }
+
+        if (
+          priceFilter === "100-300" &&
+          (price < 100 || price > 300)
+        ) {
+          return false;
+        }
+
+        if (
+          priceFilter === "300-500" &&
+          (price < 300 || price > 500)
+        ) {
+          return false;
+        }
+
+        if (
+          priceFilter === "500-plus" &&
+          price < 500
+        ) {
+          return false;
+        }
+
+        return true;
+      }
+    );
+
+    return [...result].sort(
+      (a, b) => {
+        const priceA = Number(a.price || 0);
+        const priceB = Number(b.price || 0);
+        const mrpA = Number(a.mrp || 0);
+        const mrpB = Number(b.mrp || 0);
+
+        if (sortBy === "price-low") {
+          return priceA - priceB;
+        }
+
+        if (sortBy === "price-high") {
+          return priceB - priceA;
+        }
+
+        if (sortBy === "discount-high") {
+          const discountA =
+            mrpA > priceA && mrpA > 0
+              ? ((mrpA - priceA) / mrpA) * 100
+              : 0;
+          const discountB =
+            mrpB > priceB && mrpB > 0
+              ? ((mrpB - priceB) / mrpB) * 100
+              : 0;
+
+          return discountB - discountA;
+        }
+
+        return 0;
       }
     );
   }, [
     products,
     search,
     selectedCategory,
+    selectedBrand,
     matchedNeeds,
     productsFromMatchedNeeds,
+    sortBy,
+    priceFilter,
+    discountOnly,
+    inStockOnly,
   ]);
 
   // ==========================================
@@ -762,8 +884,9 @@ export default function HomePage() {
       {/* =================================================
           HEADER
       ================================================= */}
+    
 
-      <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur">
+         <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur">
 
         <div className="relative mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
 
@@ -815,91 +938,56 @@ export default function HomePage() {
             )}
           </button>
 
-          {/* DESKTOP SEARCH */}
+         {/* DESKTOP SEARCH */}
 
-          <div className="hidden min-w-0 max-w-2xl flex-1 md:flex">
+<div className="relative hidden min-w-0 max-w-2xl flex-1 md:flex">
 
-            <div className="flex w-full items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3">
+  <div className="flex w-full items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3">
 
-              <span className="text-zinc-400">
-                🔍
-              </span>
+    <span className="text-zinc-400">
+      🔍
+    </span>
 
-              <input
-                value={search}
-                onChange={(e) =>
-                  setSearch(
-                    e.target.value
-                  )
-                }
-                placeholder="Search products, brands, needs..."
-                className="h-11 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-400"
-              />
+    <input
+      value={search}
+      onChange={(e) =>
+        setSearch(e.target.value)
+      }
+      placeholder="Search products, brands, needs..."
+      className="h-11 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-400"
+    />
 
-              {search && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSearch("")
-                  }
-                  className="mr-2 text-zinc-400"
-                >
-                  ×
-                </button>
-              )}
+    {search && (
+      <button
+        type="button"
+        onClick={() => setSearch("")}
+        className="mr-2 text-zinc-400"
+      >
+        ×
+      </button>
+    )}
 
-              <button
-                type="button"
-                onClick={
-                  startVoiceSearch
-                }
-                title="Voice Search"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400 text-sm"
-              >
-                🎙️
-              </button>
+    <button
+      type="button"
+      onClick={startVoiceSearch}
+      title="Voice Search"
+      className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400 text-sm"
+    >
+      🎙️
+    </button>
 
-            </div>
+  </div>
 
-          </div>
+</div>
 
-          {/* ORDERS */}
+        {/* PROFILE / LOGIN */}
 
-          <Link
-            href="/orders"
-            className="hidden rounded-xl bg-zinc-100 px-4 py-2 text-xs font-black sm:block"
-          >
-            📦 Orders
-          </Link>
-
-          {/* CART */}
-
-          <Link
-            href="/cart"
-            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-lg text-white"
-          >
-            🛒
-
-            {cartCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-400 px-1 text-[9px] font-black text-black">
-                {cartCount > 99
-                  ? "99+"
-                  : cartCount}
-              </span>
-            )}
-
-          </Link>
-
-          {/* PROFILE / LOGIN */}
-
-          <Link
-            href={isLoggedIn ? "/profile" : "/login"}
-            className="rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black"
-          >
-            {isLoggedIn ? "👤 Profile" : "Login"}
-          </Link>
-
-        </div>
+        <Link
+          href={isLoggedIn ? "/profile" : "/login"}
+          className="shrink-0 rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black"
+        >
+          {isLoggedIn ? "👤 Profile" : "Login"}
+        </Link>
 
         {/* MOBILE LOCATION */}
 
@@ -923,53 +1011,158 @@ export default function HomePage() {
         </div>
 
         {/* MOBILE SEARCH */}
+                </div>
 
-        <div className="px-4 pb-3 md:hidden">
+  
 
-          <div className="flex items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3">
+<div className="relative px-4 pb-3 md:hidden">
 
-            <span className="text-zinc-400">
-              🔍
-            </span>
+  <div className="flex items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3">
 
-            <input
-              value={search}
-              onChange={(e) =>
-                setSearch(
-                  e.target.value
-                )
-              }
-              placeholder="Search products, brands, needs..."
-              className="h-11 min-w-0 flex-1 bg-transparent px-3 text-xs outline-none"
-            />
+    <span className="text-zinc-400">
+      🔍
+    </span>
 
-            {search && (
-              <button
-                type="button"
-                onClick={() =>
-                  setSearch("")
-                }
-                className="mr-2 text-zinc-400"
-              >
-                ×
-              </button>
-            )}
+    <input
+      value={search}
+      onChange={(e) =>
+        setSearch(e.target.value)
+      }
+      placeholder="Search products, brands, needs..."
+      className="h-11 min-w-0 flex-1 bg-transparent px-3 text-xs outline-none"
+    />
 
-            <button
-              type="button"
-              onClick={
-                startVoiceSearch
-              }
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400"
-            >
-              🎙️
-            </button>
+    {search && (
+      <button
+        type="button"
+        onClick={() => setSearch("")}
+        className="mr-2 text-zinc-400"
+      >
+        ×
+      </button>
+    )}
 
-          </div>
+    <button
+      type="button"
+      onClick={startVoiceSearch}
+      title="Voice Search"
+      className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400"
+    >
+      🎙️
+    </button>
 
-        </div>
+  </div>
+
+</div>
 
       </header>
+      {/* =================================================
+          SEARCH RESULTS — DIRECTLY BELOW SEARCH BAR
+      ================================================= */}
+
+      {search.trim() && (
+        <section
+          id="search-results"
+          className="border-b border-zinc-200 bg-white"
+        >
+          <div className="mx-auto max-w-7xl px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-black sm:text-lg">
+                  Showing results for “{search}”
+                  <span className="ml-2 text-xs font-bold text-zinc-400">
+                    ({filteredProducts.length})
+                  </span>
+                </h2>
+                <p className="mt-1 text-[10px] font-bold text-zinc-400">
+                  Matching products on Night Now
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="shrink-0 text-xs font-black text-yellow-600"
+              >
+                Clear ×
+              </button>
+            </div>
+
+            {filteredProducts.length > 0 ? (
+              <div className="mt-3 flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+                {filteredProducts.slice(0, 12).map((product) => {
+                  const image = getProductImage(product);
+                  const price = Number(product.price || 0);
+                  const mrp = Number(product.mrp || 0);
+                  const discount =
+                    mrp > price && mrp > 0
+                      ? Math.round(((mrp - price) / mrp) * 100)
+                      : 0;
+
+                  return (
+                    <Link
+                      key={`search-result-${product.id}`}
+                      href={`/product/${product.id}`}
+                      onClick={() => setSearch("")}
+                      className="w-[180px] shrink-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                    >
+                      <div className="flex h-32 items-center justify-center bg-zinc-50">
+                        {image ? (
+                          <img
+                            src={image}
+                            alt={product.name || "Product"}
+                            className="h-full w-full object-contain p-3"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-3xl">📦</span>
+                        )}
+                      </div>
+
+                      <div className="p-3">
+                        <p className="truncate text-xs font-black text-zinc-900">
+                          {product.name || "Product"}
+                        </p>
+
+                        <p className="mt-1 truncate text-[9px] font-bold text-zinc-400">
+                          {product.brandName || product.category || "Night Now"}
+                        </p>
+
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-sm font-black text-zinc-900">
+                            ₹{price}
+                          </span>
+
+                          {mrp > price && (
+                            <span className="text-[9px] text-zinc-400 line-through">
+                              ₹{mrp}
+                            </span>
+                          )}
+
+                          {discount > 0 && (
+                            <span className="text-[9px] font-black text-green-600">
+                              {discount}% OFF
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-5 text-center">
+                <div className="text-2xl">🔍</div>
+                <p className="mt-1 text-xs font-black">
+                  Product nahi mila
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+
 
       {/* =================================================
           HERO
@@ -1161,175 +1354,60 @@ export default function HomePage() {
         )}
 
       {/* =================================================
-          CATEGORIES
+          CATEGORY RAIL
+          Medium-size quick-commerce style categories.
       ================================================= */}
 
-      <section className="mx-auto max-w-7xl px-4 pt-10">
+      <section className="mx-auto max-w-7xl px-4 pt-8">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black">
+              Shop by Category
+            </h2>
+            <p className="mt-1 text-[10px] font-bold text-zinc-400">
+              Choose what you need
+            </p>
+          </div>
 
-        <div>
-
-          <h2 className="text-xl font-black">
-            Shop by Category
-          </h2>
-
-          <p className="mt-1 text-xs text-zinc-400">
-            Choose what you need
-          </p>
-
-        </div>
-
-        <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-
-          {categories.map(
-            (category) => (
-              <button
-                key={
-                  category.name
-                }
-                type="button"
-                onClick={() =>
-                  setSelectedCategory(
-                    category.name
-                  )
-                }
-                className={[
-                  "min-w-[105px] rounded-2xl border p-4 text-center transition",
-                  selectedCategory ===
-                  category.name
-                    ? "border-yellow-400 bg-yellow-400 text-black"
-                    : "border-zinc-200 bg-white hover:border-yellow-300",
-                ].join(" ")}
-              >
-
-                <div className="text-2xl">
-                  {category.icon}
-                </div>
-
-                <p className="mt-2 text-xs font-black">
-                  {category.name}
-                </p>
-
-              </button>
-            )
-          )}
-
-        </div>
-
-      </section>
-
-      {/* =================================================
-          TOP BRANDS
-      ================================================= */}
-
-      {(() => {
-        const map =
-          new Map<
-            string,
-            Product
-          >();
-
-        products
-          .filter(
-            (product) =>
-              product.topBrand ===
-                true &&
-              product.active !==
-                false
-          )
-          .forEach((product) => {
-            const key =
-              product.brandId ||
-              product.brandName ||
-              product.id;
-
-            if (
-              !map.has(key)
-            ) {
-              map.set(
-                key,
-                product
-              );
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedCategory("All")
             }
-          });
+            className="shrink-0 text-[10px] font-black text-yellow-600"
+          >
+            View All →
+          </button>
+        </div>
 
-        const topBrands =
-          Array.from(
-            map.values()
-          );
-
-        if (
-          topBrands.length ===
-          0
-        ) {
-          return null;
-        }
-
-        return (
-          <section className="mx-auto max-w-7xl px-4 pt-10">
-
-            <div>
-
-              <h2 className="text-xl font-black">
-                ⭐ Top Brands
-              </h2>
-
-              <p className="mt-1 text-xs text-zinc-400">
-                Popular brands on Night Now
-              </p>
-
-            </div>
-
-            <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-
-              {topBrands.map(
-                (product) => (
-                  <Link
-                    key={
-                      product.id
-                    }
-                    href={`/product/${product.id}`}
-                    className="min-w-[135px] rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm transition hover:border-yellow-400"
-                  >
-
-                    <div className="flex h-20 items-center justify-center rounded-xl bg-zinc-50">
-
-                      {getProductImage(
-                        product
-                      ) ? (
-                        <img
-                          src={getProductImage(
-                            product
-                          )}
-                          alt={
-                            product.brandName ||
-                            product.name ||
-                            "Brand"
-                          }
-                          className="h-full w-full object-contain p-2"
-                        />
-                      ) : (
-                        <span className="text-2xl">
-                          🏷️
-                        </span>
-                      )}
-
-                    </div>
-
-                    <p className="mt-3 truncate text-center text-xs font-black">
-                      {product.brandName ||
-                        product.name ||
-                        "Brand"}
-                    </p>
-
-                  </Link>
+        <div className="mt-4 flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+          {categories.map((category) => (
+            <button
+              key={`category-rail-${category.name}`}
+              type="button"
+              onClick={() =>
+                setSelectedCategory(
+                  category.name
                 )
-              )}
+              }
+              className={[
+                "flex min-w-[112px] shrink-0 flex-col items-center justify-center rounded-2xl border bg-white px-3 py-3 shadow-sm transition-all",
+                selectedCategory === category.name
+                  ? "border-yellow-400 bg-yellow-50 shadow-md"
+                  : "border-zinc-200 hover:border-yellow-300 hover:shadow-md",
+              ].join(" ")}
+            >
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-50 text-3xl">
+                {category.icon}
+              </span>
 
-            </div>
-
-          </section>
-        );
-      })()}
+              <span className="mt-2 line-clamp-2 text-center text-[10px] font-black leading-tight text-zinc-800">
+                {category.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* =================================================
           BUY 1 GET 2
@@ -1410,8 +1488,35 @@ export default function HomePage() {
 
         </div>
 
+        {/* PRODUCT FILTER - ALL OPTIONS INSIDE */}
+        <div className="mt-5">
+          <button
+            type="button"
+            onClick={() => setShowProductFilters(true)}
+            className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-left shadow-sm transition hover:border-yellow-400 hover:shadow-md"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-yellow-400 text-lg">
+                ⚙️
+              </span>
+              <span>
+                <span className="block text-sm font-black text-zinc-900">
+                  Filters & Sort
+                </span>
+                <span className="mt-0.5 block text-[10px] font-bold text-zinc-400">
+                  Category • Brand • Price • Discount • Stock • Sort
+                </span>
+              </span>
+            </span>
+
+            <span className="rounded-xl bg-zinc-100 px-4 py-2 text-xs font-black text-zinc-700">
+              Open →
+            </span>
+          </button>
+        </div>
+
         {loading ? (
-          <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
 
             {Array.from({
               length: 8,
@@ -1462,7 +1567,7 @@ export default function HomePage() {
           </div>
         ) : (
 
-          <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
 
             {filteredProducts.map(
               (product) => {
@@ -1504,7 +1609,7 @@ export default function HomePage() {
                     <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-px bg-gradient-to-r from-transparent via-yellow-300 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
                     <Link href={`/product/${product.id}`}>
-                      <div className="relative flex h-44 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 [transform:translateZ(20px)]">
+                      <div className="relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 [transform:translateZ(20px)]">
                         <div className="pointer-events-none absolute bottom-5 h-5 w-24 rounded-full bg-black/10 blur-xl transition-all duration-300 group-hover:w-28 group-hover:bg-black/15" />
 
                         {image ? (
@@ -1520,9 +1625,11 @@ export default function HomePage() {
                         )}
 
                         {discount > 0 && (
-                          <span className="absolute left-3 top-3 z-20 rounded-xl bg-green-500 px-2.5 py-1.5 text-[9px] font-black text-white shadow-[0_5px_12px_rgba(0,0,0,0.18)] transition-transform duration-300 group-hover:-translate-y-1">
-                            {discount}% OFF
-                          </span>
+                          <div className="absolute left-0 top-4 z-20">
+                            <div className="rounded-r-full bg-gradient-to-r from-emerald-400 to-green-500 px-4 py-2 text-[11px] font-black text-white shadow-[0_6px_14px_rgba(34,197,94,0.25)] transition-transform duration-300 group-hover:translate-x-1">
+                              {discount}% OFF
+                            </div>
+                          </div>
                         )}
                       </div>
                     </Link>
@@ -1549,9 +1656,14 @@ export default function HomePage() {
                         </p>
 
                         {mrp > price && (
-                          <p className="pb-0.5 text-[10px] text-zinc-400 line-through">
-                            ₹{mrp}
-                          </p>
+                          <>
+                            <p className="pb-0.5 text-[10px] text-zinc-400 line-through">
+                              MRP ₹{mrp}
+                            </p>
+                            <span className="rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-black text-green-700">
+                              {discount}% OFF
+                            </span>
+                          </>
                         )}
                       </div>
 
@@ -1713,6 +1825,233 @@ export default function HomePage() {
         location={selectedLocation}
         onSelect={handleLocationSelect}
       />
+
+      {/* =================================================
+          PRODUCT FILTER MODAL
+      ================================================= */}
+
+      {showProductFilters && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-end justify-center bg-black/50 p-3 backdrop-blur-sm md:items-center"
+          onClick={() =>
+            setShowProductFilters(false)
+          }
+        >
+          <div
+            className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl"
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="flex items-center justify-between border-b border-zinc-200 p-4">
+              <div>
+                <h2 className="text-base font-black">
+                  Filters
+                </h2>
+                <p className="mt-1 text-[10px] text-zinc-400">
+                  Products ko apni preference ke hisaab se filter karein
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowProductFilters(false)
+                }
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-4">
+              {brands.length > 0 && (
+                <>
+                  <p className="text-xs font-black">
+                    Brand
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedBrand("All")
+                      }
+                      className={[
+                        "rounded-xl border px-3 py-2.5 text-[10px] font-black",
+                        selectedBrand === "All"
+                          ? "border-yellow-400 bg-yellow-400 text-black"
+                          : "border-zinc-200 bg-white text-zinc-700",
+                      ].join(" ")}
+                    >
+                      All Brands
+                    </button>
+
+                    {brands.map((brand) => (
+                      <button
+                        key={`modal-brand-${brand.id}`}
+                        type="button"
+                        onClick={() =>
+                          setSelectedBrand(
+                            brand.name
+                          )
+                        }
+                        className={[
+                          "rounded-xl border px-3 py-2.5 text-[10px] font-black",
+                          selectedBrand === brand.name
+                            ? "border-yellow-400 bg-yellow-400 text-black"
+                            : "border-zinc-200 bg-white text-zinc-700",
+                        ].join(" ")}
+                      >
+                        {brand.name}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <p className="mt-5 text-xs font-black">
+                Price Range
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {[
+                  ["all", "Any Price"],
+                  ["under-100", "Under ₹100"],
+                  ["100-300", "₹100 – ₹300"],
+                  ["300-500", "₹300 – ₹500"],
+                  ["500-plus", "₹500+"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      setPriceFilter(
+                        value as typeof priceFilter
+                      )
+                    }
+                    className={[
+                      "rounded-2xl border px-4 py-3.5 text-left text-xs font-black",
+                      priceFilter === value
+                        ? "border-yellow-400 bg-yellow-400 text-black"
+                        : "border-zinc-200 bg-white text-zinc-700",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <p className="mt-5 text-xs font-black">
+                Other Filters
+              </p>
+
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDiscountOnly(
+                      (value) => !value
+                    )
+                  }
+                  className={[
+                    "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-[10px] font-black",
+                    discountOnly
+                      ? "border-yellow-400 bg-yellow-50"
+                      : "border-zinc-200 bg-white",
+                  ].join(" ")}
+                >
+                  <span>
+                    🔥 Discounted Products
+                  </span>
+                  <span>
+                    {discountOnly ? "✓" : "○"}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setInStockOnly(
+                      (value) => !value
+                    )
+                  }
+                  className={[
+                    "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-[10px] font-black",
+                    inStockOnly
+                      ? "border-yellow-400 bg-yellow-50"
+                      : "border-zinc-200 bg-white",
+                  ].join(" ")}
+                >
+                  <span>
+                    ✓ In Stock Only
+                  </span>
+                  <span>
+                    {inStockOnly ? "✓" : "○"}
+                  </span>
+                </button>
+              </div>
+
+              <p className="mt-5 text-xs font-black">
+                Sort By
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {[
+                  ["relevance", "Relevance"],
+                  ["price-low", "Price: Low to High"],
+                  ["price-high", "Price: High to Low"],
+                  ["discount-high", "Best Discount"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      setSortBy(
+                        value as typeof sortBy
+                      )
+                    }
+                    className={[
+                      "rounded-2xl border px-4 py-3.5 text-left text-xs font-black",
+                      sortBy === value
+                        ? "border-yellow-400 bg-yellow-400 text-black"
+                        : "border-zinc-200 bg-white text-zinc-700",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2 border-t border-zinc-200 p-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setSortBy("relevance");
+                  setSelectedBrand("All");
+                  setPriceFilter("all");
+                  setDiscountOnly(false);
+                  setInStockOnly(false);
+                }}
+                className="flex-1 rounded-xl border border-zinc-200 bg-white py-3 text-xs font-black"
+              >
+                Clear All
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowProductFilters(false)
+                }
+                className="flex-1 rounded-xl bg-yellow-400 py-3 text-xs font-black text-black"
+              >
+                Show Products
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =================================================
           AAPKI ZARURAT MODAL
@@ -1891,7 +2230,7 @@ export default function HomePage() {
                                   product.name ||
                                   "Product"
                                 }
-                                className="h-full w-full object-contain p-2"
+                                className="h-full w-full object-contain p-2" loading="lazy"
                               />
                             ) : (
                               "📦"

@@ -21,9 +21,9 @@ export default function AdminLoginPage() {
           if (!user) return;
 
           const adminEmail =
-            process.env
-              .NEXT_PUBLIC_ADMIN_EMAIL
-              ?.trim()
+            (process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
+              "mahajanvicky04@gmail.com")
+              .trim()
               .toLowerCase();
 
           if (
@@ -60,19 +60,10 @@ export default function AdminLoginPage() {
             .toLowerCase();
 
         const adminEmail =
-          process.env
-            .NEXT_PUBLIC_ADMIN_EMAIL
-            ?.trim()
+          (process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
+            "mahajanvicky04@gmail.com")
+            .trim()
             .toLowerCase();
-
-        if (
-          !adminEmail
-        ) {
-          alert(
-            "NEXT_PUBLIC_ADMIN_EMAIL missing hai."
-          );
-          return;
-        }
 
         if (
           loggedEmail !==

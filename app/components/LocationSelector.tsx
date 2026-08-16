@@ -16,6 +16,30 @@ interface Props {
   onSelect: (location: SavedLocation) => void;
 }
 
+function normalizeResult(item: any): SavedLocation {
+  const address = item?.address || {};
+
+  const name =
+    address.road ||
+    address.suburb ||
+    address.neighbourhood ||
+    address.residential ||
+    address.village ||
+    address.town ||
+    address.city_district ||
+    address.city ||
+    address.state_district ||
+    item?.display_name?.split(",")[0] ||
+    "Selected Location";
+
+  return {
+    name: String(name),
+    address: String(item?.display_name || name),
+    lat: Number.isFinite(Number(item?.lat)) ? Number(item.lat) : undefined,
+    lon: Number.isFinite(Number(item?.lon)) ? Number(item.lon) : undefined,
+  };
+}
+
 export default function LocationSelector({
   open,
   onClose,
@@ -32,9 +56,12 @@ export default function LocationSelector({
 
   useEffect(() => {
     if (!open) return;
+
     setQuery("");
     setResults([]);
     setError("");
+    setLoadingSearch(false);
+    setLoadingCurrent(false);
   }, [open]);
 
   useEffect(() => {
@@ -49,32 +76,39 @@ export default function LocationSelector({
 
     if (searchTimer.current) clearTimeout(searchTimer.current);
 
-    if (value.trim().length < 3) {
+    const cleanValue = value.trim();
+
+    if (cleanValue.length < 3) {
       setResults([]);
       setLoadingSearch(false);
       return;
     }
 
-    setLoadingSearch(true);
     const id = ++requestId.current;
+    setLoadingSearch(true);
 
     searchTimer.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&countrycodes=in&q=${encodeURIComponent(value.trim())}`,
+          `/api/location/search?q=${encodeURIComponent(cleanValue)}`,
           {
-            headers: {
-              Accept: "application/json",
-            },
+            method: "GET",
+            cache: "no-store",
           }
         );
 
-        if (!response.ok) throw new Error("Search failed");
+        const payload = await response.json().catch(() => ({ results: [] }));
 
-        const data = await response.json();
         if (id !== requestId.current) return;
-        setResults(Array.isArray(data) ? data : []);
-      } catch {
+
+        if (!response.ok) {
+          throw new Error(payload?.error || "Search failed");
+        }
+
+        setResults(Array.isArray(payload?.results) ? payload.results : []);
+      } catch (searchError) {
+        console.error("Location search error:", searchError);
+
         if (id === requestId.current) {
           setResults([]);
           setError("Location search nahi ho payi. Dobara try karein.");
@@ -82,28 +116,12 @@ export default function LocationSelector({
       } finally {
         if (id === requestId.current) setLoadingSearch(false);
       }
-    }, 350);
+    }, 450);
   };
 
-  const normalizeResult = (item: any): SavedLocation => {
-    const address = item?.address || {};
-    const name =
-      address.suburb ||
-      address.neighbourhood ||
-      address.village ||
-      address.town ||
-      address.city_district ||
-      address.city ||
-      address.state_district ||
-      item?.display_name?.split(",")[0] ||
-      "Selected Location";
-
-    return {
-      name,
-      address: item?.display_name || name,
-      lat: Number(item?.lat),
-      lon: Number(item?.lon),
-    };
+  const selectLocation = (item: any) => {
+    const place = normalizeResult(item);
+    onSelect(place);
   };
 
   const useCurrentLocation = () => {
@@ -122,22 +140,25 @@ export default function LocationSelector({
 
         try {
           const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&lat=${lat}&lon=${lon}`,
+            `/api/location/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
             {
-              headers: {
-                Accept: "application/json",
-              },
+              method: "GET",
+              cache: "no-store",
             }
           );
 
+          const data = await response.json().catch(() => null);
+
           if (!response.ok) throw new Error("Reverse geocode failed");
-          const data = await response.json();
+
           onSelect({
             ...normalizeResult(data),
             lat,
             lon,
           });
-        } catch {
+        } catch (reverseError) {
+          console.error("Current location reverse lookup error:", reverseError);
+
           onSelect({
             name: "Current Location",
             address: `${lat.toFixed(6)}, ${lon.toFixed(6)}`,
@@ -150,6 +171,7 @@ export default function LocationSelector({
       },
       (geoError) => {
         setLoadingCurrent(false);
+
         if (geoError.code === geoError.PERMISSION_DENIED) {
           setError("Location permission allow karein, phir dobara try karein.");
         } else if (geoError.code === geoError.TIMEOUT) {
@@ -178,6 +200,7 @@ export default function LocationSelector({
               Delivery address select karein
             </p>
           </div>
+
           <button
             type="button"
             onClick={onClose}
@@ -196,14 +219,19 @@ export default function LocationSelector({
             className="flex w-full items-center gap-3 rounded-2xl border border-yellow-300 bg-yellow-50 p-4 text-left disabled:opacity-60"
           >
             <span className="text-2xl">📍</span>
+
             <span className="flex-1">
               <span className="block font-black">
-                {loadingCurrent ? "Getting location..." : "Use Current Location"}
+                {loadingCurrent
+                  ? "Getting location..."
+                  : "Use Current Location"}
               </span>
+
               <span className="block text-xs text-zinc-500">
                 GPS se current delivery address detect karein
               </span>
             </span>
+
             <span className="font-black">→</span>
           </button>
 
@@ -218,15 +246,20 @@ export default function LocationSelector({
               autoFocus
               value={query}
               onChange={(event) => searchAddress(event.target.value)}
-              placeholder="B-601 Abhinav Heights, Dindoli..."
+              placeholder="Enter area, society, road, city..."
               className="h-12 w-full bg-transparent text-sm font-semibold outline-none"
             />
           </div>
 
+          <p className="mt-2 px-1 text-[10px] text-zinc-400">
+            Example: Dindoli, Kharwasa, Ring Road, society name...
+          </p>
+
           {loadingSearch && (
-            <p className="mt-3 text-center text-xs font-semibold text-zinc-500">
+            <div className="mt-3 flex items-center gap-2 rounded-2xl bg-zinc-50 p-3 text-xs font-semibold text-zinc-500">
+              <span className="animate-pulse">📍</span>
               Address search ho raha hai...
-            </p>
+            </div>
           )}
 
           {error && (
@@ -234,30 +267,6 @@ export default function LocationSelector({
               {error}
             </div>
           )}
-
-          <div className="mt-3 space-y-2">
-            {results.map((item) => {
-              const place = normalizeResult(item);
-              return (
-                <button
-                  key={`${item.place_id}-${item.lat}-${item.lon}`}
-                  type="button"
-                  onClick={() => onSelect(place)}
-                  className="flex w-full items-start gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-3 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
-                >
-                  <span className="mt-0.5 text-lg">📍</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-black text-zinc-900">
-                      {place.name}
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-zinc-500">
-                      {place.address}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
 
           {!loadingSearch && query.trim().length >= 3 && results.length === 0 && !error && (
             <div className="py-8 text-center">
@@ -268,10 +277,39 @@ export default function LocationSelector({
             </div>
           )}
 
+          <div className="mt-3 space-y-2">
+            {results.map((item) => {
+              const place = normalizeResult(item);
+
+              return (
+                <button
+                  key={`${item.place_id}-${item.lat}-${item.lon}`}
+                  type="button"
+                  onClick={() => selectLocation(item)}
+                  className="flex w-full items-start gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-3 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+                >
+                  <span className="mt-0.5 text-lg">📍</span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-black text-zinc-900">
+                      {place.name}
+                    </span>
+
+                    <span className="mt-1 block text-xs leading-5 text-zinc-500">
+                      {place.address}
+                    </span>
+                  </span>
+
+                  <span className="pt-1 text-sm font-black text-zinc-400">›</span>
+                </button>
+              );
+            })}
+          </div>
+
           {location?.address && (
             <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
               <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">
-                Saved delivery location
+                Selected delivery location
               </p>
               <p className="mt-1 text-sm font-black text-emerald-950">
                 {location.name}

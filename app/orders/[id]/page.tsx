@@ -7,7 +7,8 @@ import { useParams } from "next/navigation";
 import { auth } from "../../lib/firebase";
 
 import {
-  getOrderById,
+  subscribeToOrder,
+  cancelOrderByCustomer,
 } from "../../services/orderService";
 
 import {
@@ -49,6 +50,10 @@ type Order = {
 
   status?: string;
 
+  cancelledBy?: string;
+  cancellationReason?: string;
+  cancelledAt?: any;
+
   createdAt?: any;
 };
 
@@ -67,6 +72,18 @@ export default function CustomerOrderDetailPage() {
   const [notAllowed, setNotAllowed] =
     useState(false);
 
+  const [showCancelModal, setShowCancelModal] =
+    useState(false);
+
+  const [cancelReason, setCancelReason] =
+    useState("");
+
+  const [customReason, setCustomReason] =
+    useState("");
+
+  const [cancelling, setCancelling] =
+    useState(false);
+
   useEffect(() => {
     if (!orderId) {
       return;
@@ -82,47 +99,44 @@ export default function CustomerOrderDetailPage() {
             return;
           }
 
-          try {
-            const data =
-              await getOrderById(
-                orderId
-              );
+          setLoading(true);
 
-            if (!data) {
-              setOrder(null);
-              setLoading(false);
-              return;
-            }
+          const unsubscribeOrder =
+            subscribeToOrder(
+              orderId,
+              (data) => {
+                if (!data) {
+                  setOrder(null);
+                  setLoading(false);
+                  return;
+                }
 
-            const loadedOrder =
-              data as Order;
+                const loadedOrder =
+                  data as Order;
 
-            const owner =
-              loadedOrder.userId ||
-              loadedOrder.customer?.uid ||
-              loadedOrder.customer?.userId ||
-              "";
+                const owner =
+                  loadedOrder.userId ||
+                  loadedOrder.customer?.uid ||
+                  loadedOrder.customer?.userId ||
+                  "";
 
-            if (
-              owner &&
-              owner !== user.uid
-            ) {
-              setNotAllowed(true);
-              setLoading(false);
-              return;
-            }
+                if (
+                  owner &&
+                  owner !== user.uid
+                ) {
+                  setNotAllowed(true);
+                  setLoading(false);
+                  return;
+                }
 
-            setOrder(
-              loadedOrder
+                setOrder(loadedOrder);
+                setLoading(false);
+              }
             );
-          } catch (error) {
-            console.error(
-              "Order detail error:",
-              error
-            );
-          } finally {
-            setLoading(false);
-          }
+
+          return () => {
+            unsubscribeOrder();
+          };
         }
       );
 
@@ -130,6 +144,44 @@ export default function CustomerOrderDetailPage() {
       unsubscribe();
     };
   }, [orderId]);
+
+  const handleCancelOrder = async () => {
+    if (!order) return;
+
+    if (!auth.currentUser) {
+      alert("Please login again.");
+      return;
+    }
+
+    const finalReason =
+      cancelReason === "Other"
+        ? customReason.trim()
+        : cancelReason.trim();
+
+    if (!finalReason) {
+      alert("Please select a cancellation reason.");
+      return;
+    }
+
+    try {
+      setCancelling(true);
+
+      await cancelOrderByCustomer(
+        order.id,
+        finalReason,
+        auth.currentUser.uid
+      );
+
+      setShowCancelModal(false);
+      setCancelReason("");
+      setCustomReason("");
+    } catch (error: any) {
+      console.error("Customer cancellation error:", error);
+      alert(error?.message || "Order cancellation failed.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -364,6 +416,105 @@ export default function CustomerOrderDetailPage() {
 
         </section>
 
+        {/* CUSTOMER CANCEL ORDER */}
+
+        {["Pending", "Confirmed", "Preparing"].includes(status) && (
+          <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+              <p className="text-sm font-black text-red-700">
+                Want to cancel this order?
+              </p>
+              <p className="mt-1 text-xs text-red-600">
+                You can cancel the order before it is dispatched.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(true)}
+                className="mt-4 w-full rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white transition hover:bg-red-700"
+              >
+                ❌ Cancel Order
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* LIVE DELIVERY TRACKING / LOCATION */}
+
+        <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
+
+          <div className="flex items-start justify-between gap-4">
+
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-yellow-600">
+                DELIVERY TRACKING
+              </p>
+
+              <h2 className="mt-1 text-lg font-black">
+                {status === "Out for Delivery"
+                  ? "Your order is on the way 🚚"
+                  : status === "Delivered"
+                    ? "Order delivered successfully ✅"
+                    : status === "Cancelled"
+                      ? "Order cancelled"
+                      : status === "Confirmed"
+                        ? "Order accepted and being prepared"
+                        : "We are processing your order"}
+              </h2>
+            </div>
+
+            <div className="rounded-2xl bg-yellow-50 px-3 py-2 text-center">
+              <p className="text-lg font-black">{status === "Out for Delivery" ? "🚚" : "📦"}</p>
+              <p className="text-[9px] font-black text-yellow-700">
+                {status === "Out for Delivery" ? "ON THE WAY" : "ORDER"}
+              </p>
+            </div>
+
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+              DELIVERY LOCATION
+            </p>
+
+            <p className="mt-2 text-sm font-black">
+              📍 {customer.address || "Delivery address not available"}
+            </p>
+
+            {(customer.city || customer.pincode) && (
+              <p className="mt-1 text-xs text-slate-500">
+                {customer.city}
+                {customer.city && customer.pincode ? " - " : ""}
+                {customer.pincode}
+              </p>
+            )}
+
+            {customer.address && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  `${customer.address}, ${customer.city || ""}, ${customer.pincode || ""}`
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black"
+              >
+                📍 Open Delivery Location
+              </a>
+            )}
+          </div>
+
+          {status === "Out for Delivery" && (
+            <div className="mt-3 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+              <p className="text-sm font-black text-orange-700">
+                🚚 Delivery partner is on the way
+              </p>
+              <p className="mt-1 text-xs text-orange-600">
+                Your delivery address is shown above. Live driver GPS will appear here when a driver-location feature is connected.
+              </p>
+            </div>
+          )}
+
+        </section>
+
         {/* CUSTOMER */}
 
         <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
@@ -560,6 +711,44 @@ export default function CustomerOrderDetailPage() {
         </section>
 
       </div>
+        {/* CANCEL ORDER MODAL */}
+
+        {showCancelModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+              <div className="border-b border-slate-100 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-black">Cancel Order</h2>
+                    <p className="mt-1 text-xs text-slate-500">Please tell us why you want to cancel.</p>
+                  </div>
+                  <button type="button" onClick={() => setShowCancelModal(false)} disabled={cancelling} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-500">×</button>
+                </div>
+              </div>
+              <div className="p-5">
+                <p className="text-sm font-black">Select a reason</p>
+                <div className="mt-3 space-y-2">
+                  {["Ordered by mistake","Changed my mind","Found a better price","Delivery taking too long","Wrong product ordered","Payment issue","Other"].map((reason) => (
+                    <button key={reason} type="button" onClick={() => setCancelReason(reason)} className={`w-full rounded-2xl border p-3 text-left text-sm font-bold transition ${cancelReason === reason ? "border-red-400 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                      <span className="mr-2">{cancelReason === reason ? "🔴" : "⚪"}</span>{reason}
+                    </button>
+                  ))}
+                </div>
+                {cancelReason === "Other" && (
+                  <div className="mt-4">
+                    <label className="text-xs font-black text-slate-500">Enter your reason</label>
+                    <textarea value={customReason} onChange={(event) => setCustomReason(event.target.value)} placeholder="Tell us your reason..." rows={3} maxLength={250} className="mt-2 w-full resize-none rounded-2xl border border-slate-200 p-3 text-sm font-medium outline-none focus:border-red-400" />
+                    <p className="mt-1 text-right text-[10px] text-slate-400">{customReason.length}/250</p>
+                  </div>
+                )}
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => { setShowCancelModal(false); setCancelReason(""); setCustomReason(""); }} disabled={cancelling} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600">Keep Order</button>
+                  <button type="button" onClick={handleCancelOrder} disabled={cancelling || !cancelReason || (cancelReason === "Other" && !customReason.trim())} className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40">{cancelling ? "Cancelling..." : "Confirm Cancellation"}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
     </main>
   );
