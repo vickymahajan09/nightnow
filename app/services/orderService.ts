@@ -9,9 +9,29 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
 } from "firebase/firestore";
 
-import { db } from "../lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+
+import { db, auth } from "../lib/firebase";
+
+// =====================================================
+// ADMIN CHECK
+// =====================================================
+
+const ADMIN_EMAIL =
+  "mahajanvicky04@gmail.com";
+
+const isAdminUser = () => {
+  const user = auth.currentUser;
+
+  return (
+    !!user &&
+    user.email?.toLowerCase() ===
+      ADMIN_EMAIL.toLowerCase()
+  );
+};
 
 // =====================================================
 // CUSTOMER NOTIFICATION
@@ -30,8 +50,6 @@ const createOrderNotification = async (
       order?.customer?.userId ||
       "";
 
-    // Old orders may not have userId.
-    // Notification failure should never break order process.
     if (!userId) {
       console.warn(
         "No userId found for customer notification"
@@ -43,22 +61,15 @@ const createOrderNotification = async (
       collection(db, "notifications"),
       {
         userId,
-
         orderId:
           order?.orderId ||
           order?.id ||
           "",
-
         type: "order",
-
         title,
-
         message,
-
         status,
-
         read: false,
-
         createdAt: new Date(),
       }
     );
@@ -74,24 +85,73 @@ const createOrderNotification = async (
 // ADD ORDER
 // =====================================================
 
-export const addOrder = async (order: any) => {
+export const addOrder = async (
+  order: any
+) => {
+  const currentUser =
+    auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error(
+      "Please login before placing an order."
+    );
+  }
+
+  // IMPORTANT:
+  // Never trust userId coming from frontend order object.
+  // Always use Firebase Auth UID.
+  const userId =
+    currentUser.uid;
+
+  const existingCustomer =
+    order?.customer || {};
+
+  const customer = {
+    ...existingCustomer,
+    uid: userId,
+    userId,
+    name:
+      existingCustomer?.name ||
+      currentUser.displayName ||
+      "Customer",
+    phone:
+      existingCustomer?.phone ||
+      currentUser.phoneNumber ||
+      "",
+  };
+
   const orderData = {
     ...order,
+
+    // FORCE authenticated customer UID
+    userId,
+
+    customer,
 
     status: "Pending",
 
     createdAt:
-      order?.createdAt || new Date(),
+      order?.createdAt ||
+      new Date(),
+
+    updatedAt:
+      new Date(),
   };
 
   // -------------------------------
   // CREATE ORDER
   // -------------------------------
 
-  const orderRef = await addDoc(
-    collection(db, "orders"),
-    orderData
-  );
+  const orderRef =
+    await addDoc(
+      collection(db, "orders"),
+      orderData
+    );
+
+  const savedOrder = {
+    ...orderData,
+    id: orderRef.id,
+  };
 
   // ===================================================
   // ADMIN NEW ORDER NOTIFICATION
@@ -99,7 +159,10 @@ export const addOrder = async (order: any) => {
 
   try {
     await addDoc(
-      collection(db, "notifications"),
+      collection(
+        db,
+        "notifications"
+      ),
       {
         audience: "admin",
 
@@ -113,23 +176,23 @@ export const addOrder = async (order: any) => {
             0,
             8
           )} received from ${
-            orderData?.customer?.name ||
+            customer?.name ||
             "Customer"
           } for ₹${Number(
             orderData?.total || 0
           )}.`,
 
-        orderId: orderRef.id,
+        orderId:
+          orderRef.id,
 
-        userId:
-          orderData?.userId || "",
+        userId,
 
-        customer:
-          orderData?.customer || {},
+        customer,
 
         read: false,
 
-        createdAt: new Date(),
+        createdAt:
+          new Date(),
       }
     );
   } catch (error) {
@@ -144,10 +207,7 @@ export const addOrder = async (order: any) => {
   // ===================================================
 
   await createOrderNotification(
-    {
-      ...orderData,
-      id: orderRef.id,
-    },
+    savedOrder,
 
     "Order Confirmed 🎉",
 
@@ -163,65 +223,231 @@ export const addOrder = async (order: any) => {
 };
 
 // =====================================================
-// GET ALL ORDERS
+// GET ORDERS
+//
+// ADMIN:
+//   gets all orders.
+//
+// CUSTOMER:
+//   gets only current customer's orders.
+//
+// This is IMPORTANT because Firestore Rules
+// do not allow a customer to read the entire
+// orders collection.
 // =====================================================
 
 export const getOrders = async () => {
-  const snapshot = await getDocs(
-    collection(db, "orders")
+  const currentUser =
+    auth.currentUser;
+
+  if (!currentUser) {
+    return [];
+  }
+
+  let snapshot;
+
+  if (isAdminUser()) {
+    const ordersQuery =
+      query(
+        collection(db, "orders"),
+        orderBy(
+          "createdAt",
+          "desc"
+        )
+      );
+
+    snapshot =
+      await getDocs(
+        ordersQuery
+      );
+  } else {
+    const ordersQuery =
+      query(
+        collection(db, "orders"),
+        where(
+          "userId",
+          "==",
+          currentUser.uid
+        )
+      );
+
+    snapshot =
+      await getDocs(
+        ordersQuery
+      );
+  }
+
+  const orders =
+    snapshot.docs.map(
+      (item) => ({
+        id: item.id,
+        ...item.data(),
+      })
+    );
+
+  // Customer query is intentionally not
+  // orderBy("createdAt") to avoid unnecessary
+  // composite-index requirements.
+  orders.sort(
+    (a: any, b: any) => {
+      const getTime =
+        (value: any) => {
+          if (
+            typeof value?.toMillis ===
+            "function"
+          ) {
+            return value.toMillis();
+          }
+
+          if (
+            typeof value?.seconds ===
+            "number"
+          ) {
+            return (
+              value.seconds * 1000
+            );
+          }
+
+          const time =
+            new Date(
+              value || 0
+            ).getTime();
+
+          return Number.isNaN(time)
+            ? 0
+            : time;
+        };
+
+      return (
+        getTime(b.createdAt) -
+        getTime(a.createdAt)
+      );
+    }
   );
 
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  }));
+  return orders;
 };
 
 // =====================================================
 // REAL-TIME ORDERS
-// IMPORTANT:
-// Orders page uses this function.
+//
+// ADMIN -> all orders
+// CUSTOMER -> own orders only
 // =====================================================
 
 export const subscribeToOrders = (
-  callback: (orders: any[]) => void
+  callback: (
+    orders: any[]
+  ) => void
 ) => {
-  const ordersRef =
-    collection(db, "orders");
+  const currentUser =
+    auth.currentUser;
 
-  const ordersQuery = query(
-    ordersRef,
-    orderBy("createdAt", "desc")
-  );
+  if (!currentUser) {
+    callback([]);
+    return () => {};
+  }
 
-  const unsubscribe = onSnapshot(
-    ordersQuery,
+  let ordersQuery;
 
-    (snapshot) => {
-      const orders = snapshot.docs.map(
-        (item) => {
-          const data = item.data();
-          return {
-            id: item.id,
-            ...data,
-            status: data.status || "Pending",
-          };
-        }
+  if (isAdminUser()) {
+    ordersQuery =
+      query(
+        collection(db, "orders"),
+        orderBy(
+          "createdAt",
+          "desc"
+        )
       );
-
-      callback(orders);
-    },
-
-    (error) => {
-      console.error(
-        "Orders subscription error:",
-        error
+  } else {
+    ordersQuery =
+      query(
+        collection(db, "orders"),
+        where(
+          "userId",
+          "==",
+          currentUser.uid
+        )
       );
+  }
 
-      // Don't crash the page.
-      callback([]);
-    }
-  );
+  const unsubscribe =
+    onSnapshot(
+      ordersQuery,
+
+      (snapshot) => {
+        const orders =
+          snapshot.docs.map(
+            (item) => {
+              const data =
+                item.data();
+
+              return {
+                id: item.id,
+                ...data,
+                status:
+                  data.status ||
+                  "Pending",
+              };
+            }
+          );
+
+        orders.sort(
+          (a: any, b: any) => {
+            const getTime =
+              (value: any) => {
+                if (
+                  typeof value?.toMillis ===
+                  "function"
+                ) {
+                  return value.toMillis();
+                }
+
+                if (
+                  typeof value?.seconds ===
+                  "number"
+                ) {
+                  return (
+                    value.seconds *
+                    1000
+                  );
+                }
+
+                const time =
+                  new Date(
+                    value || 0
+                  ).getTime();
+
+                return Number.isNaN(
+                  time
+                )
+                  ? 0
+                  : time;
+              };
+
+            return (
+              getTime(
+                b.createdAt
+              ) -
+              getTime(
+                a.createdAt
+              )
+            );
+          }
+        );
+
+        callback(orders);
+      },
+
+      (error) => {
+        console.error(
+          "Orders subscription error:",
+          error
+        );
+
+        callback([]);
+      }
+    );
 
   return unsubscribe;
 };
@@ -232,14 +458,29 @@ export const subscribeToOrders = (
 
 export const subscribeToOrder = (
   id: string,
-  callback: (order: any | null) => void
+  callback: (
+    order: any | null
+  ) => void
 ) => {
-  const orderRef = doc(db, "orders", id);
+  if (!id) {
+    callback(null);
+    return () => {};
+  }
+
+  const orderRef =
+    doc(
+      db,
+      "orders",
+      id
+    );
 
   return onSnapshot(
     orderRef,
+
     (snapshot) => {
-      if (!snapshot.exists()) {
+      if (
+        !snapshot.exists()
+      ) {
         callback(null);
         return;
       }
@@ -249,8 +490,13 @@ export const subscribeToOrder = (
         ...snapshot.data(),
       });
     },
+
     (error) => {
-      console.error("Single order subscription error:", error);
+      console.error(
+        "Single order subscription error:",
+        error
+      );
+
       callback(null);
     }
   );
@@ -260,253 +506,391 @@ export const subscribeToOrder = (
 // GET ORDER BY ID
 // =====================================================
 
-export const getOrderById = async (
-  id: string
-) => {
-  const orderRef = doc(
-    db,
-    "orders",
-    id
-  );
+export const getOrderById =
+  async (
+    id: string
+  ) => {
+    const currentUser =
+      auth.currentUser;
 
-  const orderSnapshot =
-    await getDoc(orderRef);
+    if (!currentUser) {
+      return null;
+    }
 
-  if (!orderSnapshot.exists()) {
-    return null;
-  }
+    const orderRef =
+      doc(
+        db,
+        "orders",
+        id
+      );
 
-  return {
-    id: orderSnapshot.id,
-    ...orderSnapshot.data(),
+    const orderSnapshot =
+      await getDoc(
+        orderRef
+      );
+
+    if (
+      !orderSnapshot.exists()
+    ) {
+      return null;
+    }
+
+    const data =
+      orderSnapshot.data();
+
+    // Customer can only receive
+    // his/her own order.
+    if (
+      !isAdminUser() &&
+      data.userId !==
+        currentUser.uid
+    ) {
+      return null;
+    }
+
+    return {
+      id:
+        orderSnapshot.id,
+      ...data,
+    };
   };
-};
 
 // =====================================================
 // CUSTOMER CANCEL ORDER
 // =====================================================
 
-export const cancelOrderByCustomer = async (
-  id: string,
-  reason: string,
-  userId: string
-) => {
-  const orderRef = doc(db, "orders", id);
-  const orderSnapshot = await getDoc(orderRef);
+export const cancelOrderByCustomer =
+  async (
+    id: string,
+    reason: string,
+    userId: string
+  ) => {
+    const currentUser =
+      auth.currentUser;
 
-  if (!orderSnapshot.exists()) {
-    throw new Error("Order not found");
-  }
-
-  const existingOrder = {
-    id: orderSnapshot.id,
-    ...orderSnapshot.data(),
-  } as any;
-
-  const owner =
-    existingOrder?.userId ||
-    existingOrder?.customer?.uid ||
-    existingOrder?.customer?.userId ||
-    "";
-
-  if (!owner || owner !== userId) {
-    throw new Error("You are not allowed to cancel this order");
-  }
-
-  const currentStatus = existingOrder?.status || "Pending";
-  const allowedStatuses = ["Pending", "Confirmed", "Preparing"];
-
-  if (!allowedStatuses.includes(currentStatus)) {
-    throw new Error("This order can no longer be cancelled");
-  }
-
-  const cleanReason = reason?.trim();
-  if (!cleanReason) {
-    throw new Error("Cancellation reason is required");
-  }
-
-  await updateDoc(orderRef, {
-    status: "Cancelled",
-    cancelledBy: "customer",
-    cancellationReason: cleanReason,
-    cancelledAt: new Date(),
-    updatedAt: new Date(),
-  });
-
-  try {
-    await addDoc(collection(db, "notifications"), {
-      audience: "admin",
-      type: "order-cancelled",
-      title: "Order Cancelled by Customer ❌",
-      message: `Order #${id.slice(0, 8)} has been cancelled by ${existingOrder?.customer?.name || "Customer"}. Reason: ${cleanReason}`,
-      orderId: id,
-      userId,
-      customer: existingOrder?.customer || {},
-      cancellationReason: cleanReason,
-      read: false,
-      createdAt: new Date(),
-    });
-  } catch (error) {
-    console.error("Admin cancellation notification failed:", error);
-  }
-
-  await createOrderNotification(
-    { ...existingOrder, id, userId },
-    "Order Cancelled ❌",
-    `Your order #${id.slice(0, 8)} has been cancelled successfully.`,
-    "Cancelled"
-  );
-
-  return true;
-};
-
-// =====================================================
-// UPDATE ORDER STATUS
-// =====================================================
-
-export const updateOrderStatus = async (
-  id: string,
-  status: string
-) => {
-  // -----------------------------------------------
-  // GET EXISTING ORDER
-  // -----------------------------------------------
-
-  const orderRef = doc(
-    db,
-    "orders",
-    id
-  );
-
-  const orderSnapshot =
-    await getDoc(orderRef);
-
-  if (!orderSnapshot.exists()) {
-    throw new Error(
-      "Order not found"
-    );
-  }
-
-  const existingOrder = {
-    id: orderSnapshot.id,
-    ...orderSnapshot.data(),
-  };
-
-  // -----------------------------------------------
-  // UPDATE ORDER
-  // -----------------------------------------------
-
-  await updateDoc(
-    orderRef,
-    {
-      status,
-
-      updatedAt: new Date(),
+    if (
+      !currentUser ||
+      currentUser.uid !==
+        userId
+    ) {
+      throw new Error(
+        "Please login again."
+      );
     }
-  );
 
-  // =================================================
-  // CUSTOMER NOTIFICATIONS
-  // =================================================
+    const orderRef =
+      doc(
+        db,
+        "orders",
+        id
+      );
 
-  // -------------------------------
-  // CONFIRMED / PACKED
-  // -------------------------------
+    const orderSnapshot =
+      await getDoc(
+        orderRef
+      );
 
-  if (
-    status === "Packed" ||
-    status === "Confirmed"
-  ) {
-    await createOrderNotification(
-      existingOrder,
+    if (
+      !orderSnapshot.exists()
+    ) {
+      throw new Error(
+        "Order not found"
+      );
+    }
 
-      "Order Packed 📦",
+    const existingOrder =
+      {
+        id:
+          orderSnapshot.id,
+        ...orderSnapshot.data(),
+      } as any;
 
-      `Your order #${id.slice(
-        0,
-        8
-      )} has been accepted and packed. It will be dispatched soon.`,
+    const owner =
+      existingOrder?.userId ||
+      existingOrder?.customer?.uid ||
+      existingOrder?.customer?.userId ||
+      "";
 
-      "Packed"
+    if (
+      owner !== userId
+    ) {
+      throw new Error(
+        "You are not allowed to cancel this order"
+      );
+    }
+
+    const currentStatus =
+      existingOrder?.status ||
+      "Pending";
+
+    const allowedStatuses = [
+      "Pending",
+      "Confirmed",
+      "Preparing",
+    ];
+
+    if (
+      !allowedStatuses.includes(
+        currentStatus
+      )
+    ) {
+      throw new Error(
+        "This order can no longer be cancelled"
+      );
+    }
+
+    const cleanReason =
+      reason?.trim();
+
+    if (!cleanReason) {
+      throw new Error(
+        "Cancellation reason is required"
+      );
+    }
+
+    await updateDoc(
+      orderRef,
+      {
+        status:
+          "Cancelled",
+
+        cancelledBy:
+          "customer",
+
+        cancellationReason:
+          cleanReason,
+
+        cancelledAt:
+          new Date(),
+
+        updatedAt:
+          new Date(),
+      }
     );
-  }
 
-  // -------------------------------
-  // OUT FOR DELIVERY
-  // -------------------------------
+    // ADMIN NOTIFICATION
 
-  else if (
-    status === "Out for Delivery"
-  ) {
+    try {
+      await addDoc(
+        collection(
+          db,
+          "notifications"
+        ),
+        {
+          audience:
+            "admin",
+
+          type:
+            "order-cancelled",
+
+          title:
+            "Order Cancelled by Customer ❌",
+
+          message:
+            `Order #${id.slice(
+              0,
+              8
+            )} has been cancelled by ${
+              existingOrder
+                ?.customer
+                ?.name ||
+              "Customer"
+            }. Reason: ${cleanReason}`,
+
+          orderId: id,
+
+          userId,
+
+          customer:
+            existingOrder?.customer ||
+            {},
+
+          cancellationReason:
+            cleanReason,
+
+          read: false,
+
+          createdAt:
+            new Date(),
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Admin cancellation notification failed:",
+        error
+      );
+    }
+
+    // CUSTOMER NOTIFICATION
+
     await createOrderNotification(
-      existingOrder,
-
-      "Out for Delivery 🚚",
-
-      `Your order #${id.slice(
-        0,
-        8
-      )} is out for delivery. It will reach you soon.`,
-
-      "Out for Delivery"
-    );
-  }
-
-  // -------------------------------
-  // DELIVERED
-  // -------------------------------
-
-  else if (
-    status === "Delivered"
-  ) {
-    await createOrderNotification(
-      existingOrder,
-
-      "Order Delivered ✅",
-
-      `Your order #${id.slice(
-        0,
-        8
-      )} has been delivered successfully. Thank you for shopping with Night Now!`,
-
-      "Delivered"
-    );
-  }
-
-  // -------------------------------
-  // CANCELLED
-  // -------------------------------
-
-  else if (
-    status === "Cancelled"
-  ) {
-    await createOrderNotification(
-      existingOrder,
+      {
+        ...existingOrder,
+        id,
+        userId,
+      },
 
       "Order Cancelled ❌",
 
       `Your order #${id.slice(
         0,
         8
-      )} has been cancelled.`,
+      )} has been cancelled successfully.`,
 
       "Cancelled"
     );
-  }
 
-  return true;
-};
+    return true;
+  };
+
+// =====================================================
+// UPDATE ORDER STATUS
+// =====================================================
+
+export const updateOrderStatus =
+  async (
+    id: string,
+    status: string
+  ) => {
+    const orderRef =
+      doc(
+        db,
+        "orders",
+        id
+      );
+
+    const orderSnapshot =
+      await getDoc(
+        orderRef
+      );
+
+    if (
+      !orderSnapshot.exists()
+    ) {
+      throw new Error(
+        "Order not found"
+      );
+    }
+
+    const existingOrder =
+      {
+        id:
+          orderSnapshot.id,
+        ...orderSnapshot.data(),
+      };
+
+    await updateDoc(
+      orderRef,
+      {
+        status,
+
+        updatedAt:
+          new Date(),
+      }
+    );
+
+    if (
+      status ===
+        "Packed" ||
+      status ===
+        "Confirmed"
+    ) {
+      await createOrderNotification(
+        existingOrder,
+
+        "Order Confirmed 📦",
+
+        `Your order #${id.slice(
+          0,
+          8
+        )} has been accepted and packed. It will be dispatched soon.`,
+
+        status
+      );
+    } else if (
+      status ===
+      "Preparing"
+    ) {
+      await createOrderNotification(
+        existingOrder,
+
+        "Order Preparing 👨‍🍳",
+
+        `Your order #${id.slice(
+          0,
+          8
+        )} is now being prepared.`,
+
+        "Preparing"
+      );
+    } else if (
+      status ===
+      "Out for Delivery"
+    ) {
+      await createOrderNotification(
+        existingOrder,
+
+        "Out for Delivery 🚚",
+
+        `Your order #${id.slice(
+          0,
+          8
+        )} is out for delivery. It will reach you soon.`,
+
+        "Out for Delivery"
+      );
+    } else if (
+      status ===
+      "Delivered"
+    ) {
+      await createOrderNotification(
+        existingOrder,
+
+        "Order Delivered ✅",
+
+        `Your order #${id.slice(
+          0,
+          8
+        )} has been delivered successfully. Thank you for shopping with Night Now!`,
+
+        "Delivered"
+      );
+    } else if (
+      status ===
+      "Cancelled"
+    ) {
+      await createOrderNotification(
+        existingOrder,
+
+        "Order Cancelled ❌",
+
+        `Your order #${id.slice(
+          0,
+          8
+        )} has been cancelled.`,
+
+        "Cancelled"
+      );
+    }
+
+    return true;
+  };
 
 // =====================================================
 // DELETE ORDER
 // =====================================================
 
-export const deleteOrder = async (
-  id: string
-) => {
-  await deleteDoc(
-    doc(db, "orders", id)
-  );
+export const deleteOrder =
+  async (
+    id: string
+  ) => {
+    await deleteDoc(
+      doc(
+        db,
+        "orders",
+        id
+      )
+    );
 
-  return true;
-};
+    return true;
+  };
