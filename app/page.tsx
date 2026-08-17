@@ -62,6 +62,7 @@ export default function HomePage() {
   const [showNeed, setShowNeed] = useState(false);
   const [needText, setNeedText] = useState("");
   const [showLocation, setShowLocation] = useState(false);
+  const [showCategories, setShowCategories] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<SavedLocation | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -1526,7 +1527,7 @@ export default function HomePage() {
           </div>
         ) : (
 
-          <div className="mt-5 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-3 no-scrollbar md:grid md:grid-cols-4 md:overflow-visible md:gap-3">
+          <div className="mt-5 flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pb-3 no-scrollbar md:grid md:grid-cols-4 md:overflow-visible md:gap-3">
 
             {filteredProducts.map(
               (product) => {
@@ -1669,10 +1670,14 @@ export default function HomePage() {
             <span className="text-xl">🏠</span>
             Home
           </Link>
-          <Link href="/categories" className="flex flex-col items-center gap-0.5 py-1 text-[10px] font-black text-zinc-500">
+          <button
+            type="button"
+            onClick={() => setShowCategories(true)}
+            className={`flex flex-col items-center gap-0.5 py-1 text-[10px] font-black ${showCategories ? "text-yellow-600" : "text-zinc-500"}`}
+          >
             <span className="text-xl">🛍️</span>
             Categories
-          </Link>
+          </button>
           <Link href="/orders" className="flex flex-col items-center gap-0.5 py-1 text-[10px] font-black text-zinc-500">
             <span className="text-xl">📦</span>
             Orders
@@ -1805,6 +1810,61 @@ export default function HomePage() {
         </div>
 
       </footer>
+
+      {showCategories && (
+        <div
+          className="fixed inset-0 z-[9997] flex items-end justify-center bg-black/50 p-3 backdrop-blur-sm md:hidden"
+          onClick={() => setShowCategories(false)}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-zinc-200 p-4">
+              <div>
+                <h2 className="text-lg font-black">Categories</h2>
+                <p className="mt-0.5 text-[10px] font-bold text-zinc-400">Choose a category</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCategories(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 p-4">
+              {categories.map((category) => (
+                <button
+                  key={category.name}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(category.name);
+                    setShowCategories(false);
+                    requestAnimationFrame(() => {
+                      document.getElementById("products")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    });
+                  }}
+                  className={`flex items-center gap-3 rounded-2xl border p-3 text-left ${
+                    selectedCategory === category.name
+                      ? "border-yellow-400 bg-yellow-50"
+                      : "border-zinc-200 bg-white"
+                  }`}
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-50 text-2xl">
+                    {category.icon}
+                  </span>
+                  <span className="text-xs font-black">{category.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <LocationSelector
         open={showLocation}
