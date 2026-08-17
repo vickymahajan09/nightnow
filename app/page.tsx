@@ -46,6 +46,9 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] =
     useState("All");
 
+  const [priceSort, setPriceSort] =
+    useState<"default" | "high" | "low">("default");
+
   const [showNeed, setShowNeed] = useState(false);
   const [needText, setNeedText] = useState("");
   const [showLocation, setShowLocation] = useState(false);
@@ -343,6 +346,21 @@ export default function HomePage() {
   // MAIN PRODUCT SEARCH
   // ==========================================
 
+  const sortByMrp = (items: Product[]) => {
+    if (priceSort === "default") {
+      return items;
+    }
+
+    return [...items].sort((a: any, b: any) => {
+      const aMrp = Number(a?.mrp ?? a?.MRP ?? a?.price ?? 0);
+      const bMrp = Number(b?.mrp ?? b?.MRP ?? b?.price ?? 0);
+
+      return priceSort === "high"
+        ? bMrp - aMrp
+        : aMrp - bMrp;
+    });
+  };
+
   const filteredProducts = useMemo(() => {
     const text =
       normalizeSearchText(search);
@@ -386,14 +404,14 @@ export default function HomePage() {
         );
       }
 
-      return result;
+      return sortByMrp(result);
     }
 
     // ----------------------------------------
     // Normal product search
     // ----------------------------------------
 
-    return products.filter(
+    const result = products.filter(
       (product) => {
         const searchable =
           productSearchText(
@@ -441,12 +459,15 @@ export default function HomePage() {
         );
       }
     );
+
+    return sortByMrp(result);
   }, [
     products,
     search,
     selectedCategory,
     matchedNeeds,
     productsFromMatchedNeeds,
+    priceSort,
   ]);
 
   // ==========================================
@@ -1172,7 +1193,7 @@ export default function HomePage() {
 
         <div className="mx-auto max-w-7xl px-4 py-6 md:py-10">
 
-          <div className="overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-none border-0 bg-transparent shadow-none md:rounded-[28px] md:border md:border-zinc-200 md:bg-white md:shadow-sm">
 
             <div className="grid items-center gap-8 p-7 md:grid-cols-2 md:p-12">
 
@@ -1186,11 +1207,8 @@ export default function HomePage() {
                   आपकी जरूरत, <span className="text-yellow-500">हमारी जिम्मेदारी।</span>
                 </h1>
 
-                <p className="mt-5 max-w-xl text-sm leading-6 text-zinc-500 md:text-base">
-                  Groceries, snacks,
-                  beverages, personal
-                  care और daily
-                  essentials एक ही जगह।
+                <p className="mt-3 hidden max-w-xl text-sm leading-6 text-zinc-500 md:block md:text-base">
+                  Groceries, snacks, beverages, personal care और daily essentials एक ही जगह।
                 </p>
 
                 <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:flex-wrap">
@@ -1605,6 +1623,44 @@ export default function HomePage() {
             <span className="mr-1 flex items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[10px] font-black text-zinc-600">
               ⚙️ Filter
             </span>
+
+            <button
+              type="button"
+              onClick={() =>
+                setPriceSort(
+                  priceSort === "high"
+                    ? "default"
+                    : "high"
+                )
+              }
+              className={[
+                "rounded-xl border px-3 py-2 text-[10px] font-black transition-all",
+                priceSort === "high"
+                  ? "border-yellow-400 bg-yellow-400 text-black shadow-sm"
+                  : "border-zinc-200 bg-white text-zinc-600 hover:border-yellow-300 hover:bg-yellow-50",
+              ].join(" ")}
+            >
+              MRP High ↓
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setPriceSort(
+                  priceSort === "low"
+                    ? "default"
+                    : "low"
+                )
+              }
+              className={[
+                "rounded-xl border px-3 py-2 text-[10px] font-black transition-all",
+                priceSort === "low"
+                  ? "border-yellow-400 bg-yellow-400 text-black shadow-sm"
+                  : "border-zinc-200 bg-white text-zinc-600 hover:border-yellow-300 hover:bg-yellow-50",
+              ].join(" ")}
+            >
+              MRP Low ↑
+            </button>
 
             {categories.map((category) => (
               <button
