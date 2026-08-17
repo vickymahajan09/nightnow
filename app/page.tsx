@@ -45,9 +45,10 @@ export default function HomePage() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] =
     useState("All");
-
-  const [priceSort, setPriceSort] =
-    useState<"default" | "high" | "low">("default");
+  const [priceSort, setPriceSort] = useState<"default" | "high" | "low">("default");
+  const [showFilter, setShowFilter] = useState(false);
+  const [tempCategory, setTempCategory] = useState("All");
+  const [tempPriceSort, setTempPriceSort] = useState<"default" | "high" | "low">("default");
 
   const [showNeed, setShowNeed] = useState(false);
   const [needText, setNeedText] = useState("");
@@ -346,21 +347,6 @@ export default function HomePage() {
   // MAIN PRODUCT SEARCH
   // ==========================================
 
-  const sortByMrp = (items: Product[]) => {
-    if (priceSort === "default") {
-      return items;
-    }
-
-    return [...items].sort((a: any, b: any) => {
-      const aMrp = Number(a?.mrp ?? a?.MRP ?? a?.price ?? 0);
-      const bMrp = Number(b?.mrp ?? b?.MRP ?? b?.price ?? 0);
-
-      return priceSort === "high"
-        ? bMrp - aMrp
-        : aMrp - bMrp;
-    });
-  };
-
   const filteredProducts = useMemo(() => {
     const text =
       normalizeSearchText(search);
@@ -404,14 +390,14 @@ export default function HomePage() {
         );
       }
 
-      return sortByMrp(result);
+      return result;
     }
 
     // ----------------------------------------
     // Normal product search
     // ----------------------------------------
 
-    const result = products.filter(
+    return products.filter(
       (product) => {
         const searchable =
           productSearchText(
@@ -459,16 +445,29 @@ export default function HomePage() {
         );
       }
     );
-
-    return sortByMrp(result);
   }, [
     products,
     search,
     selectedCategory,
     matchedNeeds,
     productsFromMatchedNeeds,
-    priceSort,
   ]);
+
+  // ==========================================
+  // PRICE SORT / FILTER
+  // ==========================================
+
+  const sortedProducts = useMemo(() => {
+    const result = [...filteredProducts];
+
+    if (priceSort === "high") {
+      result.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (priceSort === "low") {
+      result.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    }
+
+    return result;
+  }, [filteredProducts, priceSort]);
 
   // ==========================================
   // SMART NEED MODAL SEARCH
@@ -786,7 +785,7 @@ export default function HomePage() {
 
       <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur">
 
-        <div className="relative mx-auto hidden max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 md:flex md:flex-nowrap">
+        <div className="relative mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 md:flex-nowrap">
 
           {/* LOGO */}
 
@@ -1027,161 +1026,133 @@ export default function HomePage() {
 
           <Link
             href={isLoggedIn ? "/profile" : "/login"}
-            className="rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black"
+            className="hidden rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black md:block"
           >
             {isLoggedIn ? "👤 Profile" : "Login"}
           </Link>
 
         </div>
 
-        {/* MOBILE SEARCH - FIRST / STICKY */}
-        <div className="w-full basis-full md:hidden">
-          <div className="flex items-center gap-2">
-            <div className="relative flex min-w-0 flex-1 items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3 shadow-sm">
-              <span className="shrink-0 text-base text-zinc-400">🔍</span>
-
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search products, brands, needs..."
-                className="h-9 min-w-0 flex-1 bg-transparent px-2 text-[11px] outline-none placeholder:text-zinc-400"
-              />
-
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="mr-1 shrink-0 text-zinc-400"
-                >
-                  ×
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={startVoiceSearch}
-                title="Voice Search"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-xs"
-              >
-                🎙️
-              </button>
-            </div>
-
-          </div>
-
-          {/* MOBILE SEARCH RESULTS */}
-          {search.trim() &&
-            !loading &&
-            filteredProducts.length > 0 && (
-              <div className="absolute left-4 right-4 top-[calc(100%-8px)] z-[100] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl">
-                <div className="max-h-[360px] overflow-y-auto">
-                  {filteredProducts.slice(0, 7).map((product) => {
-                    const image = getProductImage(product);
-                    const price = Number(product.price || 0);
-                    const mrp = Number(product.mrp || 0);
-                    const discount =
-                      mrp > price && mrp > 0
-                        ? Math.round(((mrp - price) / mrp) * 100)
-                        : 0;
-
-                    return (
-                      <Link
-                        key={product.id}
-                        href={`/product/${product.id}`}
-                        onClick={() => setSearch("")}
-                        className="flex items-center gap-3 border-b border-zinc-100 px-3 py-3 active:bg-yellow-50"
-                      >
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-50">
-                          {image ? (
-                            <img src={image} alt={product.name || "Product"} className="h-full w-full object-contain" />
-                          ) : (
-                            <span>📦</span>
-                          )}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-black text-zinc-900">
-                            {product.name}
-                          </p>
-                          {(product.brandName || product.category) && (
-                            <p className="mt-0.5 truncate text-[9px] text-zinc-400">
-                              {product.brandName || product.category}
-                            </p>
-                          )}
-                          <div className="mt-1 flex items-center gap-2">
-                            <span className="text-xs font-black text-zinc-900">₹{price}</span>
-                            {mrp > price && (
-                              <>
-                                <span className="text-[9px] text-zinc-400 line-through">₹{mrp}</span>
-                                <span className="rounded bg-yellow-100 px-1 py-0.5 text-[8px] font-black text-yellow-700">
-                                  {discount}% OFF
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-zinc-300">→</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-
-                {filteredProducts.length > 7 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearch("");
-                      setTimeout(() => {
-                        document.getElementById("products")?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "start",
-                        });
-                      }, 50);
-                    }}
-                    className="w-full bg-zinc-50 px-3 py-3 text-center text-[10px] font-black text-yellow-600"
-                  >
-                    View all {filteredProducts.length} products →
-                  </button>
-                )}
-              </div>
-            )}
-
-          {search.trim() &&
-            !loading &&
-            filteredProducts.length === 0 && (
-              <div className="absolute left-4 right-4 top-[calc(100%-8px)] z-[100] rounded-2xl border border-zinc-200 bg-white p-4 text-center shadow-2xl">
-                <div className="text-xl">🔍</div>
-                <p className="mt-1 text-[11px] font-black text-zinc-700">
-                  Product nahi mila
-                </p>
-              </div>
-            )}
-        </div>
-
-        {/* MOBILE LOCATION - BELOW SEARCH */}
-        <div className="w-full basis-full md:hidden">
+        {/* MOBILE LOCATION */}
+        <div className="w-full basis-full border-t border-zinc-100 px-3 py-2 md:hidden">
           <button
             type="button"
             onClick={() => setShowLocation(true)}
-            className="flex w-full items-center gap-2 rounded-xl px-1 py-2 text-left"
+            className="flex w-full items-center gap-2 text-left"
           >
             <span className="text-lg">📍</span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[8px] font-bold uppercase tracking-wide text-zinc-400">
-                DELIVER TO
-              </span>
-              <span className="block truncate text-xs font-black text-zinc-900">
-                {selectedLocation?.name || "Select Location"}
-              </span>
+              <span className="block text-[8px] font-bold uppercase tracking-wide text-zinc-400">DELIVER TO</span>
+              <span className="block truncate text-xs font-black text-zinc-900">{selectedLocation?.name || "Select Location"}</span>
               {selectedLocation?.address && (
-                <span className="mt-0.5 block truncate text-[9px] font-medium text-zinc-400">
-                  {selectedLocation.address}
-                </span>
+                <span className="mt-0.5 block truncate text-[9px] font-medium text-zinc-400">{selectedLocation.address}</span>
               )}
             </span>
             <span className="text-sm">▼</span>
           </button>
         </div>
+        {/* MOBILE SEARCH + PROFILE */}
+        <div className="w-full basis-full px-3 pb-2 md:hidden">
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <div className="flex h-10 items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3 shadow-sm">
+                <span className="shrink-0 text-base text-zinc-400">🔍</span>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search products, brands, needs..."
+                  className="h-full min-w-0 flex-1 bg-transparent px-2 text-[11px] outline-none placeholder:text-zinc-400"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="mr-1 shrink-0 text-zinc-400"
+                  >
+                    ×
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={startVoiceSearch}
+                  title="Voice Search"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-xs"
+                >
+                  🎙️
+                </button>
+              </div>
+
+              {/* MOBILE SEARCH RESULTS */}
+              {search.trim() && !loading && filteredProducts.length > 0 && (
+                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[100] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl">
+                  <div className="max-h-[360px] overflow-y-auto">
+                    {filteredProducts.slice(0, 7).map((product) => {
+                      const image = getProductImage(product);
+                      const price = Number(product.price || 0);
+                      const mrp = Number(product.mrp || 0);
+                      const discount =
+                        mrp > price && mrp > 0
+                          ? Math.round(((mrp - price) / mrp) * 100)
+                          : 0;
+
+                      return (
+                        <Link
+                          key={product.id}
+                          href={`/product/${product.id}`}
+                          onClick={() => setSearch("")}
+                          className="flex items-center gap-3 border-b border-zinc-100 px-3 py-3 active:bg-yellow-50"
+                        >
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-50">
+                            {image ? (
+                              <img src={image} alt={product.name || "Product"} className="h-full w-full object-contain" />
+                            ) : (
+                              <span>📦</span>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-black text-zinc-900">{product.name}</p>
+                            {(product.brandName || product.category) && (
+                              <p className="mt-0.5 truncate text-[9px] text-zinc-400">
+                                {product.brandName || product.category}
+                              </p>
+                            )}
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-xs font-black text-zinc-900">₹{price}</span>
+                              {mrp > price && (
+                                <>
+                                  <span className="text-[9px] text-zinc-400 line-through">₹{mrp}</span>
+                                  <span className="rounded bg-yellow-100 px-1 py-0.5 text-[8px] font-black text-yellow-700">{discount}% OFF</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-zinc-300">→</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {search.trim() && !loading && filteredProducts.length === 0 && (
+                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[100] rounded-2xl border border-zinc-200 bg-white p-4 text-center shadow-2xl">
+                  <div className="text-xl">🔍</div>
+                  <p className="mt-1 text-[11px] font-black text-zinc-700">Product nahi mila</p>
+                </div>
+              )}
+            </div>
+
+            <Link
+              href={isLoggedIn ? "/profile" : "/login"}
+              aria-label={isLoggedIn ? "Profile" : "Login"}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-lg shadow-sm"
+            >
+              👤
+            </Link>
+          </div>
+        </div>
+
+
 
       </header>
 
@@ -1191,27 +1162,26 @@ export default function HomePage() {
 
       <section className="bg-gradient-to-b from-white via-white to-yellow-50/40">
 
-        <div className="mx-auto max-w-7xl px-4 py-6 md:py-10">
+        <div className="mx-auto max-w-7xl px-3 py-2 md:px-4 md:py-10">
 
-          <div className="overflow-hidden rounded-none border-0 bg-transparent shadow-none md:rounded-[28px] md:border md:border-zinc-200 md:bg-white md:shadow-sm">
+          <div className="overflow-hidden rounded-[24px] border border-zinc-200 bg-white shadow-sm">
 
-            <div className="grid items-center gap-8 p-7 md:grid-cols-2 md:p-12">
+            <div className="grid items-center gap-3 p-4 md:grid-cols-2 md:gap-8 md:p-12">
 
               <div>
 
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-3xl shadow-[0_8px_20px_rgba(0,0,0,0.18)]">
-                  🌙
-                </div>
-
-                <h1 className="mt-0 whitespace-nowrap text-[17px] font-black leading-tight tracking-tight sm:text-[22px] md:whitespace-normal md:text-6xl">
+                <h1 className="mt-0 whitespace-nowrap text-[14px] font-black leading-none tracking-tight sm:text-[18px] md:whitespace-normal md:text-6xl">
                   आपकी जरूरत, <span className="text-yellow-500">हमारी जिम्मेदारी।</span>
                 </h1>
 
-                <p className="mt-3 hidden max-w-xl text-sm leading-6 text-zinc-500 md:block md:text-base">
-                  Groceries, snacks, beverages, personal care और daily essentials एक ही जगह।
+                <p className="mt-2 hidden max-w-xl text-sm leading-6 text-zinc-500 md:mt-5 md:block md:text-base">
+                  Groceries, snacks,
+                  beverages, personal
+                  care और daily
+                  essentials एक ही जगह।
                 </p>
 
-                <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:flex-wrap">
+                <div className="mt-2 flex flex-row items-center gap-2 sm:mt-6 sm:flex-wrap sm:gap-3">
 
                   <button
                     type="button"
@@ -1225,7 +1195,7 @@ export default function HomePage() {
                             "smooth",
                         })
                     }
-                    className="w-full rounded-2xl bg-yellow-400 px-6 py-3 text-sm font-black shadow-sm transition hover:bg-yellow-500 sm:w-auto"
+                    className="rounded-lg bg-yellow-400 px-3 py-1.5 text-[10px] font-black shadow-sm transition hover:bg-yellow-500 md:rounded-2xl md:px-6 md:py-3 md:text-sm"
                   >
                     Shop Now →
                   </button>
@@ -1235,7 +1205,7 @@ export default function HomePage() {
                     onClick={() =>
                       setShowNeed(true)
                     }
-                    className="w-full rounded-2xl border border-zinc-200 bg-white px-5 py-3 text-sm font-bold sm:w-auto"
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-[9px] font-bold md:rounded-2xl md:px-5 md:py-3 md:text-sm"
                   >
                     आपकी जरूरत 🧠
                   </button>
@@ -1368,63 +1338,6 @@ export default function HomePage() {
         )}
 
       {/* =================================================
-          CATEGORIES
-      ================================================= */}
-
-      <section className="mx-auto max-w-7xl px-4 pt-10">
-
-        <div>
-
-          <h2 className="text-xl font-black">
-            Shop by Category
-          </h2>
-
-          <p className="mt-1 text-xs text-zinc-400">
-            Choose what you need
-          </p>
-
-        </div>
-
-        <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-
-          {categories.map(
-            (category) => (
-              <button
-                key={
-                  category.name
-                }
-                type="button"
-                onClick={() =>
-                  setSelectedCategory(
-                    category.name
-                  )
-                }
-                className={[
-                  "min-w-[105px] rounded-2xl border p-4 text-center transition",
-                  selectedCategory ===
-                  category.name
-                    ? "border-yellow-400 bg-yellow-400 text-black"
-                    : "border-zinc-200 bg-white hover:border-yellow-300",
-                ].join(" ")}
-              >
-
-                <div className="text-2xl">
-                  {category.icon}
-                </div>
-
-                <p className="mt-2 text-xs font-black">
-                  {category.name}
-                </p>
-
-              </button>
-            )
-          )}
-
-        </div>
-
-      </section>
-
-      {/* =================================================
           TOP BRANDS
       ================================================= */}
 
@@ -1546,7 +1459,7 @@ export default function HomePage() {
 
         <Link
           href="/offers/buy-1-get-2"
-          className="flex items-center justify-between overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-700 via-violet-600 to-fuchsia-500 p-5 text-white shadow-[0_14px_35px_rgba(79,70,229,0.25)] transition hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(79,70,229,0.30)]"
+          className="flex items-center justify-between overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-700 via-violet-600 to-fuchsia-500 p-3 md:rounded-3xl md:p-5 text-white shadow-[0_10px_24px_rgba(79,70,229,0.20)] transition hover:-translate-y-1"
         >
 
           <div>
@@ -1555,17 +1468,17 @@ export default function HomePage() {
               SPECIAL OFFER
             </p>
 
-            <h2 className="mt-1 text-2xl font-black">
+            <h2 className="mt-1 text-lg font-black md:text-2xl">
               Buy 1 Get 2 🎁
             </h2>
 
-            <p className="mt-1 text-xs font-bold">
+            <p className="mt-1 text-[9px] font-bold md:text-xs">
               Special selected products
             </p>
 
           </div>
 
-          <span className="rounded-xl bg-white px-4 py-3 text-xs font-black text-indigo-700 shadow-sm">
+          <span className="rounded-lg bg-white px-3 py-2 text-[9px] font-black text-indigo-700 shadow-sm md:rounded-xl md:px-4 md:py-3 md:text-xs">
             View Offers →
           </span>
 
@@ -1597,7 +1510,7 @@ export default function HomePage() {
             <p className="mt-1 text-xs text-zinc-400">
               {loading
                 ? "Loading..."
-                : `${filteredProducts.length} Products`}
+                : `${sortedProducts.length} Products`}
             </p>
 
           </div>
@@ -1609,6 +1522,7 @@ export default function HomePage() {
               setSelectedCategory(
                 "All"
               );
+              setPriceSort("default");
             }}
             className="text-xs font-black text-yellow-600"
           >
@@ -1618,82 +1532,50 @@ export default function HomePage() {
         </div>
 
         {/* PRODUCT FILTER */}
-        <div className="mt-5 overflow-x-auto pb-2">
-          <div className="flex min-w-max items-center gap-2">
-            <span className="mr-1 flex items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[10px] font-black text-zinc-600">
-              ⚙️ Filter
-            </span>
-
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setTempCategory(selectedCategory);
+              setTempPriceSort(priceSort);
+              setShowFilter(true);
+            }}
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-[10px] font-black text-zinc-700 shadow-sm"
+          >
+            ⚙️ Filter
+          </button>
+          {(selectedCategory !== "All" || priceSort !== "default") && (
             <button
               type="button"
-              onClick={() =>
-                setPriceSort(
-                  priceSort === "high"
-                    ? "default"
-                    : "high"
-                )
-              }
-              className={[
-                "rounded-xl border px-3 py-2 text-[10px] font-black transition-all",
-                priceSort === "high"
-                  ? "border-yellow-400 bg-yellow-400 text-black shadow-sm"
-                  : "border-zinc-200 bg-white text-zinc-600 hover:border-yellow-300 hover:bg-yellow-50",
-              ].join(" ")}
+              onClick={() => {
+                setSelectedCategory("All");
+                setPriceSort("default");
+              }}
+              className="rounded-xl bg-yellow-50 px-3 py-2.5 text-[10px] font-black text-yellow-700"
             >
-              MRP High ↓
+              Clear Filter ×
             </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                setPriceSort(
-                  priceSort === "low"
-                    ? "default"
-                    : "low"
-                )
-              }
-              className={[
-                "rounded-xl border px-3 py-2 text-[10px] font-black transition-all",
-                priceSort === "low"
-                  ? "border-yellow-400 bg-yellow-400 text-black shadow-sm"
-                  : "border-zinc-200 bg-white text-zinc-600 hover:border-yellow-300 hover:bg-yellow-50",
-              ].join(" ")}
-            >
-              MRP Low ↑
-            </button>
-
-            {categories.map((category) => (
-              <button
-                key={`product-filter-${category.name}`}
-                type="button"
-                onClick={() => setSelectedCategory(category.name)}
-                className={[
-                  "rounded-xl border px-3 py-2 text-[10px] font-black transition-all",
-                  selectedCategory === category.name
-                    ? "border-yellow-400 bg-yellow-400 text-black shadow-sm"
-                    : "border-zinc-200 bg-white text-zinc-600 hover:border-yellow-300 hover:bg-yellow-50",
-                ].join(" ")}
-              >
-                {category.icon} {category.name}
-              </button>
-            ))}
-          </div>
+          )}
+          <span className="truncate text-[10px] font-bold text-zinc-400">
+            {selectedCategory !== "All" ? selectedCategory : "All Products"}
+            {priceSort === "high" ? " • Price High" : priceSort === "low" ? " • Price Low" : ""}
+          </span>
         </div>
 
         {loading ? (
-          <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-3 lg:grid-cols-4">
 
             {Array.from({
               length: 8,
             }).map((_, index) => (
               <div
                 key={index}
-                className="h-40 animate-pulse rounded-2xl bg-zinc-100 sm:h-64"
+                className="h-64 animate-pulse rounded-2xl bg-zinc-100"
               />
             ))}
 
           </div>
-        ) : filteredProducts.length ===
+        ) : sortedProducts.length ===
           0 ? (
 
           <div className="mt-5 rounded-3xl bg-zinc-50 p-10 text-center">
@@ -1723,6 +1605,7 @@ export default function HomePage() {
                 setSelectedCategory(
                   "All"
                 );
+                setPriceSort("default");
               }}
               className="mt-5 rounded-xl bg-yellow-400 px-5 py-3 text-xs font-black"
             >
@@ -1732,9 +1615,9 @@ export default function HomePage() {
           </div>
         ) : (
 
-          <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-3 lg:grid-cols-4">
 
-            {filteredProducts.map(
+            {sortedProducts.map(
               (product) => {
                 const image =
                   getProductImage(
@@ -1769,19 +1652,19 @@ export default function HomePage() {
                 return (
                   <div
                     key={product.id}
-                    className="group relative overflow-hidden rounded-[24px] border border-zinc-200 bg-white shadow-[0_8px_20px_rgba(0,0,0,0.08),0_18px_45px_rgba(0,0,0,0.06)] transition-all duration-300 hover:-translate-y-2 hover:scale-[1.015] hover:shadow-[0_18px_35px_rgba(0,0,0,0.14),0_30px_65px_rgba(0,0,0,0.10)] active:translate-y-0 [transform-style:preserve-3d]"
+                    className="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 hover:shadow-md md:rounded-[24px] md:shadow-[0_8px_20px_rgba(0,0,0,0.08),0_18px_45px_rgba(0,0,0,0.06)]"
                   >
                     <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-px bg-gradient-to-r from-transparent via-yellow-300 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
                     <Link href={`/product/${product.id}`}>
-                      <div className="relative flex h-36 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 [transform:translateZ(20px)] md:h-48">
+                      <div className="relative flex h-[78px] items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 md:h-48">
                         <div className="pointer-events-none absolute bottom-5 h-5 w-24 rounded-full bg-black/10 blur-xl transition-all duration-300 group-hover:w-28 group-hover:bg-black/15" />
 
                         {image ? (
                           <img
                             src={image}
                             alt={product.name || "Product"}
-                            className="relative z-[1] h-full w-full object-contain p-2 md:p-4 drop-shadow-[0_12px_10px_rgba(0,0,0,0.14)] transition-all duration-500 group-hover:scale-110 group-hover:-translate-y-1"
+                            className="relative z-[1] h-full w-full object-contain p-1 md:p-4 md:drop-shadow-[0_8px_8px_rgba(0,0,0,0.12)] transition-all duration-300 group-hover:scale-105"
                           />
                         ) : (
                           <span className="relative z-[1] text-xs text-zinc-400">
@@ -1799,9 +1682,9 @@ export default function HomePage() {
                       </div>
                     </Link>
 
-                    <div className="relative border-t border-zinc-100 bg-white p-2.5 md:p-3.5 [transform:translateZ(10px)]">
+                    <div className="relative border-t border-zinc-100 bg-white p-1.5 md:p-3.5">
                       <Link href={`/product/${product.id}`}>
-                        <h3 className="line-clamp-2 min-h-[34px] text-xs font-black leading-4 transition-colors group-hover:text-yellow-600 md:min-h-[38px] md:text-sm md:leading-5">
+                        <h3 className="line-clamp-2 min-h-[28px] text-[9px] font-black leading-3 transition-colors group-hover:text-yellow-600 md:min-h-[38px] md:text-sm md:leading-5">
                           {product.name ||
                             product.title ||
                             product.productName ||
@@ -1810,22 +1693,22 @@ export default function HomePage() {
                       </Link>
 
                       {product.brandName && (
-                        <p className="mt-1 truncate text-[10px] font-bold text-yellow-600">
+                        <p className="mt-0.5 truncate text-[7px] font-bold text-yellow-600">
                           {product.brandName}
                         </p>
                       )}
 
-                      <div className="mt-2 flex items-end gap-2 md:mt-3">
-                        <p className="text-base font-black text-green-600 md:text-lg">
+                      <div className="mt-1 flex items-end gap-1 md:mt-3 md:gap-2">
+                        <p className="text-[11px] font-black text-green-600 md:text-lg">
                           ₹{price}
                         </p>
 
                         {mrp > price && (
                           <>
-                            <p className="pb-0.5 text-[10px] text-zinc-400 line-through">
+                            <p className="hidden pb-0.5 text-[10px] text-zinc-400 line-through md:block">
                               MRP ₹{mrp}
                             </p>
-                            <span className="rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-black text-green-700">
+                            <span className="hidden rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-black text-green-700 md:inline-block">
                               {discount}% OFF
                             </span>
                           </>
@@ -1833,7 +1716,7 @@ export default function HomePage() {
                       </div>
 
                       {stock > 0 && stock <= 5 && (
-                        <p className="mt-1 text-[9px] font-bold text-orange-500">
+                        <p className="mt-0.5 text-[7px] font-bold text-orange-500">
                           Only {stock} left
                         </p>
                       )}
@@ -1846,9 +1729,10 @@ export default function HomePage() {
                         <button
                           type="button"
                           onClick={() => handleAddToCart(product)}
-                          className="mt-2 w-full rounded-xl bg-yellow-400 py-2 text-[10px] font-black md:mt-3 md:py-3 text-black shadow-[0_5px_0_#d4a900,0_8px_15px_rgba(0,0,0,0.10)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-yellow-500 hover:shadow-[0_6px_0_#d4a900,0_12px_20px_rgba(0,0,0,0.14)] active:translate-y-[3px] active:shadow-[0_2px_0_#d4a900]"
+                          className="mt-1 ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-lg font-black text-white shadow-sm md:mt-3 md:h-10 md:w-10 md:text-xl"
+                          aria-label={`Add ${product.name || "product"} to cart`}
                         >
-                          🛒 Add to Cart
+                          +
                         </button>
                       )}
                     </div>
@@ -1983,6 +1867,60 @@ export default function HomePage() {
         </div>
 
       </footer>
+
+      {/* FILTER MODAL */}
+      {showFilter && (
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 px-3 pb-0 backdrop-blur-sm md:items-center md:pb-3">
+          <div className="w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl md:rounded-3xl">
+            <div className="flex items-center justify-between border-b border-zinc-100 p-4">
+              <div>
+                <h2 className="text-lg font-black">Filter Products</h2>
+                <p className="mt-1 text-[10px] text-zinc-400">Choose category and price order</p>
+              </div>
+              <button type="button" onClick={() => setShowFilter(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl">×</button>
+            </div>
+
+            <div className="max-h-[65vh] overflow-y-auto p-4">
+              <p className="text-xs font-black">Category</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {categories.map((category) => (
+                  <button
+                    key={`modal-${category.name}`}
+                    type="button"
+                    onClick={() => setTempCategory(category.name)}
+                    className={`rounded-2xl border px-3 py-3 text-left text-xs font-black ${tempCategory === category.name ? "border-yellow-400 bg-yellow-50 text-yellow-700" : "border-zinc-200 bg-white text-zinc-600"}`}
+                  >
+                    {category.icon} {category.name}
+                  </button>
+                ))}
+              </div>
+
+              <p className="mt-5 text-xs font-black">Price</p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {[
+                  ["default", "Default"],
+                  ["high", "MRP High ↓"],
+                  ["low", "MRP Low ↑"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTempPriceSort(value as "default" | "high" | "low")}
+                    className={`rounded-2xl border px-2 py-3 text-[10px] font-black ${tempPriceSort === value ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 border-t border-zinc-100 p-4">
+              <button type="button" onClick={() => { setTempCategory("All"); setTempPriceSort("default"); }} className="rounded-2xl border border-zinc-200 py-3 text-sm font-black">Reset</button>
+              <button type="button" onClick={() => { setSelectedCategory(tempCategory); setPriceSort(tempPriceSort); setShowFilter(false); }} className="rounded-2xl bg-yellow-400 py-3 text-sm font-black text-black">Apply Filter</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LocationSelector
         open={showLocation}
