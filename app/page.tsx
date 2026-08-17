@@ -1013,44 +1013,7 @@ export default function HomePage() {
 
         </div>
 
-        {/* MOBILE TOP ROW: LOCATION + PROFILE */}
-        <div className="w-full basis-full md:hidden">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setShowLocation(true)}
-              className="min-w-0 flex-1 text-left"
-            >
-              <div className="flex items-center gap-2 rounded-xl px-1 py-1">
-                <span className="text-lg">📍</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[8px] font-bold uppercase tracking-wide text-zinc-400">
-                    DELIVER TO
-                  </span>
-                  <span className="block truncate text-xs font-black text-zinc-900">
-                    {selectedLocation?.name || "Select Location"}
-                  </span>
-                  {selectedLocation?.address && (
-                    <span className="mt-0.5 block truncate text-[9px] font-medium text-zinc-400">
-                      {selectedLocation.address}
-                    </span>
-                  )}
-                </span>
-                <span className="text-sm">▼</span>
-              </div>
-            </button>
-
-            <Link
-              href={isLoggedIn ? "/profile" : "/login"}
-              aria-label={isLoggedIn ? "Profile" : "Login"}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-xl shadow-sm"
-            >
-              👤
-            </Link>
-          </div>
-        </div>
-
-        {/* MOBILE SEARCH + NIGHTNOW LOGO */}
+        {/* MOBILE SEARCH - FIRST / STICKY */}
         <div className="w-full basis-full md:hidden">
           <div className="flex items-center gap-2">
             <div className="relative flex min-w-0 flex-1 items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3 shadow-sm">
@@ -1083,14 +1046,6 @@ export default function HomePage() {
               </button>
             </div>
 
-            <Link
-              href="/"
-              aria-label="Night Now Home"
-              className="flex h-10 min-w-[58px] shrink-0 items-center justify-center rounded-2xl bg-black px-2 text-[9px] font-black text-white shadow-sm"
-            >
-              <span className="text-base">🌙</span>
-              <span>Night<span className="text-yellow-400">Now</span></span>
-            </Link>
           </div>
 
           {/* MOBILE SEARCH RESULTS */}
@@ -1182,6 +1137,31 @@ export default function HomePage() {
             )}
         </div>
 
+        {/* MOBILE LOCATION - BELOW SEARCH */}
+        <div className="w-full basis-full md:hidden">
+          <button
+            type="button"
+            onClick={() => setShowLocation(true)}
+            className="flex w-full items-center gap-2 rounded-xl px-1 py-2 text-left"
+          >
+            <span className="text-lg">📍</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[8px] font-bold uppercase tracking-wide text-zinc-400">
+                DELIVER TO
+              </span>
+              <span className="block truncate text-xs font-black text-zinc-900">
+                {selectedLocation?.name || "Select Location"}
+              </span>
+              {selectedLocation?.address && (
+                <span className="mt-0.5 block truncate text-[9px] font-medium text-zinc-400">
+                  {selectedLocation.address}
+                </span>
+              )}
+            </span>
+            <span className="text-sm">▼</span>
+          </button>
+        </div>
+
       </header>
 
       {/* =================================================
@@ -1202,12 +1182,8 @@ export default function HomePage() {
                   🌙
                 </div>
 
-                <h1 className="mt-0 whitespace-nowrap text-[18px] font-black leading-tight tracking-tight sm:text-[22px] md:whitespace-normal md:text-6xl">
-                  आपकी जरूरत,
-                  <br />
-                  <span className="text-yellow-500">
-                    हमारी जिम्मेदारी।
-                  </span>
+                <h1 className="mt-0 whitespace-nowrap text-[17px] font-black leading-tight tracking-tight sm:text-[22px] md:whitespace-normal md:text-6xl">
+                  आपकी जरूरत, <span className="text-yellow-500">हमारी जिम्मेदारी।</span>
                 </h1>
 
                 <p className="mt-5 max-w-xl text-sm leading-6 text-zinc-500 md:text-base">
@@ -1217,7 +1193,7 @@ export default function HomePage() {
                   essentials एक ही जगह।
                 </p>
 
-                <div className="mt-4 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:flex-wrap sm:gap-3">
+                <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:flex-wrap">
 
                   <button
                     type="button"
@@ -1231,7 +1207,7 @@ export default function HomePage() {
                             "smooth",
                         })
                     }
-                    className="rounded-2xl bg-yellow-400 px-6 py-3 text-sm font-black shadow-sm transition hover:bg-yellow-500"
+                    className="w-full rounded-2xl bg-yellow-400 px-6 py-3 text-sm font-black shadow-sm transition hover:bg-yellow-500 sm:w-auto"
                   >
                     Shop Now →
                   </button>
@@ -1241,7 +1217,7 @@ export default function HomePage() {
                     onClick={() =>
                       setShowNeed(true)
                     }
-                    className="rounded-2xl border border-zinc-200 bg-white px-5 py-3 text-sm font-bold"
+                    className="w-full rounded-2xl border border-zinc-200 bg-white px-5 py-3 text-sm font-bold sm:w-auto"
                   >
                     आपकी जरूरत 🧠
                   </button>
@@ -1624,7 +1600,7 @@ export default function HomePage() {
         </div>
 
         {/* PRODUCT FILTER */}
-        <div className="mt-5 overflow-x-auto pb-1">
+        <div className="mt-5 overflow-x-auto pb-2">
           <div className="flex min-w-max items-center gap-2">
             <span className="mr-1 flex items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[10px] font-black text-zinc-600">
               ⚙️ Filter
@@ -1649,14 +1625,14 @@ export default function HomePage() {
         </div>
 
         {loading ? (
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-3 lg:grid-cols-4">
 
             {Array.from({
               length: 8,
             }).map((_, index) => (
               <div
                 key={index}
-                className="h-64 animate-pulse rounded-2xl bg-zinc-100"
+                className="h-40 animate-pulse rounded-2xl bg-zinc-100 sm:h-64"
               />
             ))}
 
@@ -1700,7 +1676,7 @@ export default function HomePage() {
           </div>
         ) : (
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-3 lg:grid-cols-4">
 
             {filteredProducts.map(
               (product) => {
