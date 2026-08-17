@@ -45,17 +45,25 @@ export default function HomePage() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] =
     useState("All");
+  const [selectedBrand, setSelectedBrand] =
+    useState("All");
+
+  // Product filters / sorting
+  const [sortBy, setSortBy] = useState<
+    "relevance" | "price-low" | "price-high" | "discount-high"
+  >("relevance");
+  const [priceFilter, setPriceFilter] = useState<
+    "all" | "under-100" | "100-300" | "300-500" | "500-plus"
+  >("all");
+  const [discountOnly, setDiscountOnly] = useState(false);
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [showProductFilters, setShowProductFilters] = useState(false);
 
   const [showNeed, setShowNeed] = useState(false);
   const [needText, setNeedText] = useState("");
   const [showLocation, setShowLocation] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<SavedLocation | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  const [showCategories, setShowCategories] = useState(false);
-  const [showFilter, setShowFilter] = useState(false);
-  const [filterCategory, setFilterCategory] = useState("All");
-  const [sortOrder, setSortOrder] = useState<"none" | "high" | "low">("none");
 
   // ==========================================
   // LOAD PRODUCTS + NEEDS
@@ -135,29 +143,15 @@ export default function HomePage() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-  if (window.location.search.includes("category=1")) {
-    setShowCategories(true);
-  }
-}, []);
-
-useEffect(() => {
-  setFilterCategory(selectedCategory);
-}, [selectedCategory]);
-
-const handleLocationSelect = (location: SavedLocation) => {
-  setSelectedLocation(location);
-  setShowLocation(false);
-
-  try {
-    localStorage.setItem(
-      "nightnow_location",
-      JSON.stringify(location)
-    );
-  } catch (error) {
-    console.error("Location save error:", error);
-  }
-};
+  const handleLocationSelect = (location: SavedLocation) => {
+    setSelectedLocation(location);
+    setShowLocation(false);
+    try {
+      localStorage.setItem("nightnow_location", JSON.stringify(location));
+    } catch (error) {
+      console.error("Location save error:", error);
+    }
+  };
 
   // ==========================================
   // NORMALIZE SEARCH
@@ -410,56 +404,171 @@ const handleLocationSelect = (location: SavedLocation) => {
 
     // ----------------------------------------
     // Normal product search
-    // ---------------------------------------- 
+    // ----------------------------------------
+
     const result = products.filter(
       (product) => {
         const searchable =
-          productSearchText(product);
-        const words = text.split(" ").filter(Boolean);
+          productSearchText(
+            product
+          );
+
+        const words = text
+          .split(" ")
+          .filter(Boolean);
 
         const matchesSearch =
           !text ||
           searchable.includes(text) ||
-          words.every((word) => searchable.includes(word));
+          words.every((word) =>
+            searchable.includes(word)
+          );
 
-        if (selectedCategory === "All") {
-          return matchesSearch;
+        if (!matchesSearch) return false;
+
+        if (
+          selectedCategory !==
+          "All"
+        ) {
+          const selected =
+            normalizeSearchText(
+              selectedCategory
+            );
+
+          const category =
+            normalizeSearchText(
+              product.category
+            );
+
+          if (
+            !(
+              category.includes(
+                selected
+              ) ||
+              searchable.includes(
+                selected
+              )
+            )
+          ) {
+            return false;
+          }
         }
 
-        const selected = normalizeSearchText(selectedCategory);
-        const category = normalizeSearchText(product.category);
+        if (selectedBrand !== "All") {
+          const brandName =
+            normalizeSearchText(
+              product.brandName ||
+              product.brand ||
+              product.brandId ||
+              ""
+            );
 
-        return (
-          matchesSearch &&
-          (category.includes(selected) || searchable.includes(selected))
+          const selectedBrandName =
+            normalizeSearchText(
+              selectedBrand
+            );
+
+          if (
+            !brandName.includes(
+              selectedBrandName
+            )
+          ) {
+            return false;
+          }
+        }
+
+        const price = Number(
+          product.price || 0
         );
+        const mrp = Number(
+          product.mrp || 0
+        );
+        const stock = Number(
+          product.stock || 0
+        );
+
+        if (inStockOnly && stock <= 0) {
+          return false;
+        }
+
+        if (discountOnly && !(mrp > price && mrp > 0)) {
+          return false;
+        }
+
+        if (
+          priceFilter === "under-100" &&
+          price >= 100
+        ) {
+          return false;
+        }
+
+        if (
+          priceFilter === "100-300" &&
+          (price < 100 || price > 300)
+        ) {
+          return false;
+        }
+
+        if (
+          priceFilter === "300-500" &&
+          (price < 300 || price > 500)
+        ) {
+          return false;
+        }
+
+        if (
+          priceFilter === "500-plus" &&
+          price < 500
+        ) {
+          return false;
+        }
+
+        return true;
       }
     );
 
-    if (sortOrder === "high") {
-      return [...result].sort(
-        (a, b) =>
-          Number(b.mrp || b.price || 0) -
-          Number(a.mrp || a.price || 0)
-      );
-    }
+    return [...result].sort(
+      (a, b) => {
+        const priceA = Number(a.price || 0);
+        const priceB = Number(b.price || 0);
+        const mrpA = Number(a.mrp || 0);
+        const mrpB = Number(b.mrp || 0);
 
-    if (sortOrder === "low") {
-      return [...result].sort(
-        (a, b) =>
-          Number(a.mrp || a.price || 0) -
-          Number(b.mrp || b.price || 0)
-      );
-    }
+        if (sortBy === "price-low") {
+          return priceA - priceB;
+        }
 
-    return result;
+        if (sortBy === "price-high") {
+          return priceB - priceA;
+        }
+
+        if (sortBy === "discount-high") {
+          const discountA =
+            mrpA > priceA && mrpA > 0
+              ? ((mrpA - priceA) / mrpA) * 100
+              : 0;
+          const discountB =
+            mrpB > priceB && mrpB > 0
+              ? ((mrpB - priceB) / mrpB) * 100
+              : 0;
+
+          return discountB - discountA;
+        }
+
+        return 0;
+      }
+    );
   }, [
     products,
     search,
     selectedCategory,
+    selectedBrand,
     matchedNeeds,
     productsFromMatchedNeeds,
-    sortOrder,
+    sortBy,
+    priceFilter,
+    discountOnly,
+    inStockOnly,
   ]);
 
   // ==========================================
@@ -769,14 +878,25 @@ const handleLocationSelect = (location: SavedLocation) => {
     } as any);
   };
 
+  // Current quantity of a product already present in the cart.
+  // The + button below changes from + to 1, 2, 3... after each tap.
+  const getCartQuantity = (productId: string) => {
+    const item = (cart as any[]).find((entry: any) =>
+      String(entry?.id ?? entry?.productId ?? "") === String(productId)
+    );
+
+    return Number(item?.quantity || 0);
+  };
+
   return (
     <main className="min-h-screen bg-white text-zinc-900">
 
       {/* =================================================
           HEADER
       ================================================= */}
+    
 
-      <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur">
+         <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur">
 
         <div className="relative mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
 
@@ -784,7 +904,7 @@ const handleLocationSelect = (location: SavedLocation) => {
 
           <Link
             href="/"
-            className="shrink-0"
+            className="hidden shrink-0 md:block"
           >
             <div className="flex items-center gap-2">
 
@@ -807,23 +927,6 @@ const handleLocationSelect = (location: SavedLocation) => {
 
             </div>
           </Link>
-
-          {/* MOBILE LOCATION BESIDE LOGO */}
-          <button
-            type="button"
-            className="ml-auto flex min-w-0 max-w-[150px] items-center gap-1 text-left md:hidden"
-            onClick={() => setShowLocation(true)}
-          >
-            <span className="text-sm">📍</span>
-            <span className="min-w-0">
-              <span className="block truncate text-[8px] font-bold text-zinc-400">
-                DELIVER TO
-              </span>
-              <span className="block truncate text-[10px] font-black">
-                {selectedLocation?.name || "Select Location"}
-              </span>
-            </span>
-          </button>
 
           {/* LOCATION */}
 
@@ -885,356 +988,219 @@ const handleLocationSelect = (location: SavedLocation) => {
 
   </div>
 
-  {/* SEARCH RESULTS DIRECTLY BELOW SEARCH BAR */}
-
-  {search.trim() &&
-    !loading &&
-    filteredProducts.length > 0 && (
-      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[100] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl">
-
-        <div className="max-h-[420px] overflow-y-auto">
-
-          {filteredProducts
-            .slice(0, 8)
-            .map((product) => {
-              const image =
-                getProductImage(product);
-
-              const price =
-                Number(product.price || 0);
-
-              const mrp =
-                Number(product.mrp || 0);
-
-              const discount =
-                mrp > price && mrp > 0
-                  ? Math.round(
-                      ((mrp - price) / mrp) * 100
-                    )
-                  : 0;
-
-              return (
-                <Link
-                  key={product.id}
-                  href={`/product/${product.id}`}
-                  onClick={() => setSearch("")}
-                  className="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 transition hover:bg-yellow-50"
-                >
-
-                  {/* IMAGE */}
-
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-50">
-
-                    {image ? (
-                      <img
-                        src={image}
-                        alt={product.name || "Product"}
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <span className="text-xl">
-                        📦
-                      </span>
-                    )}
-
-                  </div>
-
-                  {/* PRODUCT INFO */}
-
-                  <div className="min-w-0 flex-1">
-
-                    <p className="truncate text-sm font-black text-zinc-900">
-                      {product.name}
-                    </p>
-
-                    {(product.brandName ||
-                      product.category) && (
-                      <p className="mt-0.5 truncate text-[10px] text-zinc-400">
-                        {product.brandName ||
-                          product.category}
-                      </p>
-                    )}
-
-                    <div className="mt-1 flex items-center gap-2">
-
-                      <span className="text-sm font-black text-zinc-900">
-                        ₹{price}
-                      </span>
-
-                      {mrp > price && (
-                        <>
-                          <span className="text-[10px] text-zinc-400 line-through">
-                            ₹{mrp}
-                          </span>
-
-                          <span className="rounded-md bg-yellow-100 px-1.5 py-0.5 text-[9px] font-black text-yellow-700">
-                            {discount}% OFF
-                          </span>
-                        </>
-                      )}
-
-                    </div>
-
-                  </div>
-
-                  <span className="text-zinc-300">
-                    →
-                  </span>
-
-                </Link>
-              );
-            })}
-
-        </div>
-
-        {filteredProducts.length > 8 && (
-          <button
-            type="button"
-            onClick={() => {
-              setSearch("");
-              setTimeout(() => {
-                document
-                  .getElementById("products")
-                  ?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                  });
-              }, 50);
-            }}
-            className="w-full bg-zinc-50 px-4 py-3 text-center text-xs font-black text-yellow-600 hover:bg-yellow-50"
-          >
-            View all {filteredProducts.length} products →
-          </button>
-        )}
-
-      </div>
-    )}
-
-  {search.trim() &&
-    !loading &&
-    filteredProducts.length === 0 && (
-      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[100] rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-2xl">
-
-        <div className="text-2xl">
-          🔍
-        </div>
-
-        <p className="mt-2 text-xs font-black text-zinc-700">
-          Product nahi mila
-        </p>
-
-        <p className="mt-1 text-[10px] text-zinc-400">
-          Try another product name
-        </p>
-
-      </div>
-    )}
-
 </div>
 
-          {/* PROFILE / LOGIN */}
+        {/* PROFILE / LOGIN */}
 
-          <Link
-            href={isLoggedIn ? "/profile" : "/login"}
-            className="rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black"
-          >
-            {isLoggedIn ? "👤 Profile" : "Login"}
-          </Link>
+        <Link
+          href={isLoggedIn ? "/profile" : "/login"}
+          className="hidden shrink-0 rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-black md:block"
+        >
+          {isLoggedIn ? "👤 Profile" : "Login"}
+        </Link>
 
-        </div>
+        {/* MOBILE HEADER — LOCATION + PROFILE */}
+        <div className="px-4 pt-2 md:hidden">
+          <div className="flex items-center gap-3">
 
-        {/* MOBILE SEARCH */}
+            <button
+              type="button"
+              onClick={() => setShowLocation(true)}
+              className="min-w-0 flex-1 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📍</span>
 
-<div className="relative px-4 pb-3 md:hidden">
-
-  <div className="flex items-center gap-2"><div className="flex min-w-0 flex-1 items-center rounded-xl border border-zinc-200 bg-zinc-50 px-2">
-
-    <span className="text-zinc-400">
-      🔍
-    </span>
-
-    <input
-      value={search}
-      onChange={(e) =>
-        setSearch(e.target.value)
-      }
-      placeholder="Search products, brands, needs..."
-      className="h-9 min-w-0 flex-1 bg-transparent px-2 text-[11px] outline-none"
-    />
-
-    {search && (
-      <button
-        type="button"
-        onClick={() => setSearch("")}
-        className="mr-2 text-zinc-400"
-      >
-        ×
-      </button>
-    )}
-
-    <button
-      type="button"
-      onClick={startVoiceSearch}
-      title="Voice Search"
-      className="flex h-7 w-7 items-center justify-center rounded-full bg-yellow-400 text-xs"
-    >
-      🎙️
-    </button>
-
-  </div>
-
-  <Link
-    href={isLoggedIn ? "/profile" : "/login"}
-    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-sm font-black text-black"
-    aria-label="Profile"
-  >
-    👤
-  </Link>
-  </div>
-
-  {/* MOBILE SEARCH RESULTS DIRECTLY BELOW SEARCH BAR */}
-
-  {search.trim() &&
-    !loading &&
-    filteredProducts.length > 0 && (
-      <div className="absolute left-4 right-4 top-[calc(100%-5px)] z-[100] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl">
-
-        <div className="max-h-[360px] overflow-y-auto">
-
-          {filteredProducts
-            .slice(0, 7)
-            .map((product) => {
-              const image =
-                getProductImage(product);
-
-              const price =
-                Number(product.price || 0);
-
-              const mrp =
-                Number(product.mrp || 0);
-
-              const discount =
-                mrp > price && mrp > 0
-                  ? Math.round(
-                      ((mrp - price) / mrp) * 100
-                    )
-                  : 0;
-
-              return (
-                <Link
-                  key={product.id}
-                  href={`/product/${product.id}`}
-                  onClick={() => setSearch("")}
-                  className="flex items-center gap-3 border-b border-zinc-100 px-3 py-3 active:bg-yellow-50"
-                >
-
-                  {/* IMAGE */}
-
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-50">
-
-                    {image ? (
-                      <img
-                        src={image}
-                        alt={product.name || "Product"}
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <span>
-                        📦
-                      </span>
-                    )}
-
-                  </div>
-
-                  {/* PRODUCT INFO */}
-
-                  <div className="min-w-0 flex-1">
-
-                    <p className="truncate text-xs font-black text-zinc-900">
-                      {product.name}
-                    </p>
-
-                    {(product.brandName ||
-                      product.category) && (
-                      <p className="mt-0.5 truncate text-[9px] text-zinc-400">
-                        {product.brandName ||
-                          product.category}
-                      </p>
-                    )}
-
-                    <div className="mt-1 flex items-center gap-2">
-
-                      <span className="text-xs font-black text-zinc-900">
-                        ₹{price}
-                      </span>
-
-                      {mrp > price && (
-                        <>
-                          <span className="text-[9px] text-zinc-400 line-through">
-                            ₹{mrp}
-                          </span>
-
-                          <span className="rounded bg-yellow-100 px-1 py-0.5 text-[8px] font-black text-yellow-700">
-                            {discount}% OFF
-                          </span>
-                        </>
-                      )}
-
-                    </div>
-
-                  </div>
-
-                  <span className="text-zinc-300">
-                    →
+                <div className="min-w-0 flex-1">
+                  <span className="block text-[8px] font-bold uppercase tracking-wide text-zinc-400">
+                    DELIVER TO
                   </span>
 
-                </Link>
-              );
-            })}
+                  <span className="block truncate text-xs font-black text-zinc-900">
+                    {selectedLocation?.name || "Select Location"}
+                  </span>
 
+                  {selectedLocation?.address && (
+                    <span className="mt-0.5 block truncate text-[9px] font-medium text-zinc-400">
+                      {selectedLocation.address}
+                    </span>
+                  )}
+                </div>
+
+                <span className="text-sm">▼</span>
+              </div>
+            </button>
+
+            <Link
+              href={isLoggedIn ? "/profile" : "/login"}
+              aria-label={isLoggedIn ? "Profile" : "Login"}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-xl shadow-sm"
+            >
+              👤
+            </Link>
+
+          </div>
         </div>
 
-        {filteredProducts.length > 7 && (
-          <button
-            type="button"
-            onClick={() => {
-              setSearch("");
-              setTimeout(() => {
-                document
-                  .getElementById("products")
-                  ?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                  });
-              }, 50);
-            }}
-            className="w-full bg-zinc-50 px-3 py-3 text-center text-[10px] font-black text-yellow-600"
-          >
-            View all {filteredProducts.length} products →
-          </button>
-        )}
+        {/* MOBILE SEARCH + LOGO */}
+        <div className="relative px-4 pb-3 pt-2 md:hidden">
+          <div className="flex items-center gap-2">
 
-      </div>
-    )}
+            <div className="flex min-w-0 flex-1 items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3 shadow-sm">
 
-  {search.trim() &&
-    !loading &&
-    filteredProducts.length === 0 && (
-      <div className="absolute left-4 right-4 top-[calc(100%-5px)] z-[100] rounded-2xl border border-zinc-200 bg-white p-4 text-center shadow-2xl">
+              <span className="shrink-0 text-base text-zinc-400">
+                🔍
+              </span>
 
-        <div className="text-xl">
-          🔍
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search products, brands, needs..."
+                className="h-10 min-w-0 flex-1 bg-transparent px-2 text-[11px] outline-none placeholder:text-zinc-400"
+              />
+
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="mr-1 shrink-0 text-zinc-400"
+                >
+                  ×
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={startVoiceSearch}
+                title="Voice Search"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-sm"
+              >
+                🎙️
+              </button>
+
+            </div>
+
+            <Link
+              href="/"
+              aria-label="Night Now Home"
+              className="flex h-11 min-w-[58px] shrink-0 items-center justify-center gap-0.5 rounded-2xl bg-black px-1.5 text-[10px] font-black text-white shadow-sm"
+            >
+              <span className="text-lg">🌙</span>
+              <span>Night<span className="text-yellow-400">Now</span></span>
+            </Link>
+
+          </div>
         </div>
 
-        <p className="mt-1 text-[11px] font-black text-zinc-700">
-          Product nahi mila
-        </p>
-
-      </div>
-    )}
-
-</div>
+        </div>
       </header>
+      {/* =================================================
+          SEARCH RESULTS — DIRECTLY BELOW SEARCH BAR
+      ================================================= */}
+
+      {search.trim() && (
+        <section
+          id="search-results"
+          className="border-b border-zinc-200 bg-white"
+        >
+          <div className="mx-auto max-w-7xl px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-black sm:text-lg">
+                  Showing results for “{search}”
+                  <span className="ml-2 text-xs font-bold text-zinc-400">
+                    ({filteredProducts.length})
+                  </span>
+                </h2>
+                <p className="mt-1 text-[10px] font-bold text-zinc-400">
+                  Matching products on Night Now
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="shrink-0 text-xs font-black text-yellow-600"
+              >
+                Clear ×
+              </button>
+            </div>
+
+            {filteredProducts.length > 0 ? (
+              <div className="mt-3 flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+                {filteredProducts.slice(0, 12).map((product) => {
+                  const image = getProductImage(product);
+                  const price = Number(product.price || 0);
+                  const mrp = Number(product.mrp || 0);
+                  const discount =
+                    mrp > price && mrp > 0
+                      ? Math.round(((mrp - price) / mrp) * 100)
+                      : 0;
+
+                  return (
+                    <Link
+                      key={`search-result-${product.id}`}
+                      href={`/product/${product.id}`}
+                      onClick={() => setSearch("")}
+                      className="w-[180px] shrink-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                    >
+                      <div className="flex h-32 items-center justify-center bg-zinc-50">
+                        {image ? (
+                          <img
+                            src={image}
+                            alt={product.name || "Product"}
+                            className="h-full w-full object-contain p-3"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-3xl">📦</span>
+                        )}
+                      </div>
+
+                      <div className="p-3">
+                        <p className="truncate text-xs font-black text-zinc-900">
+                          {product.name || "Product"}
+                        </p>
+
+                        <p className="mt-1 truncate text-[9px] font-bold text-zinc-400">
+                          {product.brandName || product.category || "Night Now"}
+                        </p>
+
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-sm font-black text-zinc-900">
+                            ₹{price}
+                          </span>
+
+                          {mrp > price && (
+                            <span className="text-[9px] text-zinc-400 line-through">
+                              ₹{mrp}
+                            </span>
+                          )}
+
+                          {discount > 0 && (
+                            <span className="text-[9px] font-black text-green-600">
+                              {discount}% OFF
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-5 text-center">
+                <div className="text-2xl">🔍</div>
+                <p className="mt-1 text-xs font-black">
+                  Product nahi mila
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+
 
       {/* =================================================
           HERO
@@ -1250,8 +1216,13 @@ const handleLocationSelect = (location: SavedLocation) => {
 
               <div>
 
-                <h1 className="mt-0 whitespace-nowrap text-[20px] font-black leading-tight tracking-tight sm:text-4xl md:text-6xl">
-                  आपकी जरूरत, <span className="text-yellow-500">हमारी जिम्मेदारी।</span>
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-3xl shadow-[0_8px_20px_rgba(0,0,0,0.18)]">
+                  🌙
+                </div>
+
+                <h1 className="mt-0 whitespace-nowrap text-[22px] font-black leading-tight tracking-tight sm:text-4xl md:text-6xl">
+                  आपकी जरूरत,
+                  <span className="text-yellow-500"> हमारी जिम्मेदारी।</span>
                 </h1>
 
                 <p className="mt-5 max-w-xl text-sm leading-6 text-zinc-500 md:text-base">
@@ -1261,7 +1232,7 @@ const handleLocationSelect = (location: SavedLocation) => {
                   essentials एक ही जगह।
                 </p>
 
-                <div className="mt-3 flex flex-nowrap gap-2 sm:mt-6 sm:flex-wrap sm:gap-3">
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
 
                   <button
                     type="button"
@@ -1275,7 +1246,7 @@ const handleLocationSelect = (location: SavedLocation) => {
                             "smooth",
                         })
                     }
-                    className="rounded-xl bg-yellow-400 px-3 py-2 text-[10px] font-black shadow-sm transition hover:bg-yellow-500 sm:rounded-2xl sm:px-6 sm:py-3 sm:text-sm"
+                    className="rounded-2xl bg-yellow-400 px-6 py-3 text-sm font-black shadow-sm transition hover:bg-yellow-500"
                   >
                     Shop Now →
                   </button>
@@ -1285,7 +1256,7 @@ const handleLocationSelect = (location: SavedLocation) => {
                     onClick={() =>
                       setShowNeed(true)
                     }
-                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[10px] font-bold sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+                    className="rounded-2xl border border-zinc-200 bg-white px-5 py-3 text-sm font-bold"
                   >
                     आपकी जरूरत 🧠
                   </button>
@@ -1418,152 +1389,45 @@ const handleLocationSelect = (location: SavedLocation) => {
         )}
 
       {/* =================================================
-          TOP BRANDS
+          CATEGORY SHORTCUT
+          The old Shop by Category rail is intentionally removed
+          from the homepage. Categories are opened from navigation.
       ================================================= */}
-
-      {(() => {
-        const map =
-          new Map<
-            string,
-            Product
-          >();
-
-        products
-          .filter(
-            (product) =>
-              product.topBrand ===
-                true &&
-              product.active !==
-                false
-          )
-          .forEach((product) => {
-            const key =
-              product.brandId ||
-              product.brandName ||
-              product.id;
-
-            if (
-              !map.has(key)
-            ) {
-              map.set(
-                key,
-                product
-              );
-            }
-          });
-
-        const topBrands =
-          Array.from(
-            map.values()
-          );
-
-        if (
-          topBrands.length ===
-          0
-        ) {
-          return null;
-        }
-
-        return (
-          <section className="mx-auto max-w-7xl px-4 pt-10">
-
-            <div>
-
-              <h2 className="text-xl font-black">
-                ⭐ Top Brands
-              </h2>
-
-              <p className="mt-1 text-xs text-zinc-400">
-                Popular brands on Night Now
-              </p>
-
-            </div>
-
-            <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-
-              {topBrands.map(
-                (product) => (
-                  <Link
-                    key={
-                      product.id
-                    }
-                    href={`/product/${product.id}`}
-                    className="min-w-[135px] rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm transition hover:border-yellow-400"
-                  >
-
-                    <div className="flex h-20 items-center justify-center rounded-xl bg-zinc-50">
-
-                      {getProductImage(
-                        product
-                      ) ? (
-                        <img
-                          src={getProductImage(
-                            product
-                          )}
-                          alt={
-                            product.brandName ||
-                            product.name ||
-                            "Brand"
-                          }
-                          className="h-full w-full object-contain p-2" loading="lazy"
-                        />
-                      ) : (
-                        <span className="text-2xl">
-                          🏷️
-                        </span>
-                      )}
-
-                    </div>
-
-                    <p className="mt-3 truncate text-center text-xs font-black">
-                      {product.brandName ||
-                        product.name ||
-                        "Brand"}
-                    </p>
-
-                  </Link>
-                )
-              )}
-
-            </div>
-
-          </section>
-        );
-      })()}
+      <section className="mx-auto max-w-7xl px-4 pt-5 md:pt-8">
+        <Link
+          href="/categories"
+          className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm md:hidden"
+        >
+          <span className="flex items-center gap-2 text-sm font-black">
+            🛍️ Categories
+          </span>
+          <span className="text-xs font-black text-yellow-600">
+            View All →
+          </span>
+        </Link>
+      </section>
 
       {/* =================================================
-          BUY 1 GET 2
+          BUY 1 GET 2 — COMPACT
       ================================================= */}
-
-      <section className="mx-auto max-w-7xl px-4 pt-6 sm:pt-10">
-
+      <section className="mx-auto max-w-7xl px-4 pt-5 md:pt-10">
         <Link
           href="/offers/buy-1-get-2"
-          className="flex items-center justify-between overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-700 via-violet-600 to-fuchsia-500 px-3 py-3 text-white shadow-sm transition hover:-translate-y-1 sm:rounded-3xl sm:p-5 sm:shadow-[0_14px_35px_rgba(79,70,229,0.25)]"
+          className="flex min-h-[88px] items-center justify-between gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-700 via-violet-600 to-fuchsia-500 px-4 py-3 text-white shadow-[0_10px_25px_rgba(79,70,229,0.18)] md:min-h-[120px] md:rounded-3xl md:p-5"
         >
-
-          <div>
-
-            <p className="text-[10px] font-black">
-              SPECIAL OFFER
-            </p>
-
-            <h2 className="mt-1 text-base font-black sm:text-2xl">
+          <div className="min-w-0">
+            <p className="text-[8px] font-black md:text-[10px]">SPECIAL OFFER</p>
+            <h2 className="mt-0.5 text-base font-black md:mt-1 md:text-2xl">
               Buy 1 Get 2 🎁
             </h2>
-
-            <p className="mt-1 text-xs font-bold">
+            <p className="mt-0.5 truncate text-[9px] font-bold md:mt-1 md:text-xs">
               Special selected products
             </p>
-
           </div>
-
-          <span className="rounded-lg bg-white px-3 py-2 text-[10px] font-black text-indigo-700 shadow-sm sm:rounded-xl sm:px-4 sm:py-3 sm:text-xs">
+          <span className="shrink-0 rounded-xl bg-white px-3 py-2 text-[9px] font-black text-indigo-700 shadow-sm md:px-4 md:py-3 md:text-xs">
             View Offers →
           </span>
-
         </Link>
-
       </section>
 
       {/* =================================================
@@ -1599,9 +1463,18 @@ const handleLocationSelect = (location: SavedLocation) => {
             type="button"
             onClick={() => {
               setSearch("");
-              setSelectedCategory(
-                "All"
-              );
+              setSelectedCategory("All");
+              setSelectedBrand("All");
+              setPriceFilter("all");
+              setDiscountOnly(false);
+              setInStockOnly(false);
+              setSortBy("relevance");
+              requestAnimationFrame(() => {
+                document.getElementById("products")?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              });
             }}
             className="text-xs font-black text-yellow-600"
           >
@@ -1610,38 +1483,42 @@ const handleLocationSelect = (location: SavedLocation) => {
 
         </div>
 
-        {/* PRODUCT FILTER + CATEGORIES */}
-        <div className="mt-5 flex items-center gap-2">
+        {/* PRODUCT FILTER - ALL OPTIONS INSIDE */}
+        <div className="mt-5">
           <button
             type="button"
-            onClick={() => setShowFilter(true)}
-            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[10px] font-black text-zinc-700 shadow-sm"
+            onClick={() => setShowProductFilters(true)}
+            className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-left shadow-sm transition hover:border-yellow-400 hover:shadow-md"
           >
-            ⚙️ Filter
-          </button>
+            <span className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-yellow-400 text-lg">
+                ⚙️
+              </span>
+              <span>
+                <span className="block text-sm font-black text-zinc-900">
+                  Filters & Sort
+                </span>
+                <span className="mt-0.5 block text-[10px] font-bold text-zinc-400">
+                  Category • Brand • Price • Discount • Stock • Sort
+                </span>
+              </span>
+            </span>
 
-          <button
-            type="button"
-            onClick={() => setShowCategories(true)}
-            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[10px] font-black text-zinc-700 shadow-sm"
-          >
-            🗂️ Categories
+            <span className="rounded-xl bg-zinc-100 px-4 py-2 text-xs font-black text-zinc-700">
+              Open →
+            </span>
           </button>
-
-          <span className="ml-auto truncate text-[10px] font-bold text-zinc-400">
-            {selectedCategory === "All" ? "All Categories" : selectedCategory}
-          </span>
         </div>
 
         {loading ? (
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
 
             {Array.from({
               length: 8,
             }).map((_, index) => (
               <div
                 key={index}
-                className="h-64 animate-pulse rounded-2xl bg-zinc-100"
+                className="h-56 animate-pulse rounded-xl bg-zinc-100 sm:h-64 sm:rounded-2xl"
               />
             ))}
 
@@ -1685,7 +1562,7 @@ const handleLocationSelect = (location: SavedLocation) => {
           </div>
         ) : (
 
-          <div className="mt-5 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:pb-0 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
 
             {filteredProducts.map(
               (product) => {
@@ -1722,19 +1599,19 @@ const handleLocationSelect = (location: SavedLocation) => {
                 return (
                   <div
                     key={product.id}
-                    className="group relative w-[31%] min-w-[31%] snap-start overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 sm:w-auto sm:min-w-0 sm:rounded-[24px] sm:shadow-[0_8px_20px_rgba(0,0,0,0.08),0_18px_45px_rgba(0,0,0,0.06)] sm:hover:-translate-y-2 sm:hover:scale-[1.015] sm:hover:shadow-[0_18px_35px_rgba(0,0,0,0.14),0_30px_65px_rgba(0,0,0,0.10)] [transform-style:preserve-3d]"
+                    className="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:rounded-[24px] sm:shadow-[0_8px_20px_rgba(0,0,0,0.08),0_18px_45px_rgba(0,0,0,0.06)]"
                   >
                     <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-px bg-gradient-to-r from-transparent via-yellow-300 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
                     <Link href={`/product/${product.id}`}>
-                      <div className="relative flex h-28 items-center justify-center overflow-hidden sm:h-48 bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 [transform:translateZ(20px)]">
+                      <div className="relative flex h-28 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 sm:h-36 [transform:translateZ(20px)]">
                         <div className="pointer-events-none absolute bottom-5 h-5 w-24 rounded-full bg-black/10 blur-xl transition-all duration-300 group-hover:w-28 group-hover:bg-black/15" />
 
                         {image ? (
                           <img
                             src={image}
                             alt={product.name || "Product"}
-                            className="relative z-[1] h-full w-full object-contain p-4 drop-shadow-[0_12px_10px_rgba(0,0,0,0.14)] transition-all duration-500 group-hover:scale-110 group-hover:-translate-y-1"
+                            className="relative z-[1] h-full w-full object-contain p-3 drop-shadow-[0_10px_8px_rgba(0,0,0,0.12)] transition-all duration-500 group-hover:scale-105"
                           />
                         ) : (
                           <span className="relative z-[1] text-xs text-zinc-400">
@@ -1752,9 +1629,9 @@ const handleLocationSelect = (location: SavedLocation) => {
                       </div>
                     </Link>
 
-                    <div className="relative border-t border-zinc-100 bg-white p-2 sm:p-3.5 [transform:translateZ(10px)]">
+                    <div className="relative flex min-h-[116px] flex-col border-t border-zinc-100 bg-white p-2 [transform:translateZ(10px)] sm:min-h-[150px] sm:p-3.5">
                       <Link href={`/product/${product.id}`}>
-                        <h3 className="line-clamp-2 min-h-[28px] text-[10px] font-black leading-4 transition-colors group-hover:text-yellow-600 sm:min-h-[38px] sm:text-sm sm:leading-5">
+                        <h3 className="line-clamp-2 min-h-[28px] text-[10px] font-black leading-3.5 transition-colors group-hover:text-yellow-600 sm:min-h-[38px] sm:text-sm sm:leading-5">
                           {product.name ||
                             product.title ||
                             product.productName ||
@@ -1768,7 +1645,7 @@ const handleLocationSelect = (location: SavedLocation) => {
                         </p>
                       )}
 
-                      <div className="mt-3 flex items-end gap-2">
+                      <div className="mt-2 flex items-end gap-1.5">
                         <p className="text-sm font-black text-green-600 sm:text-lg">
                           ₹{price}
                         </p>
@@ -1796,14 +1673,16 @@ const handleLocationSelect = (location: SavedLocation) => {
                           Out of Stock
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleAddToCart(product)}
-                          className="mt-2 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-lg font-black text-white shadow-sm transition active:scale-95 sm:mt-3 sm:h-auto sm:w-full sm:rounded-xl sm:bg-yellow-400 sm:py-3 sm:text-[10px] sm:text-black sm:shadow-[0_5px_0_#d4a900,0_8px_15px_rgba(0,0,0,0.10)]"
-                        >
-                          <span className="sm:hidden">+</span>
-                          <span className="hidden sm:inline">🛒 Add to Cart</span>
-                        </button>
+                        <div className="mt-auto pt-2">
+                          <button
+                            type="button"
+                            aria-label={`Add ${product.name || "product"} to cart`}
+                            onClick={() => handleAddToCart(product)}
+                            className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-xl font-black leading-none text-white shadow-[0_3px_0_#c2410c] transition active:translate-y-[2px] active:shadow-[0_1px_0_#c2410c] sm:h-10 sm:w-10"
+                          >
+                            {getCartQuantity(product.id) > 0 ? getCartQuantity(product.id) : "+"}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1938,91 +1817,239 @@ const handleLocationSelect = (location: SavedLocation) => {
 
       </footer>
 
-      {/* =================================================
-          CATEGORIES MODAL
-      ================================================= */}
-      {showCategories && (
-        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 px-3 pb-20 backdrop-blur-sm md:items-center md:pb-0">
-          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black">Categories</h2>
-              <button type="button" onClick={() => setShowCategories(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl">×</button>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {categories.map((category) => (
-                <button key={`modal-category-${category.name}`} type="button" onClick={() => {
-                  setSelectedCategory(category.name);
-                  setShowCategories(false);
-                  document.getElementById("products")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }} className={[
-                  "rounded-2xl border p-4 text-left transition",
-                  selectedCategory === category.name ? "border-yellow-400 bg-yellow-50" : "border-zinc-200 bg-white",
-                ].join(" ")}>
-                  <span className="text-2xl">{category.icon}</span>
-                  <span className="mt-2 block text-xs font-black">{category.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =================================================
-          FILTER MODAL
-      ================================================= */}
-      {showFilter && (
-        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 px-3 pb-20 backdrop-blur-sm md:items-center md:pb-0">
-          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black">Filter Products</h2>
-                <p className="mt-1 text-[10px] text-zinc-400">Category aur sorting select karein</p>
-              </div>
-              <button type="button" onClick={() => setShowFilter(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl">×</button>
-            </div>
-
-            <p className="mt-5 text-xs font-black">Category</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {categories.map((category) => (
-                <button key={`filter-category-${category.name}`} type="button" onClick={() => setFilterCategory(category.name)} className={[
-                  "rounded-xl border px-3 py-2 text-left text-xs font-black",
-                  filterCategory === category.name ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600",
-                ].join(" ")}>
-                  {category.icon} {category.name}
-                </button>
-              ))}
-            </div>
-
-            <p className="mt-5 text-xs font-black">Sort by MRP</p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {[
-                ["none", "Default"],
-                ["high", "MRP High"],
-                ["low", "MRP Low"],
-              ].map(([value, label]) => (
-                <button key={value} type="button" onClick={() => setSortOrder(value as "none" | "high" | "low")} className={[
-                  "rounded-xl border px-2 py-2 text-[10px] font-black",
-                  sortOrder === value ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600",
-                ].join(" ")}>
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => { setFilterCategory("All"); setSortOrder("none"); }} className="rounded-xl border border-zinc-200 py-3 text-xs font-black">Reset</button>
-              <button type="button" onClick={() => { setSelectedCategory(filterCategory); setShowFilter(false); }} className="rounded-xl bg-yellow-400 py-3 text-xs font-black text-black">Apply Filter</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <LocationSelector
         open={showLocation}
         onClose={() => setShowLocation(false)}
         location={selectedLocation}
         onSelect={handleLocationSelect}
       />
+
+      {/* =================================================
+          PRODUCT FILTER MODAL
+      ================================================= */}
+
+      {showProductFilters && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-end justify-center bg-black/50 p-3 backdrop-blur-sm md:items-center"
+          onClick={() =>
+            setShowProductFilters(false)
+          }
+        >
+          <div
+            className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl"
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="flex items-center justify-between border-b border-zinc-200 p-4">
+              <div>
+                <h2 className="text-base font-black">
+                  Filters
+                </h2>
+                <p className="mt-1 text-[10px] text-zinc-400">
+                  Products ko apni preference ke hisaab se filter karein
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowProductFilters(false)
+                }
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-4">
+              {brands.length > 0 && (
+                <>
+                  <p className="text-xs font-black">
+                    Brand
+                  </p>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedBrand("All")
+                      }
+                      className={[
+                        "rounded-xl border px-3 py-2 text-[10px] font-black",
+                        selectedBrand === "All"
+                          ? "border-yellow-400 bg-yellow-400 text-black"
+                          : "border-zinc-200 bg-white text-zinc-700",
+                      ].join(" ")}
+                    >
+                      All Brands
+                    </button>
+
+                    {brands.map((brand) => (
+                      <button
+                        key={`modal-brand-${brand.id}`}
+                        type="button"
+                        onClick={() =>
+                          setSelectedBrand(
+                            brand.name
+                          )
+                        }
+                        className={[
+                          "rounded-xl border px-3 py-2.5 text-[10px] font-black",
+                          selectedBrand === brand.name
+                            ? "border-yellow-400 bg-yellow-400 text-black"
+                            : "border-zinc-200 bg-white text-zinc-700",
+                        ].join(" ")}
+                      >
+                        {brand.name}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <p className="mt-5 text-xs font-black">
+                Price Range
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {[
+                  ["all", "Any Price"],
+                  ["under-100", "Under ₹100"],
+                  ["100-300", "₹100 – ₹300"],
+                  ["300-500", "₹300 – ₹500"],
+                  ["500-plus", "₹500+"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      setPriceFilter(
+                        value as typeof priceFilter
+                      )
+                    }
+                    className={[
+                      "rounded-2xl border px-4 py-3.5 text-left text-xs font-black",
+                      priceFilter === value
+                        ? "border-yellow-400 bg-yellow-400 text-black"
+                        : "border-zinc-200 bg-white text-zinc-700",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <p className="mt-5 text-xs font-black">
+                Other Filters
+              </p>
+
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDiscountOnly(
+                      (value) => !value
+                    )
+                  }
+                  className={[
+                    "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-[10px] font-black",
+                    discountOnly
+                      ? "border-yellow-400 bg-yellow-50"
+                      : "border-zinc-200 bg-white",
+                  ].join(" ")}
+                >
+                  <span>
+                    🔥 Discounted Products
+                  </span>
+                  <span>
+                    {discountOnly ? "✓" : "○"}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setInStockOnly(
+                      (value) => !value
+                    )
+                  }
+                  className={[
+                    "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-[10px] font-black",
+                    inStockOnly
+                      ? "border-yellow-400 bg-yellow-50"
+                      : "border-zinc-200 bg-white",
+                  ].join(" ")}
+                >
+                  <span>
+                    ✓ In Stock Only
+                  </span>
+                  <span>
+                    {inStockOnly ? "✓" : "○"}
+                  </span>
+                </button>
+              </div>
+
+              <p className="mt-5 text-xs font-black">
+                Sort By
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {[
+                  ["relevance", "Relevance"],
+                  ["price-low", "Price: Low to High"],
+                  ["price-high", "Price: High to Low"],
+                  ["discount-high", "Best Discount"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      setSortBy(
+                        value as typeof sortBy
+                      )
+                    }
+                    className={[
+                      "rounded-2xl border px-4 py-3.5 text-left text-xs font-black",
+                      sortBy === value
+                        ? "border-yellow-400 bg-yellow-400 text-black"
+                        : "border-zinc-200 bg-white text-zinc-700",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2 border-t border-zinc-200 p-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setSortBy("relevance");
+                  setSelectedBrand("All");
+                  setPriceFilter("all");
+                  setDiscountOnly(false);
+                  setInStockOnly(false);
+                }}
+                className="flex-1 rounded-xl border border-zinc-200 bg-white py-3 text-xs font-black"
+              >
+                Clear All
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowProductFilters(false)
+                }
+                className="flex-1 rounded-xl bg-yellow-400 py-3 text-xs font-black text-black"
+              >
+                Show Products
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =================================================
           AAPKI ZARURAT MODAL
