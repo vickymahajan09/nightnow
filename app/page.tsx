@@ -1871,14 +1871,14 @@ export default function HomePage() {
                     Brand
                   </p>
 
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() =>
                         setSelectedBrand("All")
                       }
                       className={[
-                        "rounded-xl border px-3 py-2.5 text-[10px] font-black",
+                        "rounded-xl border px-3 py-2 text-[10px] font-black",
                         selectedBrand === "All"
                           ? "border-yellow-400 bg-yellow-400 text-black"
                           : "border-zinc-200 bg-white text-zinc-700",
