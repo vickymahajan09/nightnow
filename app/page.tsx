@@ -889,7 +889,7 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-white text-zinc-900">
+    <main className="min-h-screen bg-white pb-20 text-zinc-900 md:pb-0">
 
       {/* =================================================
           HEADER
@@ -999,64 +999,50 @@ export default function HomePage() {
           {isLoggedIn ? "👤 Profile" : "Login"}
         </Link>
 
-        {/* MOBILE HEADER — LOCATION + PROFILE */}
+        {/* MOBILE HEADER — MOBILE-ONLY LAYOUT
+            Desktop header above remains unchanged. */}
         <div className="px-4 pt-2 md:hidden">
           <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              aria-label="Night Now Home"
+              className="flex h-10 shrink-0 items-center gap-1 rounded-xl bg-black px-2 text-[10px] font-black text-white shadow-sm"
+            >
+              <span className="text-base">🌙</span>
+              <span>Night<span className="text-yellow-400">Now</span></span>
+            </Link>
 
             <button
               type="button"
               onClick={() => setShowLocation(true)}
               className="min-w-0 flex-1 text-left"
             >
-              <div className="flex items-center gap-2">
-                <span className="text-lg">📍</span>
-
-                <div className="min-w-0 flex-1">
-                  <span className="block text-[8px] font-bold uppercase tracking-wide text-zinc-400">
-                    DELIVER TO
-                  </span>
-
-                  <span className="block truncate text-xs font-black text-zinc-900">
-                    {selectedLocation?.name || "Select Location"}
-                  </span>
-
-                  {selectedLocation?.address && (
-                    <span className="mt-0.5 block truncate text-[9px] font-medium text-zinc-400">
-                      {selectedLocation.address}
-                    </span>
-                  )}
-                </div>
-
-                <span className="text-sm">▼</span>
-              </div>
+              <span className="block text-[7px] font-bold uppercase tracking-wide text-zinc-400">
+                DELIVER TO
+              </span>
+              <span className="block truncate text-[11px] font-black text-zinc-900">
+                📍 {selectedLocation?.name || "Select Location"} ▼
+              </span>
+              {selectedLocation?.address && (
+                <span className="block truncate text-[8px] font-medium text-zinc-400">
+                  {selectedLocation.address}
+                </span>
+              )}
             </button>
-
-            <Link
-              href={isLoggedIn ? "/profile" : "/login"}
-              aria-label={isLoggedIn ? "Profile" : "Login"}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-xl shadow-sm"
-            >
-              👤
-            </Link>
-
           </div>
         </div>
 
-        {/* MOBILE SEARCH + LOGO */}
+        {/* MOBILE SEARCH + PROFILE */}
         <div className="relative px-4 pb-3 pt-2 md:hidden">
           <div className="flex items-center gap-2">
-
-            <div className="flex min-w-0 flex-1 items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3 shadow-sm">
-
-              <span className="shrink-0 text-base text-zinc-400">
-                🔍
-              </span>
+            <div className="flex min-w-0 flex-1 items-center rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 shadow-sm">
+              <span className="shrink-0 text-sm text-zinc-400">🔍</span>
 
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search products, brands, needs..."
-                className="h-10 min-w-0 flex-1 bg-transparent px-2 text-[11px] outline-none placeholder:text-zinc-400"
+                className="h-9 min-w-0 flex-1 bg-transparent px-2 text-[10px] outline-none placeholder:text-zinc-400"
               />
 
               {search && (
@@ -1073,22 +1059,19 @@ export default function HomePage() {
                 type="button"
                 onClick={startVoiceSearch}
                 title="Voice Search"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-sm"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-xs"
               >
                 🎙️
               </button>
-
             </div>
 
             <Link
-              href="/"
-              aria-label="Night Now Home"
-              className="flex h-11 min-w-[58px] shrink-0 items-center justify-center gap-0.5 rounded-2xl bg-black px-1.5 text-[10px] font-black text-white shadow-sm"
+              href={isLoggedIn ? "/profile" : "/login"}
+              aria-label={isLoggedIn ? "Profile" : "Login"}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-base shadow-sm"
             >
-              <span className="text-lg">🌙</span>
-              <span>Night<span className="text-yellow-400">Now</span></span>
+              👤
             </Link>
-
           </div>
         </div>
 
@@ -1216,23 +1199,23 @@ export default function HomePage() {
 
               <div>
 
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-3xl shadow-[0_8px_20px_rgba(0,0,0,0.18)]">
+                <div className="mb-4 hidden h-14 w-14 items-center justify-center rounded-2xl bg-black text-3xl shadow-[0_8px_20px_rgba(0,0,0,0.18)] md:flex">
                   🌙
                 </div>
 
-                <h1 className="mt-0 whitespace-nowrap text-[22px] font-black leading-tight tracking-tight sm:text-4xl md:text-6xl">
+                <h1 className="mt-0 whitespace-nowrap text-[18px] font-black leading-tight tracking-tight sm:text-4xl md:text-6xl">
                   आपकी जरूरत,
                   <span className="text-yellow-500"> हमारी जिम्मेदारी।</span>
                 </h1>
 
-                <p className="mt-5 max-w-xl text-sm leading-6 text-zinc-500 md:text-base">
+                <p className="mt-3 max-w-xl text-[10px] leading-4 text-zinc-500 md:mt-5 md:text-base md:leading-6">
                   Groceries, snacks,
                   beverages, personal
                   care और daily
                   essentials एक ही जगह।
                 </p>
 
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                <div className="mt-3 flex flex-row items-center gap-2 md:mt-5">
 
                   <button
                     type="button"
@@ -1246,7 +1229,7 @@ export default function HomePage() {
                             "smooth",
                         })
                     }
-                    className="rounded-2xl bg-yellow-400 px-6 py-3 text-sm font-black shadow-sm transition hover:bg-yellow-500"
+                    className="rounded-xl bg-yellow-400 px-4 py-2 text-[10px] font-black shadow-sm transition hover:bg-yellow-500 md:rounded-2xl md:px-6 md:py-3 md:text-sm"
                   >
                     Shop Now →
                   </button>
@@ -1256,7 +1239,7 @@ export default function HomePage() {
                     onClick={() =>
                       setShowNeed(true)
                     }
-                    className="rounded-2xl border border-zinc-200 bg-white px-5 py-3 text-sm font-bold"
+                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[9px] font-bold md:rounded-2xl md:px-5 md:py-3 md:text-sm"
                   >
                     आपकी जरूरत 🧠
                   </button>
@@ -1389,31 +1372,12 @@ export default function HomePage() {
         )}
 
       {/* =================================================
-          CATEGORY SHORTCUT
-          The old Shop by Category rail is intentionally removed
-          from the homepage. Categories are opened from navigation.
-      ================================================= */}
-      <section className="mx-auto max-w-7xl px-4 pt-5 md:pt-8">
-        <Link
-          href="/categories"
-          className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm md:hidden"
-        >
-          <span className="flex items-center gap-2 text-sm font-black">
-            🛍️ Categories
-          </span>
-          <span className="text-xs font-black text-yellow-600">
-            View All →
-          </span>
-        </Link>
-      </section>
-
-      {/* =================================================
           BUY 1 GET 2 — COMPACT
       ================================================= */}
       <section className="mx-auto max-w-7xl px-4 pt-5 md:pt-10">
         <Link
           href="/offers/buy-1-get-2"
-          className="flex min-h-[88px] items-center justify-between gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-700 via-violet-600 to-fuchsia-500 px-4 py-3 text-white shadow-[0_10px_25px_rgba(79,70,229,0.18)] md:min-h-[120px] md:rounded-3xl md:p-5"
+          className="flex min-h-[70px] items-center justify-between gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-indigo-700 via-violet-600 to-fuchsia-500 px-3 py-2 text-white shadow-[0_10px_25px_rgba(79,70,229,0.18)] md:min-h-[120px] md:rounded-3xl md:p-5"
         >
           <div className="min-w-0">
             <p className="text-[8px] font-black md:text-[10px]">SPECIAL OFFER</p>
@@ -1488,30 +1452,30 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => setShowProductFilters(true)}
-            className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-left shadow-sm transition hover:border-yellow-400 hover:shadow-md"
+            className="flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-yellow-400 hover:shadow-md md:rounded-2xl md:px-5 md:py-4"
           >
             <span className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-yellow-400 text-lg">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-400 text-base md:h-11 md:w-11 md:rounded-xl md:text-lg">
                 ⚙️
               </span>
               <span>
-                <span className="block text-sm font-black text-zinc-900">
+                <span className="block text-xs font-black text-zinc-900 md:text-sm">
                   Filters & Sort
                 </span>
-                <span className="mt-0.5 block text-[10px] font-bold text-zinc-400">
+                <span className="mt-0.5 block text-[8px] font-bold text-zinc-400 md:text-[10px]">
                   Category • Brand • Price • Discount • Stock • Sort
                 </span>
               </span>
             </span>
 
-            <span className="rounded-xl bg-zinc-100 px-4 py-2 text-xs font-black text-zinc-700">
+            <span className="rounded-lg bg-zinc-100 px-3 py-1.5 text-[10px] font-black text-zinc-700 md:rounded-xl md:px-4 md:py-2 md:text-xs">
               Open →
             </span>
           </button>
         </div>
 
         {loading ? (
-          <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-3 gap-2 md:grid-cols-4 md:gap-3">
 
             {Array.from({
               length: 8,
@@ -1562,7 +1526,7 @@ export default function HomePage() {
           </div>
         ) : (
 
-          <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
+          <div className="mt-5 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-3 no-scrollbar md:grid md:grid-cols-4 md:overflow-visible md:gap-3">
 
             {filteredProducts.map(
               (product) => {
@@ -1599,12 +1563,12 @@ export default function HomePage() {
                 return (
                   <div
                     key={product.id}
-                    className="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:rounded-[24px] sm:shadow-[0_8px_20px_rgba(0,0,0,0.08),0_18px_45px_rgba(0,0,0,0.06)]"
+                    className="group relative w-[31%] min-w-[31%] snap-start overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md md:w-auto md:min-w-0 md:rounded-[24px] md:shadow-[0_8px_20px_rgba(0,0,0,0.08),0_18px_45px_rgba(0,0,0,0.06)]"
                   >
                     <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-px bg-gradient-to-r from-transparent via-yellow-300 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
                     <Link href={`/product/${product.id}`}>
-                      <div className="relative flex h-28 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 sm:h-36 [transform:translateZ(20px)]">
+                      <div className="relative flex h-24 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 md:h-36 [transform:translateZ(20px)]">
                         <div className="pointer-events-none absolute bottom-5 h-5 w-24 rounded-full bg-black/10 blur-xl transition-all duration-300 group-hover:w-28 group-hover:bg-black/15" />
 
                         {image ? (
@@ -1629,9 +1593,9 @@ export default function HomePage() {
                       </div>
                     </Link>
 
-                    <div className="relative flex min-h-[116px] flex-col border-t border-zinc-100 bg-white p-2 [transform:translateZ(10px)] sm:min-h-[150px] sm:p-3.5">
+                    <div className="relative flex min-h-[108px] flex-col border-t border-zinc-100 bg-white p-2 [transform:translateZ(10px)] md:min-h-[150px] md:p-3.5">
                       <Link href={`/product/${product.id}`}>
-                        <h3 className="line-clamp-2 min-h-[28px] text-[10px] font-black leading-3.5 transition-colors group-hover:text-yellow-600 sm:min-h-[38px] sm:text-sm sm:leading-5">
+                        <h3 className="line-clamp-2 min-h-[28px] text-[9px] font-black leading-3.5 transition-colors group-hover:text-yellow-600 md:min-h-[38px] md:text-sm md:leading-5">
                           {product.name ||
                             product.title ||
                             product.productName ||
@@ -1640,13 +1604,13 @@ export default function HomePage() {
                       </Link>
 
                       {product.brandName && (
-                        <p className="mt-1 truncate text-[10px] font-bold text-yellow-600">
+                        <p className="mt-1 truncate text-[8px] font-bold text-yellow-600 md:text-[10px]">
                           {product.brandName}
                         </p>
                       )}
 
                       <div className="mt-2 flex items-end gap-1.5">
-                        <p className="text-sm font-black text-green-600 sm:text-lg">
+                        <p className="text-xs font-black text-green-600 md:text-lg">
                           ₹{price}
                         </p>
 
@@ -1663,7 +1627,7 @@ export default function HomePage() {
                       </div>
 
                       {stock > 0 && stock <= 5 && (
-                        <p className="mt-1 text-[9px] font-bold text-orange-500">
+                        <p className="mt-1 truncate text-[8px] font-bold text-orange-500 md:text-[9px]">
                           Only {stock} left
                         </p>
                       )}
@@ -1678,7 +1642,7 @@ export default function HomePage() {
                             type="button"
                             aria-label={`Add ${product.name || "product"} to cart`}
                             onClick={() => handleAddToCart(product)}
-                            className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-xl font-black leading-none text-white shadow-[0_3px_0_#c2410c] transition active:translate-y-[2px] active:shadow-[0_1px_0_#c2410c] sm:h-10 sm:w-10"
+                            className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500 text-xl font-black leading-none text-white shadow-[0_3px_0_#c2410c] transition active:translate-y-[2px] active:shadow-[0_1px_0_#c2410c] md:h-10 md:w-10 md:rounded-xl"
                           >
                             {getCartQuantity(product.id) > 0 ? getCartQuantity(product.id) : "+"}
                           </button>
@@ -1694,6 +1658,31 @@ export default function HomePage() {
         )}
 
       </section>
+
+      {/* =================================================
+          MOBILE BOTTOM NAVIGATION — MOBILE ONLY
+          Home | Categories | Orders | Cart
+      ================================================= */}
+      <nav className="fixed inset-x-0 bottom-0 z-[80] border-t border-zinc-200 bg-white/95 px-2 pb-[calc(env(safe-area-inset-bottom)+6px)] pt-2 shadow-[0_-8px_25px_rgba(0,0,0,0.08)] backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-4">
+          <Link href="/" className="flex flex-col items-center gap-0.5 py-1 text-[10px] font-black text-zinc-500">
+            <span className="text-xl">🏠</span>
+            Home
+          </Link>
+          <Link href="/categories" className="flex flex-col items-center gap-0.5 py-1 text-[10px] font-black text-zinc-500">
+            <span className="text-xl">🛍️</span>
+            Categories
+          </Link>
+          <Link href="/orders" className="flex flex-col items-center gap-0.5 py-1 text-[10px] font-black text-zinc-500">
+            <span className="text-xl">📦</span>
+            Orders
+          </Link>
+          <Link href="/cart" className="flex flex-col items-center gap-0.5 py-1 text-[10px] font-black text-zinc-500">
+            <span className="text-xl">🛒</span>
+            Cart
+          </Link>
+        </div>
+      </nav>
 
       {/* =================================================
           FOOTER
