@@ -1609,7 +1609,7 @@ export default function HomePage() {
                     <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-px bg-gradient-to-r from-transparent via-yellow-300 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
                     <Link href={`/product/${product.id}`}>
-                      <div className="relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 [transform:translateZ(20px)]">
+                      <div className="relative flex h-30 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 [transform:translateZ(20px)]">
                         <div className="pointer-events-none absolute bottom-5 h-5 w-24 rounded-full bg-black/10 blur-xl transition-all duration-300 group-hover:w-28 group-hover:bg-black/15" />
 
                         {image ? (
