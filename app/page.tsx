@@ -1516,7 +1516,7 @@ export default function HomePage() {
         </div>
 
         {loading ? (
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
 
             {Array.from({
               length: 8,
@@ -1567,7 +1567,7 @@ export default function HomePage() {
           </div>
         ) : (
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
 
             {filteredProducts.map(
               (product) => {
@@ -1604,12 +1604,12 @@ export default function HomePage() {
                 return (
                   <div
                     key={product.id}
-                    className="group relative overflow-hidden rounded-[24px] border border-zinc-200 bg-white shadow-[0_8px_20px_rgba(0,0,0,0.08),0_18px_45px_rgba(0,0,0,0.06)] transition-all duration-300 hover:-translate-y-2 hover:scale-[1.015] hover:shadow-[0_18px_35px_rgba(0,0,0,0.14),0_30px_65px_rgba(0,0,0,0.10)] active:translate-y-0 [transform-style:preserve-3d]"
+                    className="group relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:rounded-[24px] sm:shadow-[0_8px_20px_rgba(0,0,0,0.08),0_18px_45px_rgba(0,0,0,0.06)]"
                   >
                     <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-px bg-gradient-to-r from-transparent via-yellow-300 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
                     <Link href={`/product/${product.id}`}>
-                      <div className="relative flex h-30 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 [transform:translateZ(20px)]">
+                      <div className="relative flex h-20 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 sm:h-30 [transform:translateZ(20px)]">
                         <div className="pointer-events-none absolute bottom-5 h-5 w-24 rounded-full bg-black/10 blur-xl transition-all duration-300 group-hover:w-28 group-hover:bg-black/15" />
 
                         {image ? (
@@ -1634,9 +1634,9 @@ export default function HomePage() {
                       </div>
                     </Link>
 
-                    <div className="relative border-t border-zinc-100 bg-white p-3.5 [transform:translateZ(10px)]">
+                    <div className="relative border-t border-zinc-100 bg-white p-2 sm:p-3.5 [transform:translateZ(10px)]">
                       <Link href={`/product/${product.id}`}>
-                        <h3 className="line-clamp-2 min-h-[38px] text-sm font-black leading-5 transition-colors group-hover:text-yellow-600">
+                        <h3 className="line-clamp-2 min-h-[30px] text-[10px] font-black leading-4 transition-colors group-hover:text-yellow-600 sm:min-h-[38px] sm:text-sm sm:leading-5">
                           {product.name ||
                             product.title ||
                             product.productName ||
@@ -1651,7 +1651,7 @@ export default function HomePage() {
                       )}
 
                       <div className="mt-3 flex items-end gap-2">
-                        <p className="text-lg font-black text-green-600">
+                        <p className="text-sm font-black text-green-600 sm:text-lg">
                           ₹{price}
                         </p>
 
@@ -1681,7 +1681,7 @@ export default function HomePage() {
                         <button
                           type="button"
                           onClick={() => handleAddToCart(product)}
-                          className="mt-3 w-full rounded-xl bg-yellow-400 py-3 text-[10px] font-black text-black shadow-[0_5px_0_#d4a900,0_8px_15px_rgba(0,0,0,0.10)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-yellow-500 hover:shadow-[0_6px_0_#d4a900,0_12px_20px_rgba(0,0,0,0.14)] active:translate-y-[3px] active:shadow-[0_2px_0_#d4a900]"
+                          className="mt-2 w-full rounded-lg bg-yellow-400 py-2 text-[8px] font-black text-black shadow-[0_3px_0_#d4a900,0_6px_12px_rgba(0,0,0,0.10)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-yellow-500 sm:mt-3 sm:rounded-xl sm:py-3 sm:text-[10px] sm:shadow-[0_5px_0_#d4a900,0_8px_15px_rgba(0,0,0,0.10)] sm:hover:shadow-[0_6px_0_#d4a900,0_12px_20px_rgba(0,0,0,0.14)] active:translate-y-[3px] active:shadow-[0_2px_0_#d4a900]"
                         >
                           🛒 Add to Cart
                         </button>
