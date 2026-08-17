@@ -765,7 +765,7 @@ export default function HomePage() {
 
       <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur">
 
-        <div className="relative mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 md:flex-nowrap">
+        <div className="relative mx-auto hidden max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 md:flex md:flex-nowrap">
 
           {/* LOGO */}
 
