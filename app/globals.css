@@ -208,3 +208,100 @@ html.dark .bg-black {
   background: #ffffff;
   color: #27272a;
 }
+/* NIGHTNOW LIVE OFFER */
+
+.nightnow-live-offer {
+  transform: translateZ(0);
+  animation: nightnowOfferFloat 3.5s ease-in-out infinite;
+}
+
+.nightnow-live-offer:nth-child(2) {
+  animation-delay: 0.25s;
+}
+
+.nightnow-live-offer:nth-child(3) {
+  animation-delay: 0.5s;
+}
+
+.nightnow-live-offer:nth-child(4) {
+  animation-delay: 0.75s;
+}
+
+.nightnow-live-offer:hover {
+  transform: translateY(-3px) scale(1.01);
+}
+
+.nightnow-offer-shine {
+  animation: nightnowOfferShine 4s ease-in-out infinite;
+}
+
+.nightnow-offer-badge {
+  animation: nightnowOfferBadge 2s ease-in-out infinite;
+}
+
+.nightnow-offer-arrow {
+  animation: nightnowOfferArrow 1.2s ease-in-out infinite;
+}
+
+@keyframes nightnowOfferFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes nightnowOfferShine {
+  0% {
+    transform: translateX(-70px) skewX(-18deg);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 0.7;
+  }
+
+  40% {
+    opacity: 0.25;
+  }
+
+  60%,
+  100% {
+    transform: translateX(450px) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+@keyframes nightnowOfferBadge {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes nightnowOfferArrow {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nightnow-live-offer,
+  .nightnow-offer-shine,
+  .nightnow-offer-badge,
+  .nightnow-offer-arrow {
+    animation: none;
+  }
+}

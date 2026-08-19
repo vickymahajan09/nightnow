@@ -1,8 +1,4 @@
 ﻿"use client";
-import {
-  getOffers,
-  type Offer,
-} from "./services/offerService";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -64,8 +60,6 @@ export default function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [needs, setNeeds] = useState<Need[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [offers, setOffers] = useState<Offer[]>([]);
-  
 
   const [loading, setLoading] = useState(true);
 
@@ -147,151 +141,66 @@ export default function HomePage() {
     };
   }, []);
 
- // ==========================================
-// LOAD PRODUCTS + NEEDS + BRANDS + OFFERS
-// ==========================================
+  // ==========================================
+  // LOAD PRODUCTS + NEEDS
+  // ==========================================
 
-useEffect(() => {
-  const loadData = async () => {
-    setLoading(true);
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
 
-    const [
-      productResult,
-      needResult,
-      brandResult,
-      offerResult,
-    ] = await Promise.allSettled([
-      getProducts(),
-      getNeeds(),
-      getBrands(),
-      getOffers(),
-    ]);
-    // ========================================
-    // PRODUCTS
-    // ========================================
+        const [productData, needData, brandData] =
+          await Promise.all([
+            getProducts(),
+            getNeeds(),
+            getBrands(),
+          ]);
 
-    if (
-      productResult.status === "fulfilled"
-    ) {
-      const data =
-        Array.isArray(
-          productResult.value
+        const cleanProducts = Array.isArray(
+          productData
         )
-          ? productResult.value.filter(
+          ? productData.filter(
               (item: any) =>
                 item?.active !== false
             )
           : [];
 
-      setProducts(
-        data as Product[]
-      );
-    } else {
-      console.error(
-        "Products load error:",
-        productResult.reason
-      );
-
-      setProducts([]);
-    }
-
-    // ========================================
-    // NEEDS
-    // ========================================
-
-    if (
-      needResult.status === "fulfilled"
-    ) {
-      const data =
-        Array.isArray(
-          needResult.value
+        const cleanNeeds = Array.isArray(
+          needData
         )
-          ? needResult.value.filter(
+          ? needData.filter(
               (item: Need) =>
                 item?.active !== false
             )
           : [];
 
-      setNeeds(data);
-    } else {
-      console.error(
-        "Needs load error:",
-        needResult.reason
-      );
+        setProducts(
+          cleanProducts as Product[]
+        );
 
-      setNeeds([]);
-    }
+        setNeeds(cleanNeeds);
+        setBrands(
+          Array.isArray(brandData)
+            ? brandData.filter((item) => item?.active !== false)
+            : []
+        );
+      } catch (error) {
+        console.error(
+          "Homepage data loading error:",
+          error
+        );
 
-    // ========================================
-    // BRANDS
-    // ========================================
+        setProducts([]);
+        setNeeds([]);
+        setBrands([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    if (
-      brandResult.status === "fulfilled"
-    ) {
-      const data =
-        Array.isArray(
-          brandResult.value
-        )
-          ? brandResult.value.filter(
-              (item: any) =>
-                item?.active !== false
-            )
-          : [];
-
-      setBrands(
-        data as Brand[]
-      );
-    } else {
-      console.error(
-        "Brands load error:",
-        brandResult.reason
-      );
-
-      setBrands([]);
-    }
-
-    // ========================================
-    // OFFERS
-    // ========================================
-
-    if (
-      offerResult.status === "fulfilled"
-    ) {
-      const data =
-        Array.isArray(
-          offerResult.value
-        )
-          ? offerResult.value.filter(
-              (item: Offer) =>
-                item?.active !== false
-            )
-          : [];
-
-      console.log(
-        "NIGHTNOW ACTIVE OFFERS:",
-        data
-      );
-
-      setOffers(data);
-    } else {
-      console.error(
-        "Offers load error:",
-        offerResult.reason
-      );
-
-      setOffers([]);
-    }
-
-    // ========================================
-    // LOADING COMPLETE
-    // ========================================
-
-    setLoading(false);
-  };
-
-  loadData();
-}, []);
+    loadData();
+  }, []);
 
   useEffect(() => {
     try {
@@ -997,13 +906,13 @@ useEffect(() => {
   };
 
   return (
-   <main className="min-h-screen bg-gradient-to-b from-[#fdf4ff] via-[#fff8fc] to-[#f3e8ff] text-zinc-900">
+    <main className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-violet-50 text-zinc-900">
 
       {/* =================================================
           HEADER
       ================================================= */}
 
-      <header className="sticky top-0 z-50 border-b border-purple-100 bg-[#fffaff]/95 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur">
 
         <div className="relative mx-auto hidden max-w-7xl flex-wrap items-center justify-between gap-2 px-3 py-2.5 md:flex md:flex-nowrap">
 
@@ -1096,33 +1005,7 @@ useEffect(() => {
   </div>
 
   {/* SEARCH RESULTS DIRECTLY BELOW SEARCH BAR */}
-{/* SEARCH BAR */}
-<div className="px-3">
-  <div className="flex items-center gap-2 rounded-xl bg-zinc-100 px-3 py-2">
-    <span className="text-sm">🔍</span>
 
-    <input
-      type="text"
-      placeholder="Search products..."
-      className="flex-1 bg-transparent text-xs font-medium outline-none"
-    />
-  </div>
-
-  {/* Small tagline below search */}
-  <p className="mt-1.5 px-1 text-[9px] font-semibold text-zinc-500">
-    आपकी जरूरत, हमारी जिम्मेदारी
-  </p>
-</div>
-
-{/* SMALL NEED BUTTON */}
-<div className="mt-2 px-3">
-  <button
-    type="button"
-    className="rounded-full bg-yellow-400 px-3 py-1.5 text-[9px] font-black text-zinc-900"
-  >
-    आपकी जरूरत 🛍️
-  </button>
-</div>
 
   {search.trim() &&
     !loading &&
@@ -1470,7 +1353,7 @@ useEffect(() => {
           HERO
       ================================================= */}
 
-      <section className="bg-gradient-to-b from-[#fffaff] via-[#fdf4ff] to-[#f3e8ff]">
+      <section className="bg-gradient-to-b from-white via-white to-yellow-50/40">
 
         <div className="mx-auto max-w-7xl px-4 py-6 md:py-10">
 
@@ -1557,165 +1440,6 @@ useEffect(() => {
         </div>
 
       </section>
-
-{/* =================================================
-    LIVE OFFERS
-================================================= */}
-
-{offers.filter(
-  (offer: Offer) =>
-    offer.active !== false
-).length > 0 && (
-  <section className="w-full px-3 pt-2 pb-3">
-
-    {/* LIVE HEADER */}
-
-    <div className="mb-2 flex items-center justify-between">
-
-      <div className="flex items-center gap-2">
-
-        <span className="relative flex h-2.5 w-2.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-70" />
-
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-        </span>
-
-        <span className="text-[11px] font-black text-zinc-900">
-          LIVE OFFERS
-        </span>
-
-      </div>
-
-      {offers.filter(
-        (offer: Offer) =>
-          offer.active !== false
-      ).length > 1 && (
-        <span className="text-[9px] font-bold text-zinc-400">
-          Swipe →
-        </span>
-      )}
-
-    </div>
-
-
-    {/* OFFER SCROLLER */}
-
-    <div
-      className="flex gap-2.5 overflow-x-auto pb-1"
-      style={{
-        scrollbarWidth: "none",
-        msOverflowStyle: "none",
-      }}
-    >
-
-      {offers
-        .filter(
-          (offer: Offer) =>
-            offer.active !== false
-        )
-        .map(
-          (offer: Offer) => {
-
-            let offerType =
-              "SPECIAL OFFER";
-
-            if (
-              offer.type ===
-              "BUY_1_GET_1"
-            ) {
-              offerType =
-                "BUY 1 GET 1";
-            }
-
-            if (
-              offer.type ===
-              "BUY_1_GET_2"
-            ) {
-              offerType =
-                "BUY 1 GET 2";
-            }
-
-            if (
-              offer.type ===
-              "BUY_X_GET_Y"
-            ) {
-              offerType =
-                `BUY ${offer.buyQuantity} GET ${offer.freeQuantity}`;
-            }
-
-            return (
-              <Link
-                key={offer.id}
-                href={`/offers/${offer.id}`}
-                className="group relative min-w-[calc(100vw-36px)] max-w-[360px] overflow-hidden rounded-[18px] border border-yellow-300 bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-300 px-3 py-2.5 shadow-[0_5px_16px_rgba(0,0,0,0.12)] transition-all duration-200 active:scale-[0.98]"
-              >
-
-                {/* MOVING SHINE */}
-
-                <span
-                  className="pointer-events-none absolute inset-y-0 -left-16 w-10 -skew-x-12 bg-white/40 transition-transform duration-[1800ms] group-hover:translate-x-[430px]"
-                />
-
-                {/* TOP */}
-
-                <div className="relative z-10 flex items-center justify-between gap-2">
-
-                  <div className="min-w-0">
-
-                    <div className="flex items-center gap-1.5">
-
-                      <span className="text-[8px] font-black text-black/60">
-                        {offerType}
-                      </span>
-
-                    </div>
-
-                    <h3 className="mt-0.5 truncate text-[14px] font-black leading-tight text-black">
-                      {offer.title}
-                    </h3>
-
-                    {offer.description && (
-                      <p className="mt-0.5 truncate text-[8px] font-semibold text-black/60">
-                        {offer.description}
-                      </p>
-                    )}
-
-                  </div>
-
-
-                  {/* OFFER BADGE */}
-
-                  <span className="shrink-0 animate-pulse rounded-full bg-black px-2.5 py-1 text-[7px] font-black text-white">
-                    OFFER
-                  </span>
-
-                </div>
-
-
-                {/* BOTTOM */}
-
-                <div className="relative z-10 mt-2 flex items-center justify-between">
-
-                  <span className="text-[8px] font-bold text-black/55">
-                    Tap to see offer
-                  </span>
-
-                  <span className="rounded-lg bg-black px-3 py-1.5 text-[8px] font-black text-white transition-transform group-hover:translate-x-1">
-                    View Offer →
-                  </span>
-
-                </div>
-
-              </Link>
-            );
-          }
-        )}
-
-    </div>
-
-  </section>
-)}
-
 
       {/* =================================================
           MATCHED NEEDS FROM MAIN SEARCH
@@ -1836,7 +1560,7 @@ useEffect(() => {
                       )}`}
                       className="min-w-0 text-center"
                     >
-                      <div className="flex h-[76px] items-center justify-center overflow-hidden rounded-xl bg-[#faf0ff]">
+                      <div className="flex h-[76px] items-center justify-center overflow-hidden rounded-xl bg-[#eefafa]">
                         {category.image ? (
                           <img
                             src={category.image}
@@ -1915,9 +1639,7 @@ useEffect(() => {
         </div>
 
       </section>
-<style jsx>{`
-  ...
-`}</style>
+
       {/* =================================================
           TOP BRANDS
       ================================================= */}
@@ -2398,14 +2120,9 @@ useEffect(() => {
                         </div>
                       ) : (
                         <>
-                          {/* MOBILE ONLY: FIXED QUANTITY AREA */}
-                          {/*
-                            Reserve the same height even when quantity is 0.
-                            This keeps the - / qty / + control locked to the
-                            same vertical position for every product card.
-                          */}
-                          <div className="mt-2 h-9 md:hidden">
-                            {getMobileCartQuantity(product) > 0 ? (
+                          {/* MOBILE ONLY: MINUS / QUANTITY / PLUS */}
+                          <div className="mt-2 md:hidden">
+                            {getMobileCartQuantity(product) > 0 && (
                               <div className="flex h-9 w-full items-center overflow-hidden rounded-lg bg-yellow-400">
                                 <button
                                   type="button"
@@ -2415,12 +2132,12 @@ useEffect(() => {
                                     handleMobileDecrease(product);
                                   }}
                                   aria-label={`Decrease ${product.name || "product"} quantity`}
-                                  className="flex h-full w-10 shrink-0 items-center justify-center bg-black text-lg font-black text-white active:bg-zinc-800"
+                                  className="flex h-full w-10 items-center justify-center bg-black text-lg font-black text-white active:bg-zinc-800"
                                 >
                                   −
                                 </button>
 
-                                <span className="flex h-full min-w-0 flex-1 items-center justify-center text-xs font-black text-black">
+                                <span className="flex h-full flex-1 items-center justify-center text-xs font-black text-black">
                                   {getMobileCartQuantity(product)}
                                 </span>
 
@@ -2433,13 +2150,11 @@ useEffect(() => {
                                   }}
                                   disabled={getMobileCartQuantity(product) >= stock}
                                   aria-label={`Increase ${product.name || "product"} quantity`}
-                                  className="flex h-full w-10 shrink-0 items-center justify-center bg-black text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-40 active:bg-zinc-800"
+                                  className="flex h-full w-10 items-center justify-center bg-black text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-40 active:bg-zinc-800"
                                 >
                                   +
                                 </button>
                               </div>
-                            ) : (
-                              <div className="h-9 w-full" aria-hidden="true" />
                             )}
                           </div>
 

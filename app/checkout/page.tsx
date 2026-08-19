@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
+
 import Link from "next/link";
 
 import {
@@ -12,10 +16,12 @@ import {
   getDocs,
 } from "firebase/firestore";
 
-import { auth, db } from "../lib/firebase";
+import {
+  auth,
+  db,
+} from "../lib/firebase";
 
 import {
-  CartProvider,
   useCart,
 } from "../context/CartContext";
 
@@ -35,24 +41,31 @@ declare global {
 
 type SavedAddress = {
   id: string;
+
   name?: string;
   phone?: string;
   address?: string;
   city?: string;
   pincode?: string;
+
   label?: string;
 };
 
 type Coupon = {
   id: string;
+
   code: string;
+
   discount: number;
+
   minOrder?: number;
+
   expiresAt?: string;
+
   active?: boolean;
 };
 
-function CheckoutContent() {
+export default function CheckoutPage() {
   const {
     cart,
     cartTotal,
@@ -77,64 +90,94 @@ function CheckoutContent() {
   const [pincode, setPincode] =
     useState("");
 
-  const [savedAddresses, setSavedAddresses] =
-    useState<SavedAddress[]>([]);
+  const [
+    savedAddresses,
+    setSavedAddresses,
+  ] =
+    useState<
+      SavedAddress[]
+    >([]);
 
-  const [showAddresses, setShowAddresses] =
+  const [
+    showAddresses,
+    setShowAddresses,
+  ] =
     useState(false);
 
   const [loading, setLoading] =
     useState(false);
 
-  // =====================================
-  // COUPON STATES
-  // =====================================
+  /* =====================================================
+     COUPON
+  ===================================================== */
 
-  const [couponCode, setCouponCode] =
-    useState("");
+  const [
+    couponCode,
+    setCouponCode,
+  ] = useState("");
 
-  const [appliedCoupon, setAppliedCoupon] =
-    useState<Coupon | null>(null);
+  const [
+    appliedCoupon,
+    setAppliedCoupon,
+  ] =
+    useState<Coupon | null>(
+      null
+    );
 
-  const [couponDiscount, setCouponDiscount] =
-    useState(0);
+  const [
+    couponDiscount,
+    setCouponDiscount,
+  ] = useState(0);
 
-  const [couponLoading, setCouponLoading] =
-    useState(false);
+  const [
+    couponLoading,
+    setCouponLoading,
+  ] = useState(false);
 
-  const [couponMessage, setCouponMessage] =
-    useState("");
+  const [
+    couponMessage,
+    setCouponMessage,
+  ] = useState("");
 
-  const [couponError, setCouponError] =
-    useState("");
+  const [
+    couponError,
+    setCouponError,
+  ] = useState("");
 
-  // =====================================
-  // TOTALS
-  // =====================================
+  /* =====================================================
+     TOTALS
+  ===================================================== */
 
   const delivery =
-    cartTotal >= 299 ? 0 : 30;
+    cartTotal >= 299
+      ? 0
+      : 30;
 
   const subtotalAfterCoupon =
     Math.max(
       0,
-      cartTotal - couponDiscount
+      cartTotal -
+        couponDiscount
     );
 
   const grandTotal =
     subtotalAfterCoupon +
     delivery;
 
-  // =====================================
-  // AUTH + SAVED ADDRESS
-  // =====================================
+  /* =====================================================
+     AUTH + SAVED ADDRESS
+  ===================================================== */
 
   useEffect(() => {
     const unsubscribe =
       onAuthStateChanged(
         auth,
-        async (currentUser) => {
-          setUser(currentUser);
+        async (
+          currentUser
+        ) => {
+          setUser(
+            currentUser
+          );
 
           if (!currentUser) {
             return;
@@ -155,39 +198,44 @@ function CheckoutContent() {
               snapshot.docs.map(
                 (item) => ({
                   id: item.id,
-                  ...(item.data() as any),
+                  ...item.data(),
                 })
-              );
+              ) as SavedAddress[];
 
             setSavedAddresses(
               addresses
             );
 
-            // AUTO SELECT FIRST SAVED ADDRESS
             if (
-              addresses.length > 0
+              addresses.length >
+              0
             ) {
               const first =
                 addresses[0];
 
               setName(
-                first.name || ""
+                first.name ||
+                  ""
               );
 
               setPhone(
-                first.phone || ""
+                first.phone ||
+                  ""
               );
 
               setAddress(
-                first.address || ""
+                first.address ||
+                  ""
               );
 
               setCity(
-                first.city || ""
+                first.city ||
+                  ""
               );
 
               setPincode(
-                first.pincode || ""
+                first.pincode ||
+                  ""
               );
             }
           } catch (error) {
@@ -203,9 +251,9 @@ function CheckoutContent() {
       unsubscribe();
   }, []);
 
-  // =====================================
-  // SELECT SAVED ADDRESS
-  // =====================================
+  /* =====================================================
+     SELECT ADDRESS
+  ===================================================== */
 
   const selectAddress = (
     item: SavedAddress
@@ -230,202 +278,258 @@ function CheckoutContent() {
       item.pincode || ""
     );
 
-    setShowAddresses(false);
+    setShowAddresses(
+      false
+    );
   };
 
-  // =====================================
-  // APPLY COUPON
-  // =====================================
+  /* =====================================================
+     APPLY COUPON
+  ===================================================== */
 
-  const applyCoupon = async () => {
-    const cleanCode =
-      couponCode
-        .trim()
-        .toUpperCase();
+  const applyCoupon =
+    async () => {
+      const cleanCode =
+        couponCode
+          .trim()
+          .toUpperCase();
 
-    setCouponError("");
-    setCouponMessage("");
+      setCouponError("");
+      setCouponMessage("");
 
-    if (!cleanCode) {
-      setCouponError(
-        "Please enter coupon code."
-      );
-      return;
-    }
-
-    if (cartTotal <= 0) {
-      setCouponError(
-        "Cart is empty."
-      );
-      return;
-    }
-
-    setCouponLoading(true);
-
-    try {
-      const coupons =
-        (await getCoupons()) as Coupon[];
-
-      const coupon =
-        coupons.find(
-          (item) =>
-            String(
-              item.code || ""
-            )
-              .trim()
-              .toUpperCase() ===
-            cleanCode
-        );
-
-      if (!coupon) {
+      if (!cleanCode) {
         setCouponError(
-          "Invalid coupon code."
+          "Please enter coupon code."
         );
-        setAppliedCoupon(null);
-        setCouponDiscount(0);
+
         return;
       }
 
-      // ACTIVE CHECK
-
-      if (
-        coupon.active === false
-      ) {
+      if (cartTotal <= 0) {
         setCouponError(
-          "This coupon is inactive."
+          "Cart is empty."
         );
-        setAppliedCoupon(null);
-        setCouponDiscount(0);
+
         return;
       }
 
-      // MINIMUM ORDER CHECK
+      setCouponLoading(true);
 
-      const minOrder =
-        Number(
-          coupon.minOrder || 0
-        );
+      try {
+        const coupons =
+          (await getCoupons()) as Coupon[];
 
-      if (
-        minOrder > 0 &&
-        cartTotal < minOrder
-      ) {
-        setCouponError(
-          `Minimum order value is ₹${minOrder}.`
-        );
-        setAppliedCoupon(null);
-        setCouponDiscount(0);
-        return;
-      }
+        const coupon =
+          coupons.find(
+            (item) =>
+              String(
+                item.code || ""
+              )
+                .trim()
+                .toUpperCase() ===
+              cleanCode
+          );
 
-      // EXPIRY CHECK
+        if (!coupon) {
+          setCouponError(
+            "Invalid coupon code."
+          );
 
-      if (coupon.expiresAt) {
-        const expiryDate =
-          new Date(
-            coupon.expiresAt
+          setAppliedCoupon(
+            null
+          );
+
+          setCouponDiscount(
+            0
+          );
+
+          return;
+        }
+
+        if (
+          coupon.active ===
+          false
+        ) {
+          setCouponError(
+            "This coupon is inactive."
+          );
+
+          setAppliedCoupon(
+            null
+          );
+
+          setCouponDiscount(
+            0
+          );
+
+          return;
+        }
+
+        const minOrder =
+          Number(
+            coupon.minOrder ||
+              0
           );
 
         if (
-          !Number.isNaN(
-            expiryDate.getTime()
-          ) &&
-          expiryDate <
-            new Date()
+          minOrder > 0 &&
+          cartTotal <
+            minOrder
         ) {
           setCouponError(
-            "This coupon has expired."
+            `Minimum order value is ₹${minOrder}.`
           );
-          setAppliedCoupon(null);
-          setCouponDiscount(0);
+
+          setAppliedCoupon(
+            null
+          );
+
+          setCouponDiscount(
+            0
+          );
+
           return;
         }
-      }
 
-      // DISCOUNT
+        if (
+          coupon.expiresAt
+        ) {
+          const expiryDate =
+            new Date(
+              coupon.expiresAt
+            );
 
-      const discountPercent =
-        Number(
-          coupon.discount || 0
+          if (
+            !Number.isNaN(
+              expiryDate.getTime()
+            ) &&
+            expiryDate <
+              new Date()
+          ) {
+            setCouponError(
+              "This coupon has expired."
+            );
+
+            setAppliedCoupon(
+              null
+            );
+
+            setCouponDiscount(
+              0
+            );
+
+            return;
+          }
+        }
+
+        const discountPercent =
+          Number(
+            coupon.discount ||
+              0
+          );
+
+        if (
+          discountPercent <=
+          0
+        ) {
+          setCouponError(
+            "Invalid coupon discount."
+          );
+
+          setAppliedCoupon(
+            null
+          );
+
+          setCouponDiscount(
+            0
+          );
+
+          return;
+        }
+
+        const discountAmount =
+          Math.round(
+            (cartTotal *
+              discountPercent) /
+              100
+          );
+
+        const finalDiscount =
+          Math.min(
+            discountAmount,
+            cartTotal
+          );
+
+        setAppliedCoupon(
+          coupon
         );
 
-      if (
-        discountPercent <= 0
-      ) {
+        setCouponDiscount(
+          finalDiscount
+        );
+
+        setCouponCode(
+          coupon.code
+        );
+
+        setCouponMessage(
+          `Coupon applied! You saved ₹${finalDiscount}.`
+        );
+      } catch (error) {
+        console.error(
+          "Coupon apply error:",
+          error
+        );
+
         setCouponError(
-          "Invalid coupon discount."
+          "Unable to apply coupon. Please try again."
         );
-        setAppliedCoupon(null);
-        setCouponDiscount(0);
-        return;
+
+        setAppliedCoupon(
+          null
+        );
+
+        setCouponDiscount(
+          0
+        );
+      } finally {
+        setCouponLoading(
+          false
+        );
       }
+    };
 
-      const discountAmount =
-        Math.round(
-          (cartTotal *
-            discountPercent) /
-            100
-        );
+  /* =====================================================
+     REMOVE COUPON
+  ===================================================== */
 
-      const finalDiscount =
-        Math.min(
-          discountAmount,
-          cartTotal
-        );
-
+  const removeCoupon =
+    () => {
       setAppliedCoupon(
-        coupon
+        null
       );
 
       setCouponDiscount(
-        finalDiscount
+        0
       );
 
-      setCouponCode(
-        coupon.code
-      );
+      setCouponCode("");
 
-      setCouponMessage(
-        `Coupon applied! You saved ₹${finalDiscount}.`
-      );
-    } catch (error) {
-      console.error(
-        "Coupon apply error:",
-        error
-      );
+      setCouponMessage("");
 
-      setCouponError(
-        "Unable to apply coupon. Please try again."
-      );
+      setCouponError("");
+    };
 
-      setAppliedCoupon(null);
-      setCouponDiscount(0);
-    } finally {
-      setCouponLoading(false);
-    }
-  };
-
-  // =====================================
-  // REMOVE COUPON
-  // =====================================
-
-  const removeCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponDiscount(0);
-    setCouponCode("");
-    setCouponMessage("");
-    setCouponError("");
-  };
-
-  // =====================================
-  // VALIDATE
-  // =====================================
+  /* =====================================================
+     VALIDATE
+  ===================================================== */
 
   const validate = () => {
     if (!name.trim()) {
       alert(
         "Please enter your name"
       );
+
       return false;
     }
 
@@ -436,6 +540,7 @@ function CheckoutContent() {
       alert(
         "Enter valid 10 digit phone number"
       );
+
       return false;
     }
 
@@ -443,6 +548,7 @@ function CheckoutContent() {
       alert(
         "Please enter delivery address"
       );
+
       return false;
     }
 
@@ -450,6 +556,7 @@ function CheckoutContent() {
       alert(
         "Please enter city"
       );
+
       return false;
     }
 
@@ -460,6 +567,7 @@ function CheckoutContent() {
       alert(
         "Enter valid 6 digit pincode"
       );
+
       return false;
     }
 
@@ -470,91 +578,287 @@ function CheckoutContent() {
       alert(
         "Cart is empty"
       );
+
       return false;
     }
 
     return true;
   };
 
-  // =====================================
-  // SAVE ORDER
-  // =====================================
+  /* =====================================================
+     OFFER SNAPSHOT
+     
+     Old order future offer changes se affect nahi hoga.
+  ===================================================== */
 
-  const saveOrder = async (
-    paymentMethod: string,
-    paymentData: any = {}
-  ) => {
-    const order = {
-      customer: {
-        name,
-        phone,
-        address,
-        city,
-        pincode,
-      },
+  const buildOfferSnapshot =
+    () => {
+      return cart
+        .filter(
+          (item: any) =>
+            item.offerType &&
+            item.offerType !==
+              "NONE"
+        )
+        .map(
+          (item: any) => ({
+            productId:
+              item.id,
 
-      items: cart,
+            productName:
+              item.name ||
+              "Product",
 
-      subtotal: cartTotal,
+            offerId:
+              item.offerId ||
+              null,
 
-      coupon: appliedCoupon
-        ? {
-            id:
-              appliedCoupon.id,
-            code:
-              appliedCoupon.code,
-            discountPercent:
+            offerType:
+              item.offerType,
+
+            offerLabel:
+              item.offerLabel ||
+              "",
+
+            offerDescription:
+              item.offerDescription ||
+              "",
+
+            buyQuantity:
               Number(
-                appliedCoupon.discount ||
+                item.offerBuyQuantity ||
+                  1
+              ),
+
+            freePerSet:
+              Number(
+                item.offerFreeQuantity ||
                   0
               ),
-            discountAmount:
-              couponDiscount,
-          }
-        : null,
 
-      couponCode:
-        appliedCoupon?.code ||
-        null,
+            paidQuantity:
+              Number(
+                item.quantity ||
+                  1
+              ),
 
-      couponDiscount:
-        couponDiscount,
+            freeQuantity:
+              Number(
+                item.freeQuantity ||
+                  0
+              ),
 
-      delivery,
+            totalQuantity:
+              Number(
+                item.totalQuantity ||
+                  item.quantity ||
+                  1
+              ),
 
-      total: grandTotal,
+            unitPrice:
+              Number(
+                item.price ||
+                  0
+              ),
 
-      paymentMethod,
+            paidAmount:
+              Number(
+                item.price ||
+                  0
+              ) *
+              Number(
+                item.quantity ||
+                  1
+              ),
 
-      payment:
-        paymentData,
-
-      userId:
-        user?.uid || null,
-
-      customerEmail:
-        user?.email || null,
-
-      status: "Placed",
-
-      createdAt:
-        new Date(),
+            freeAmount:
+              Number(
+                item.price ||
+                  0
+              ) *
+              Number(
+                item.freeQuantity ||
+                  0
+              ),
+          })
+        );
     };
 
-    await addOrder(
-      order
-    );
+  /* =====================================================
+     SAVE ORDER
+  ===================================================== */
 
-    // Order successfully created: clear the whole cart in one atomic state update.
-    clearCart();
+  const saveOrder =
+    async (
+      paymentMethod: string,
+      paymentData: any = {}
+    ) => {
+      const offerSnapshot =
+        buildOfferSnapshot();
 
-    window.location.href =
-      "/orders";
-  };
+      const orderItems =
+        cart.map(
+          (item: any) => ({
+            ...item,
 
-  // =====================================
-  // COD
-  // =====================================
+            paidQuantity:
+              Number(
+                item.quantity ||
+                  1
+              ),
+
+            freeQuantity:
+              Number(
+                item.freeQuantity ||
+                  0
+              ),
+
+            totalQuantity:
+              Number(
+                item.totalQuantity ||
+                  item.quantity ||
+                  1
+              ),
+
+            offerSnapshot:
+              item.offerType &&
+              item.offerType !==
+                "NONE"
+                ? {
+                    offerId:
+                      item.offerId ||
+                      null,
+
+                    offerType:
+                      item.offerType,
+
+                    offerLabel:
+                      item.offerLabel ||
+                      "",
+
+                    offerBuyQuantity:
+                      Number(
+                        item.offerBuyQuantity ||
+                          1
+                      ),
+
+                    offerFreeQuantity:
+                      Number(
+                        item.offerFreeQuantity ||
+                          0
+                      ),
+                  }
+                : null,
+          })
+        );
+
+      const order = {
+        customer: {
+          name,
+          phone,
+          address,
+          city,
+          pincode,
+        },
+
+        /* ==========================
+           ITEMS
+        ========================== */
+
+        items:
+          orderItems,
+
+        /* ==========================
+           OFFER SNAPSHOT
+        ========================== */
+
+        offers:
+          offerSnapshot,
+
+        hasOffers:
+          offerSnapshot.length >
+          0,
+
+        /* ==========================
+           PRICE
+        ========================== */
+
+        subtotal:
+          cartTotal,
+
+        coupon:
+          appliedCoupon
+            ? {
+                id:
+                  appliedCoupon.id,
+
+                code:
+                  appliedCoupon.code,
+
+                discountPercent:
+                  Number(
+                    appliedCoupon.discount ||
+                      0
+                  ),
+
+                discountAmount:
+                  couponDiscount,
+              }
+            : null,
+
+        couponCode:
+          appliedCoupon?.code ||
+          null,
+
+        couponDiscount:
+          couponDiscount,
+
+        delivery,
+
+        total:
+          grandTotal,
+
+        /* ==========================
+           PAYMENT
+        ========================== */
+
+        paymentMethod,
+
+        payment:
+          paymentData,
+
+        /* ==========================
+           USER
+        ========================== */
+
+        userId:
+          user?.uid ||
+          null,
+
+        customerEmail:
+          user?.email ||
+          null,
+
+        status:
+          "Placed",
+
+        createdAt:
+          new Date(),
+      };
+
+      await addOrder(
+        order
+      );
+
+      clearCart();
+
+      window.location.href =
+        "/orders";
+    };
+
+  /* =====================================================
+     COD
+  ===================================================== */
 
   const placeCOD =
     async () => {
@@ -581,9 +885,9 @@ function CheckoutContent() {
       }
     };
 
-  // =====================================
-  // ONLINE PAYMENT
-  // =====================================
+  /* =====================================================
+     ONLINE PAYMENT
+  ===================================================== */
 
   const payOnline =
     async () => {
@@ -629,19 +933,19 @@ function CheckoutContent() {
           await fetch(
             "/api/razorpay/create-order",
             {
-              method: "POST",
+              method:
+                "POST",
 
               headers: {
                 "Content-Type":
                   "application/json",
               },
 
-              body: JSON.stringify(
-                {
+              body:
+                JSON.stringify({
                   amount:
                     grandTotal,
-                }
-              ),
+                }),
             }
           );
 
@@ -664,9 +968,11 @@ function CheckoutContent() {
           amount:
             razorpayOrder.amount,
 
-          currency: "INR",
+          currency:
+            "INR",
 
-          name: "Night Now",
+          name:
+            "Night Now",
 
           description:
             "Night Now Order",
@@ -683,7 +989,9 @@ function CheckoutContent() {
 
           notes: {
             address,
+
             city,
+
             pincode,
 
             coupon:
@@ -736,9 +1044,9 @@ function CheckoutContent() {
       }
     };
 
-  // =====================================
-  // UI
-  // =====================================
+  /* =====================================================
+     UI
+  ===================================================== */
 
   return (
     <main className="min-h-screen bg-black px-3 py-5 pb-10 text-white">
@@ -780,7 +1088,7 @@ function CheckoutContent() {
 
         <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
 
-          {/* DELIVERY DETAILS */}
+          {/* DELIVERY */}
 
           <section className="rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
 
@@ -815,8 +1123,6 @@ function CheckoutContent() {
 
             </div>
 
-            {/* SAVED ADDRESS */}
-
             {showAddresses && (
               <div className="mt-4 space-y-2">
 
@@ -832,7 +1138,7 @@ function CheckoutContent() {
                           item
                         )
                       }
-                      className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-left hover:border-yellow-400"
+                      className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-left"
                     >
 
                       <p className="text-xs font-black">
@@ -959,38 +1265,72 @@ function CheckoutContent() {
                     key={
                       item.id
                     }
-                    className="flex items-center justify-between gap-3 rounded-2xl bg-zinc-900 p-3"
+                    className="rounded-2xl bg-zinc-900 p-3"
                   >
 
-                    <div className="min-w-0">
+                    <div className="flex items-center justify-between gap-3">
 
-                      <p className="truncate text-xs font-black">
-                        {
-                          item.name
-                        }
-                      </p>
+                      <div className="min-w-0">
 
-                      <p className="mt-1 text-[10px] text-zinc-500">
-                        Qty:{" "}
-                        {
-                          item.quantity ||
-                            1
-                        }
+                        <p className="truncate text-xs font-black">
+                          {
+                            item.name
+                          }
+                        </p>
+
+                        <p className="mt-1 text-[10px] text-zinc-500">
+                          Paid Qty:{" "}
+                          {
+                            item.quantity ||
+                              1
+                          }
+                        </p>
+
+                      </div>
+
+                      <p className="shrink-0 text-xs font-black">
+                        ₹
+                        {Number(
+                          item.price ||
+                            0
+                        ) *
+                          Number(
+                            item.quantity ||
+                              1
+                          )}
                       </p>
 
                     </div>
 
-                    <p className="shrink-0 text-xs font-black">
-                      ₹
-                      {Number(
-                        item.price ||
-                          0
-                      ) *
-                        Number(
-                          item.quantity ||
-                            1
-                        )}
-                    </p>
+                    {Number(
+                      item.freeQuantity ||
+                        0
+                    ) > 0 && (
+                      <div className="mt-2 rounded-xl border border-green-900/50 bg-green-950/30 p-2">
+
+                        <p className="text-[10px] font-black text-green-400">
+                          🎁{" "}
+                          {item.offerLabel ||
+                            "FREE OFFER"}
+                        </p>
+
+                        <p className="mt-1 text-[9px] text-green-500">
+                          Paid:{" "}
+                          {
+                            item.quantity
+                          }{" "}
+                          • Free:{" "}
+                          {
+                            item.freeQuantity
+                          }{" "}
+                          • Total Qty:{" "}
+                          {
+                            item.totalQuantity
+                          }
+                        </p>
+
+                      </div>
+                    )}
 
                   </div>
                 )
@@ -998,9 +1338,7 @@ function CheckoutContent() {
 
             </div>
 
-            {/* =================================
-                COUPON
-            ================================== */}
+            {/* COUPON */}
 
             <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
 
@@ -1011,7 +1349,6 @@ function CheckoutContent() {
                 </span>
 
                 <div>
-
                   <p className="text-sm font-black">
                     Apply Coupon
                   </p>
@@ -1019,23 +1356,19 @@ function CheckoutContent() {
                   <p className="text-[10px] text-zinc-500">
                     Save more on your order
                   </p>
-
                 </div>
 
               </div>
 
               {!appliedCoupon ? (
                 <>
-
                   <div className="mt-3 flex gap-2">
 
                     <input
                       value={
                         couponCode
                       }
-                      onChange={(
-                        e
-                      ) => {
+                      onChange={(e) => {
                         setCouponCode(
                           e.target.value.toUpperCase()
                         );
@@ -1048,9 +1381,7 @@ function CheckoutContent() {
                           ""
                         );
                       }}
-                      onKeyDown={(
-                        e
-                      ) => {
+                      onKeyDown={(e) => {
                         if (
                           e.key ===
                           "Enter"
@@ -1096,7 +1427,6 @@ function CheckoutContent() {
                       }
                     </p>
                   )}
-
                 </>
               ) : (
                 <div className="mt-3 flex items-center justify-between rounded-xl border border-green-700/50 bg-green-950/30 p-3">
@@ -1104,13 +1434,15 @@ function CheckoutContent() {
                   <div>
 
                     <p className="text-xs font-black text-green-400">
-                      {appliedCoupon.code}
+                      {
+                        appliedCoupon.code
+                      }
                     </p>
 
                     <p className="mt-1 text-[10px] text-green-500">
-                      {appliedCoupon.discount}% OFF
-                      {" • "}
-                      Saved ₹
+                      {
+                        appliedCoupon.discount
+                      }% OFF • Saved ₹
                       {
                         couponDiscount
                       }
@@ -1135,7 +1467,7 @@ function CheckoutContent() {
 
             <div className="my-5 h-px bg-zinc-800" />
 
-            {/* PRICE BREAKDOWN */}
+            {/* PRICE */}
 
             <div className="space-y-3 text-sm">
 
@@ -1235,17 +1567,7 @@ function CheckoutContent() {
           </section>
 
         </div>
-
       </div>
-
     </main>
-  );
-}
-
-export default function CheckoutPage() {
-  return (
-    <CartProvider>
-      <CheckoutContent />
-    </CartProvider>
   );
 }
