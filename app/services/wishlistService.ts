@@ -1,76 +1,174 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
   getDocs,
-  query,
-  where,
+  setDoc,
 } from "firebase/firestore";
 
-import { db } from "../lib/firebase";
+import {
+  auth,
+  db,
+} from "../lib/firebase";
 
-export type WishlistItem = {
-  id: string;
-  userId: string;
-  productId: string;
-  name?: string;
-  price?: number;
-  mrp?: number;
-  image?: string;
-  createdAt?: any;
-};
+const getUserId = () => {
+  const uid =
+    auth.currentUser?.uid;
 
-export const addWishlist = async (
-  data: Omit<WishlistItem, "id">
-) => {
-  const existingQuery = query(
-    collection(db, "wishlist"),
-    where("userId", "==", data.userId),
-    where("productId", "==", data.productId)
-  );
-
-  const existing =
-    await getDocs(existingQuery);
-
-  if (!existing.empty) {
-    return existing.docs[0];
+  if (!uid) {
+    throw new Error(
+      "Please login first."
+    );
   }
 
-  return await addDoc(
-    collection(db, "wishlist"),
-    {
-      ...data,
-      createdAt: new Date(),
+  return uid;
+};
+
+const wishlistCollection = () =>
+  collection(
+    db,
+    "users",
+    getUserId(),
+    "wishlist"
+  );
+
+export const getWishlist =
+  async () => {
+    const snapshot =
+      await getDocs(
+        wishlistCollection()
+      );
+
+    return snapshot.docs.map(
+      (item) => ({
+        id: item.id,
+        ...item.data(),
+      })
+    );
+  };
+
+export const isInWishlist =
+  async (
+    productId: string
+  ) => {
+    if (!productId) {
+      return false;
     }
-  );
-};
 
-export const getWishlist = async (
-  userId: string
-): Promise<WishlistItem[]> => {
-  if (!userId) return [];
+    const snapshot =
+      await getDocs(
+        wishlistCollection()
+      );
 
-  const q = query(
-    collection(db, "wishlist"),
-    where("userId", "==", userId)
-  );
+    return snapshot.docs.some(
+      (item) =>
+        item.id === productId
+    );
+  };
 
-  const snapshot =
-    await getDocs(q);
+export const addToWishlist =
+  async (
+    productId: string,
+    product: any = {}
+  ) => {
+    if (!productId) {
+      throw new Error(
+        "Product ID is required."
+      );
+    }
 
-  return snapshot.docs.map(
-    (item) => ({
-      id: item.id,
-      ...item.data(),
-    }) as WishlistItem
-  );
-};
+    await setDoc(
+      doc(
+        db,
+        "users",
+        getUserId(),
+        "wishlist",
+        productId
+      ),
+      {
+        productId,
 
-export const deleteWishlist = async (
-  id: string
-) => {
-  await deleteDoc(
-    doc(db, "wishlist", id)
-  );
-};
+        productName:
+          product.productName ||
+          product.name ||
+          "",
+
+        image:
+          product.image ||
+          product.images?.[0] ||
+          "",
+
+        price:
+          Number(
+            product.price || 0
+          ),
+
+        mrp:
+          Number(
+            product.mrp || 0
+          ),
+
+        variantId:
+          product.variantId ||
+          "",
+
+        variantName:
+          product.variantName ||
+          "",
+
+        addedAt:
+          new Date(),
+
+        updatedAt:
+          new Date(),
+      },
+      {
+        merge: true,
+      }
+    );
+  };
+
+export const removeFromWishlist =
+  async (
+    productId: string
+  ) => {
+    if (!productId) {
+      return;
+    }
+
+    await deleteDoc(
+      doc(
+        db,
+        "users",
+        getUserId(),
+        "wishlist",
+        productId
+      )
+    );
+  };
+
+export const toggleWishlist =
+  async (
+    productId: string,
+    product: any = {}
+  ) => {
+    const exists =
+      await isInWishlist(
+        productId
+      );
+
+    if (exists) {
+      await removeFromWishlist(
+        productId
+      );
+
+      return false;
+    }
+
+    await addToWishlist(
+      productId,
+      product
+    );
+
+    return true;
+  };

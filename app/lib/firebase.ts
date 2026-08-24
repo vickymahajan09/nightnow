@@ -1,9 +1,13 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
+import {
+  initializeApp,
+  getApps,
+  getApp,
+} from "firebase/app";
 
 import {
   getAuth,
   setPersistence,
-  browserSessionPersistence,
+  browserLocalPersistence,
 } from "firebase/auth";
 
 import { getFirestore } from "firebase/firestore";
@@ -46,19 +50,23 @@ const app = getApps().length
    AUTH
 ========================================== */
 
-export const auth = getAuth(app);
+export const auth =
+  getAuth(app);
 
 /*
-  Session browser/tab ke andar maintain rahegi.
-*/
-
-if (typeof window !== "undefined") {
+ * Keep customer login available across
+ * route changes / page reloads.
+ */
+if (
+  typeof window !==
+  "undefined"
+) {
   setPersistence(
     auth,
-    browserSessionPersistence
+    browserLocalPersistence
   ).catch((error) => {
     console.error(
-      "Firebase auth persistence error:",
+      "Firebase Auth persistence error:",
       error
     );
   });
@@ -85,7 +93,8 @@ export const storage =
 export const getFirebaseMessaging =
   async () => {
     if (
-      typeof window === "undefined"
+      typeof window ===
+      "undefined"
     ) {
       return null;
     }

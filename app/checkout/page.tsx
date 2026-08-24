@@ -12,13 +12,7 @@ import {
 } from "firebase/auth";
 
 import {
-  collection,
-  getDocs,
-} from "firebase/firestore";
-
-import {
   auth,
-  db,
 } from "../lib/firebase";
 
 import {
@@ -33,6 +27,10 @@ import {
   getCoupons,
 } from "../services/couponService";
 
+import {
+  getAddresses,
+} from "../services/addressService";
+
 declare global {
   interface Window {
     Razorpay: any;
@@ -40,17 +38,15 @@ declare global {
 }
 
 type SavedAddress = {
-  id: string;
-
+  id?: string;
   name?: string;
   phone?: string;
   address?: string;
   city?: string;
   pincode?: string;
-
   label?: string;
+  isDefault?: boolean;
 };
-
 type Coupon = {
   id: string;
 
@@ -166,6 +162,8 @@ export default function CheckoutPage() {
 
   /* =====================================================
      AUTH + SAVED ADDRESS
+
+     Default address is selected first.
   ===================================================== */
 
   useEffect(() => {
@@ -180,61 +178,61 @@ export default function CheckoutPage() {
           );
 
           if (!currentUser) {
+            setSavedAddresses([]);
             return;
           }
 
           try {
-            const snapshot =
-              await getDocs(
-                collection(
-                  db,
-                  "users",
-                  currentUser.uid,
-                  "addresses"
-                )
-              );
-
             const addresses =
-              snapshot.docs.map(
-                (item) => ({
-                  id: item.id,
-                  ...item.data(),
-                })
-              ) as SavedAddress[];
+              await getAddresses();
 
-            setSavedAddresses(
-              addresses
-            );
-
+        setSavedAddresses(
+  addresses.map((item) => ({
+    id: item.id,
+    name: item.name || "",
+    phone: item.phone || "",
+    address: item.address || "",
+    city: item.city || "",
+    pincode: item.pincode || "",
+    label: item.label || "",
+    isDefault: Boolean(
+      item.isDefault
+    ),
+  }))
+);
             if (
               addresses.length >
               0
             ) {
-              const first =
+              const selected =
+                addresses.find(
+                  (item) =>
+                    item.isDefault
+                ) ||
                 addresses[0];
 
               setName(
-                first.name ||
+                selected.name ||
                   ""
               );
 
               setPhone(
-                first.phone ||
+                selected.phone ||
                   ""
               );
 
               setAddress(
-                first.address ||
+                selected.address ||
                   ""
               );
 
               setCity(
-                first.city ||
+                selected.city ||
                   ""
               );
 
               setPincode(
-                first.pincode ||
+                selected.pincode ||
                   ""
               );
             }
@@ -277,6 +275,15 @@ export default function CheckoutPage() {
     setPincode(
       item.pincode || ""
     );
+
+    try {
+      localStorage.setItem(
+        "nightnow-checkout-address",
+        JSON.stringify(item)
+      );
+    } catch {
+      // Ignore localStorage failures.
+    }
 
     setShowAddresses(
       false
@@ -949,16 +956,27 @@ export default function CheckoutPage() {
             }
           );
 
-        const razorpayOrder =
-          await response.json();
+        
 
-        if (
-          !response.ok
-        ) {
-          throw new Error(
-            "Razorpay order creation failed"
-          );
-        }
+        const razorpayOrder =
+  await response.json();
+
+if (!response.ok) {
+  throw new Error(
+    razorpayOrder?.error ||
+      razorpayOrder?.message ||
+      "Razorpay order creation failed"
+  );
+}
+
+if (
+  !razorpayOrder?.id ||
+  !razorpayOrder?.amount
+) {
+  throw new Error(
+    "Razorpay order response is invalid."
+  );
+}
 
         const options = {
           key:
@@ -1031,15 +1049,17 @@ export default function CheckoutPage() {
           );
 
         razorpay.open();
-      } catch (error) {
-        console.error(
-          error
-        );
+      } catch (error: any) {
+  console.error(
+    "Online payment error:",
+    error
+  );
 
-        alert(
-          "Online payment failed"
-        );
-      } finally {
+  alert(
+    error?.message ||
+      "Online payment failed"
+  );
+} finally {
         setLoading(false);
       }
     };

@@ -1,5 +1,13 @@
 "use client";
 
+
+import OrderStatusTimeline from "../../components/OrderStatusTimeline";
+<section className="mt-4">
+  <OrderStatusTimeline
+    status={status}
+  />
+</section>
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -338,13 +346,14 @@ export default function CustomerOrderDetailPage() {
 
         {/* STATUS */}
 
-        <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
+       <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
 
-          <h2 className="text-lg font-black">
-            Order Status
-          </h2>
+  <h2 className="text-lg font-black">
+    Order Status
+  </h2>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+  <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+
 
             <StatusStep
               title="Pending"

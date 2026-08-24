@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -10,69 +9,127 @@ import {
   where,
 } from "firebase/firestore";
 
-import { db } from "../lib/firebase";
+import {
+  auth,
+  db,
+} from "../lib/firebase";
 
-// ==========================================
-// CREATE NOTIFICATION
-// ==========================================
-
-export const addNotification = async (
-  title: string,
-  message: string,
-  userId?: string,
-  orderId?: string
-) => {
-  return await addDoc(
-    collection(db, "notifications"),
-    {
-      title: title.trim(),
-      message: message.trim(),
-      userId: userId || null,
-      orderId: orderId || "",
-      audience: userId
-        ? "customer"
-        : "admin",
-      type: "general",
-      read: false,
-      createdAt: new Date(),
-    }
-  );
+export type AppNotification = {
+  id?: string;
+  userId?: string;
+  audience?: string;
+  type?: string;
+  title?: string;
+  message?: string;
+  status?: string;
+  orderId?: string;
+  read?: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+  [key: string]: any;
 };
 
-// ==========================================
-// GET ALL
-// ==========================================
+const getCurrentUserId =
+  () =>
+    auth.currentUser?.uid ||
+    "";
 
-export const getNotifications =
-  async () => {
+const getNotificationTime =
+  (value: any) => {
+    if (
+      typeof value?.toMillis ===
+      "function"
+    ) {
+      return value.toMillis();
+    }
+
+    if (
+      typeof value?.seconds ===
+      "number"
+    ) {
+      return (
+        value.seconds *
+        1000
+      );
+    }
+
+    const time =
+      new Date(
+        value || 0
+      ).getTime();
+
+    return Number.isNaN(
+      time
+    )
+      ? 0
+      : time;
+  };
+
+const sortNotifications =
+  (
+    items: AppNotification[]
+  ) =>
+    [...items].sort(
+      (a, b) =>
+        getNotificationTime(
+          b.createdAt
+        ) -
+        getNotificationTime(
+          a.createdAt
+        )
+    );
+
+export const getMyNotifications =
+  async (): Promise<
+    AppNotification[]
+  > => {
+    const uid =
+      getCurrentUserId();
+
+    if (!uid) {
+      return [];
+    }
+
     const snapshot =
       await getDocs(
-        collection(
-          db,
-          "notifications"
+        query(
+          collection(
+            db,
+            "notifications"
+          ),
+          where(
+            "userId",
+            "==",
+            uid
+          )
         )
       );
 
-    return snapshot.docs
-      .map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }))
-      .sort(
-        (a: any, b: any) =>
-          getTime(b.createdAt) -
-          getTime(a.createdAt)
-      );
+    return sortNotifications(
+      snapshot.docs.map(
+        (item) =>
+          ({
+            id: item.id,
+            ...item.data(),
+          }) as AppNotification
+      )
+    );
   };
-
-// ==========================================
-// CUSTOMER
-// ==========================================
 
 export const getUserNotifications =
   async (
-    userId: string
-  ) => {
+    userId?: string
+  ): Promise<
+    AppNotification[]
+  > => {
+    const uid =
+      userId ||
+      getCurrentUserId();
+
+    if (!uid) {
+      return [];
+    }
+
     const snapshot =
       await getDocs(
         query(
@@ -81,74 +138,93 @@ export const getUserNotifications =
             "notifications"
           ),
           where(
-            "audience",
-            "!=",
-            "admin"
-          )
-        )
-      );
-
-    return snapshot.docs
-      .map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }))
-      .filter(
-        (item: any) =>
-          !item.userId ||
-          item.userId === userId
-      )
-      .sort(
-        (a: any, b: any) =>
-          getTime(b.createdAt) -
-          getTime(a.createdAt)
-      );
-  };
-
-// ==========================================
-// ADMIN
-// ==========================================
-
-export const getAdminNotifications =
-  async () => {
-    const snapshot =
-      await getDocs(
-        query(
-          collection(
-            db,
-            "notifications"
-          ),
-          where(
-            "audience",
+            "userId",
             "==",
-            "admin"
+            uid
           )
         )
       );
 
-    return snapshot.docs
-      .map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }))
-      .sort(
-        (a: any, b: any) =>
-          getTime(b.createdAt) -
-          getTime(a.createdAt)
-      );
+    return sortNotifications(
+      snapshot.docs.map(
+        (item) =>
+          ({
+            id: item.id,
+            ...item.data(),
+          }) as AppNotification
+      )
+    );
   };
 
-// ==========================================
-// ADMIN REAL-TIME
-// ==========================================
+export const getUnreadCount =
+  async () => {
+    const items =
+      await getMyNotifications();
+
+    return items.filter(
+      (item) =>
+        item.read !== true
+    ).length;
+  };
+
+export const subscribeToMyNotifications =
+  (
+    callback: (
+      notifications: AppNotification[]
+    ) => void
+  ) => {
+    const uid =
+      getCurrentUserId();
+
+    if (!uid) {
+      callback([]);
+
+      return () => {};
+    }
+
+    return onSnapshot(
+      query(
+        collection(
+          db,
+          "notifications"
+        ),
+        where(
+          "userId",
+          "==",
+          uid
+        )
+      ),
+      (snapshot) => {
+        callback(
+          sortNotifications(
+            snapshot.docs.map(
+              (item) =>
+                ({
+                  id: item.id,
+                  ...item.data(),
+                }) as AppNotification
+            )
+          )
+        );
+      },
+      (error) => {
+        console.error(
+          "Customer notification subscription error:",
+          error
+        );
+
+        callback([]);
+      }
+    );
+  };
 
 export const subscribeToAdminNotifications =
   (
     callback: (
-      notifications: any[]
+      notifications: AppNotification[]
     ) => void
   ) => {
-    const notificationsQuery =
+    return onSnapshot(
       query(
         collection(
           db,
@@ -159,35 +235,23 @@ export const subscribeToAdminNotifications =
           "==",
           "admin"
         )
-      );
-
-    return onSnapshot(
-      notificationsQuery,
+      ),
       (snapshot) => {
-        const data =
-          snapshot.docs
-            .map((item) => ({
-              id: item.id,
-              ...item.data(),
-            }))
-            .sort(
-              (
-                a: any,
-                b: any
-              ) =>
-                getTime(
-                  b.createdAt
-                ) -
-                getTime(
-                  a.createdAt
-                )
-            );
-
-        callback(data);
+        callback(
+          sortNotifications(
+            snapshot.docs.map(
+              (item) =>
+                ({
+                  id: item.id,
+                  ...item.data(),
+                }) as AppNotification
+            )
+          )
+        );
       },
       (error) => {
         console.error(
-          "ADMIN NOTIFICATION ERROR:",
+          "Admin notification subscription error:",
           error
         );
 
@@ -196,14 +260,14 @@ export const subscribeToAdminNotifications =
     );
   };
 
-// ==========================================
-// MARK READ
-// ==========================================
-
 export const markNotificationRead =
   async (
     id: string
   ) => {
+    if (!id) {
+      return;
+    }
+
     await updateDoc(
       doc(
         db,
@@ -218,14 +282,44 @@ export const markNotificationRead =
     );
   };
 
-// ==========================================
-// DELETE
-// ==========================================
+export const markAllNotificationsRead =
+  async () => {
+    const items =
+      await getMyNotifications();
+
+    await Promise.all(
+      items
+        .filter(
+          (item) =>
+            item.id &&
+            item.read !== true
+        )
+        .map(
+          (item) =>
+            updateDoc(
+              doc(
+                db,
+                "notifications",
+                item.id!
+              ),
+              {
+                read: true,
+                updatedAt:
+                  new Date(),
+              }
+            )
+        )
+    );
+  };
 
 export const deleteNotification =
   async (
     id: string
   ) => {
+    if (!id) {
+      return;
+    }
+
     await deleteDoc(
       doc(
         db,
@@ -234,37 +328,3 @@ export const deleteNotification =
       )
     );
   };
-
-// ==========================================
-// DATE HELPER
-// ==========================================
-
-function getTime(
-  value: any
-): number {
-  if (!value) {
-    return 0;
-  }
-
-  if (
-    typeof value.toDate ===
-    "function"
-  ) {
-    return value
-      .toDate()
-      .getTime();
-  }
-
-  if (
-    value instanceof Date
-  ) {
-    return value.getTime();
-  }
-
-  const time =
-    new Date(value).getTime();
-
-  return Number.isNaN(time)
-    ? 0
-    : time;
-}

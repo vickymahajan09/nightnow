@@ -2,63 +2,203 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
     function isAdmin() {
-      return signedIn() && request.auth.token.email == "mahajanvicky04@gmail.com";
+      return signedIn()
+        && request.auth.token.email == "mahajanvicky04@gmail.com";
     }
 
-    match /products/{id} { allow read: if true; allow create, update, delete: if isAdmin(); }
-    match /brands/{id} { allow read: if true; allow create, update, delete: if isAdmin(); }
-    match /categories/{id} { allow read: if true; allow create, update, delete: if isAdmin(); }
-    match /needs/{id} { allow read: if true; allow create, update, delete: if isAdmin(); }
-    match /buy1get2Offers/{id} { allow read: if true; allow create, update, delete: if isAdmin(); }
-    match /coupons/{id} { allow read: if true; allow create, update, delete: if isAdmin(); }
+    // ==========================================
+    // PUBLIC CATALOG
+    // ==========================================
 
-    match /wishlist/{id} {
-      allow read: if isAdmin() || (signedIn() && (
-        resource.data.userId == request.auth.uid ||
-        resource.data.uid == request.auth.uid ||
-        resource.data.email == request.auth.token.email
-      ));
-      allow create: if signedIn() && (
-        request.resource.data.userId == request.auth.uid ||
-        request.resource.data.uid == request.auth.uid ||
-        request.resource.data.email == request.auth.token.email
-      );
-      allow delete: if isAdmin() || (signedIn() && (
-        resource.data.userId == request.auth.uid ||
-        resource.data.uid == request.auth.uid ||
-        resource.data.email == request.auth.token.email
-      ));
+    match /products/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    match /orders/{id} {
-      allow create: if signedIn();
-      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
-      allow update, delete: if isAdmin();
+    match /brands/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
+
+    match /categories/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /needs/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /buy1get2Offers/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /offers/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+match /homeSections/{id} {
+  allow read: if true;
+  allow create, update, delete: if isAdmin();
+}
+    match /coupons/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    match /homeSections/{id} {
+  allow read: if true;
+  allow create, update, delete: if isAdmin();
+}
+
+    // ==========================================
+    // HOME PAGE SECTIONS
+    // ==========================================
+
+    match /homeSections/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // REVIEWS
+    // ==========================================
 
     match /reviews/{id} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
     }
+
+    // ==========================================
+    // WISHLIST
+    // ==========================================
+
+    match /wishlist/{id} {
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && (
+            resource.data.userId == request.auth.uid
+            || resource.data.uid == request.auth.uid
+            || resource.data.email == request.auth.token.email
+          )
+        );
+
+      allow create: if signedIn()
+        && (
+          request.resource.data.userId == request.auth.uid
+          || request.resource.data.uid == request.auth.uid
+          || request.resource.data.email == request.auth.token.email
+        );
+
+      allow delete: if isAdmin()
+        || (
+          signedIn()
+          && (
+            resource.data.userId == request.auth.uid
+            || resource.data.uid == request.auth.uid
+            || resource.data.email == request.auth.token.email
+          )
+        );
+    }
+
+    // ==========================================
+    // ORDERS
+    // ==========================================
+
+    match /orders/{id} {
+      allow create: if signedIn();
+
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // NOTIFICATIONS
+    // ==========================================
 
     match /notifications/{id} {
-      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid) || (signedIn() && resource.data.audience == "admin");
-      allow create: if signedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.audience == "admin" || isAdmin());
-      allow update, delete: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        )
+        || (
+          signedIn()
+          && resource.data.audience == "admin"
+        );
+
+      allow create: if signedIn()
+        && (
+          request.resource.data.userId == request.auth.uid
+          || request.resource.data.audience == "admin"
+          || isAdmin()
+        );
+
+      allow update, delete: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
     }
 
+    // ==========================================
+    // USERS
+    // ==========================================
+
     match /users/{userId} {
-      allow read, write: if isAdmin() || (signedIn() && request.auth.uid == userId);
+
+      allow read, write: if isAdmin()
+        || (
+          signedIn()
+          && request.auth.uid == userId
+        );
+
       match /addresses/{addressId} {
-        allow read, write: if isAdmin() || (signedIn() && request.auth.uid == userId);
+        allow read, write: if isAdmin()
+          || (
+            signedIn()
+            && request.auth.uid == userId
+          );
       }
+
       match /wallet/{walletId} {
-        allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+        allow read: if isAdmin()
+          || (
+            signedIn()
+            && request.auth.uid == userId
+          );
+
         allow write: if isAdmin();
       }
+    }
+
+    // ==========================================
+    // DEFAULT DENY
+    // ==========================================
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

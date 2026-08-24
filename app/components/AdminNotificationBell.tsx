@@ -5,134 +5,225 @@ import {
   useState,
 } from "react";
 
-import Link from "next/link";
+import {
+  auth,
+} from "../lib/firebase";
+
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
 
 import {
   markNotificationRead,
   subscribeToAdminNotifications,
 } from "../services/notificationService";
 
+const ADMIN_EMAIL =
+  "mahajanvicky04@gmail.com";
+
 export default function AdminNotificationBell() {
-  const [
-    notifications,
-    setNotifications,
-  ] = useState<any[]>([]);
+  const [isAdmin, setIsAdmin] =
+    useState(false);
+
+  const [notifications, setNotifications] =
+    useState<any[]>([]);
+
+  const [open, setOpen] =
+    useState(false);
 
   useEffect(() => {
+    let stop: (() => void) | null =
+      null;
+
     const unsubscribe =
-      subscribeToAdminNotifications(
-        (data) => {
-          setNotifications(data);
+      onAuthStateChanged(
+        auth,
+        (user) => {
+          const admin =
+            !!user &&
+            user.email
+              ?.trim()
+              .toLowerCase() ===
+              ADMIN_EMAIL.toLowerCase();
+
+          setIsAdmin(
+            admin
+          );
+
+          if (
+            stop
+          ) {
+            stop();
+            stop = null;
+          }
+
+          if (!admin) {
+            setNotifications([]);
+            return;
+          }
+
+          stop =
+            subscribeToAdminNotifications(
+              (
+                data
+              ) => {
+                setNotifications(
+                  data
+                );
+              }
+            );
         }
       );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+
+      if (
+        stop
+      ) {
+        stop();
+      }
+    };
   }, []);
 
-  const unread =
+  if (!isAdmin) {
+    return null;
+  }
+
+  const unreadCount =
     notifications.filter(
       (item) =>
         item.read !== true
-    );
+    ).length;
 
-  const unreadCount =
-    unread.length;
-
-  const latest =
-    unread[0];
-
-  const getNotificationLink = (
-    notification: any
-  ) => {
-    if (
-      notification?.orderId
-    ) {
-      return `/admin/orders/${notification.orderId}`;
-    }
-
-    return "/admin/notifications";
-  };
-
-  const handleOpen = async (
-    notification: any
-  ) => {
-    try {
+  const handleRead =
+    async (
+      item: any
+    ) => {
       if (
-        notification?.id &&
-        notification.read !== true
+        item.id &&
+        item.read !== true
       ) {
-        await markNotificationRead(
-          notification.id
-        );
+        try {
+          await markNotificationRead(
+            item.id
+          );
+
+          setNotifications(
+            (current) =>
+              current.map(
+                (
+                  notification
+                ) =>
+                  notification.id ===
+                  item.id
+                    ? {
+                        ...notification,
+                        read: true,
+                      }
+                    : notification
+              )
+          );
+        } catch (
+          error
+        ) {
+          console.error(
+            "Admin notification read error:",
+            error
+          );
+        }
       }
-    } catch (error) {
-      console.error(
-        "Notification read error:",
-        error
-      );
-    }
-  };
+
+      setOpen(false);
+    };
 
   return (
-    <div className="relative shrink-0">
-
-      {/* BELL */}
-
-      <Link
-        href="/admin/notifications"
-        className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-xl transition hover:border-yellow-400 hover:bg-zinc-800"
-        title="Admin Notifications"
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() =>
+          setOpen(
+            (current) =>
+              !current
+          )
+        }
+        className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg shadow-sm"
       >
         🔔
 
-        {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">
-            {unreadCount > 99
+        {unreadCount >
+          0 && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-black text-white">
+            {unreadCount >
+            99
               ? "99+"
               : unreadCount}
           </span>
         )}
-      </Link>
+      </button>
 
-      {/* POPUP */}
-
-      {latest &&
-        unreadCount > 0 && (
-          <Link
-            href={getNotificationLink(
-              latest
-            )}
+      {open && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-40"
             onClick={() =>
-              handleOpen(
-                latest
-              )
+              setOpen(false)
             }
-            className="absolute right-0 top-12 z-[999] block w-80 rounded-2xl border border-zinc-700 bg-zinc-950 p-4 text-left shadow-2xl transition hover:border-yellow-400 hover:bg-zinc-900"
-          >
+            aria-label="Close"
+          />
 
-            <span className="block text-[10px] font-black uppercase tracking-wider text-yellow-400">
-              NEW NOTIFICATION
-            </span>
+          <div className="absolute right-0 top-12 z-50 w-[340px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl">
+            <div className="border-b p-4">
+              <p className="text-sm font-black">
+                Admin Notifications
+              </p>
+            </div>
 
-            <span className="mt-1 block text-sm font-black text-white">
-              {latest.title ||
-                "New Order Received 🔔"}
-            </span>
+            <div className="max-h-[400px] overflow-y-auto">
+              {notifications.length ===
+              0 ? (
+                <div className="p-8 text-center text-sm text-zinc-500">
+                  No new notifications
+                </div>
+              ) : (
+                notifications
+                  .slice(0, 30)
+                  .map(
+                    (item) => (
+                      <button
+                        type="button"
+                        key={
+                          item.id
+                        }
+                        onClick={() =>
+                          handleRead(
+                            item
+                          )
+                        }
+                        className={`w-full border-b p-4 text-left ${
+                          item.read
+                            ? "bg-white"
+                            : "bg-yellow-50"
+                        }`}
+                      >
+                        <p className="text-xs font-black">
+                          {item.title ||
+                            "Admin Notification"}
+                        </p>
 
-            <span className="mt-2 block text-[11px] leading-5 text-zinc-400">
-              {latest.message ||
-                ""}
-            </span>
-
-            <span className="mt-3 block text-[10px] font-black text-yellow-400">
-              {latest.orderId
-                ? "Open Order →"
-                : "View Notification →"}
-            </span>
-
-          </Link>
-        )}
-
+                        <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+                          {item.message ||
+                            ""}
+                        </p>
+                      </button>
+                    )
+                  )
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

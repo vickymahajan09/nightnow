@@ -25,6 +25,7 @@ export default function RootLayout({
         <ThemeProvider>
           <CartProvider>
             {children}
+
             <MobileNav />
           </CartProvider>
         </ThemeProvider>

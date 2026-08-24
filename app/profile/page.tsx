@@ -1006,6 +1006,7 @@ export default function ProfilePage() {
       </main>
     );
   }
+  
 
   // ==========================================
   // LOGIN REQUIRED
@@ -1027,7 +1028,41 @@ export default function ProfilePage() {
             Profile access karne ke liye
             login karein.
           </p>
+<Link
+  href="/profile/addresses"
+  className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm"
+>
+  <div>
+    <p className="font-black">
+      Saved Addresses
+    </p>
+    <p className="mt-1 text-xs text-zinc-500">
+      Manage delivery addresses
+    </p>
+  </div>
 
+  <span className="text-zinc-400">
+    →
+  </span>
+</Link>
+
+<Link
+  href="/profile/gst"
+  className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm"
+>
+  <div>
+    <p className="font-black">
+      GST Details
+    </p>
+    <p className="mt-1 text-xs text-zinc-500">
+      Add or update business GST details
+    </p>
+  </div>
+
+  <span className="text-zinc-400">
+    →
+  </span>
+</Link>
           <Link
             href="/login"
             className="mt-6 block rounded-2xl bg-yellow-400 py-4 font-black text-black"

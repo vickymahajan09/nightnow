@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import {
-  collection,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
+  useEffect,
+  useState,
+} from "react";
+
+import Link from "next/link";
 
 import {
   onAuthStateChanged,
@@ -15,99 +13,66 @@ import {
 
 import {
   auth,
-  db,
 } from "../lib/firebase";
 
-type Notification = {
-  id: string;
-  title?: string;
-  message?: string;
-  active?: boolean;
-  read?: boolean;
-  createdAt?: any;
-  orderId?: string;
-  type?: string;
-};
+import {
+  AppNotification,
+  getMyNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "../services/notificationService";
 
 export default function NotificationsPage() {
+  const [user, setUser] =
+    useState<any>(null);
+
   const [
     notifications,
     setNotifications,
-  ] = useState<Notification[]>([]);
+  ] = useState<AppNotification[]>(
+    []
+  );
 
   const [loading, setLoading] =
     useState(true);
+
+  const loadNotifications =
+    async () => {
+      try {
+        setLoading(true);
+
+        const data =
+          await getMyNotifications();
+
+        setNotifications(data);
+      } catch (error) {
+        console.error(
+          "Notifications loading error:",
+          error
+        );
+
+        setNotifications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     const unsubscribe =
       onAuthStateChanged(
         auth,
-        async (user) => {
-          if (!user) {
+        async (currentUser) => {
+          setUser(
+            currentUser
+          );
+
+          if (!currentUser) {
             setNotifications([]);
             setLoading(false);
             return;
           }
 
-          try {
-            setLoading(true);
-
-            const notificationsRef =
-              collection(
-                db,
-                "notifications"
-              );
-
-            const userQuery = query(
-              notificationsRef,
-              where(
-                "userId",
-                "==",
-                user.uid
-              )
-            );
-
-            const snapshot =
-              await getDocs(
-                userQuery
-              );
-
-            const data =
-              snapshot.docs
-                .map(
-                  (item) => ({
-                    id: item.id,
-                    ...item.data(),
-                  })
-                )
-                .filter(
-                  (item: any) =>
-                    item.active !==
-                    false
-                )
-                .sort(
-                  (a: any, b: any) =>
-                    getTime(
-                      b.createdAt
-                    ) -
-                    getTime(
-                      a.createdAt
-                    )
-                ) as Notification[];
-
-            setNotifications(
-              data
-            );
-          } catch (error) {
-            console.error(
-              "Notifications load error:",
-              error
-            );
-
-            setNotifications([]);
-          } finally {
-            setLoading(false);
-          }
+          await loadNotifications();
         }
       );
 
@@ -115,136 +80,225 @@ export default function NotificationsPage() {
       unsubscribe();
   }, []);
 
-  return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-900">
+  const markRead =
+    async (
+      notification: AppNotification
+    ) => {
+      if (
+        !notification.id ||
+        notification.read === true
+      ) {
+        return;
+      }
 
-      <div className="mx-auto max-w-3xl">
+      try {
+        await markNotificationRead(
+          notification.id
+        );
 
-        <div className="rounded-3xl bg-white p-6 shadow-sm">
+        setNotifications(
+          (current) =>
+            current.map(
+              (item) =>
+                item.id ===
+                notification.id
+                  ? {
+                      ...item,
+                      read: true,
+                    }
+                  : item
+            )
+        );
+      } catch (error) {
+        console.error(
+          "Notification read error:",
+          error
+        );
+      }
+    };
 
-          <p className="text-xs font-black text-yellow-600">
-            NIGHT NOW
+  const markAllRead =
+    async () => {
+      try {
+        await markAllNotificationsRead();
+
+        setNotifications(
+          (current) =>
+            current.map(
+              (item) => ({
+                ...item,
+                read: true,
+              })
+            )
+        );
+      } catch (error) {
+        console.error(
+          "Mark all notifications error:",
+          error
+        );
+      }
+    };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-zinc-50 px-4 py-16 text-black">
+        <div className="mx-auto max-w-md text-center">
+          <div className="text-5xl">
+            🔔
+          </div>
+
+          <p className="mt-4 font-black">
+            Loading notifications...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="min-h-screen bg-zinc-50 px-4 py-16 text-black">
+        <div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow">
+          <div className="text-6xl">
+            🔔
+          </div>
+
+          <h1 className="mt-5 text-2xl font-black">
+            Login Required
+          </h1>
+
+          <p className="mt-2 text-sm text-zinc-500">
+            Notifications dekhne ke liye login karein.
           </p>
 
-          <h1 className="mt-1 text-3xl font-black">
+          <Link
+            href="/login"
+            className="mt-6 block rounded-2xl bg-yellow-400 py-4 font-black"
+          >
+            Login
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const unreadCount =
+    notifications.filter(
+      (item) =>
+        item.read !== true
+    ).length;
+
+  return (
+    <main className="min-h-screen bg-zinc-50 px-3 py-5 pb-24 text-black">
+      <div className="mx-auto max-w-3xl">
+
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href="/profile"
+            className="text-sm font-black text-zinc-500"
+          >
+            ← Profile
+          </Link>
+
+          <h1 className="text-xl font-black">
             Notifications
           </h1>
 
+          {unreadCount > 0 ? (
+            <button
+              type="button"
+              onClick={
+                markAllRead
+              }
+              className="text-xs font-black text-yellow-600"
+            >
+              Mark all read
+            </button>
+          ) : (
+            <span />
+          )}
         </div>
 
-        {loading ? (
-          <div className="py-20 text-center font-bold">
-            Loading...
-          </div>
-        ) : notifications.length ===
+        <div className="mt-5 space-y-3">
+          {notifications.length ===
           0 ? (
-          <div className="mt-5 rounded-3xl bg-white p-10 text-center shadow-sm">
+            <div className="rounded-3xl bg-white p-10 text-center shadow-sm">
+              <div className="text-6xl">
+                🔔
+              </div>
 
-            <div className="text-5xl">
-              🔔
+              <h2 className="mt-4 text-xl font-black">
+                No Notifications
+              </h2>
+
+              <p className="mt-2 text-sm text-zinc-500">
+                Order updates and important messages will appear here.
+              </p>
             </div>
-
-            <p className="mt-4 font-black">
-              No new notifications
-            </p>
-
-          </div>
-        ) : (
-          <div className="mt-5 space-y-3">
-
-            {notifications.map(
+          ) : (
+            notifications.map(
               (item) => (
-                <div
-                  key={item.id}
-                  className="rounded-3xl bg-white p-5 shadow-sm"
+                <button
+                  type="button"
+                  key={
+                    item.id
+                  }
+                  onClick={() =>
+                    markRead(
+                      item
+                    )
+                  }
+                  className={`w-full rounded-2xl border p-4 text-left shadow-sm ${
+                    item.read
+                      ? "border-zinc-200 bg-white"
+                      : "border-yellow-200 bg-yellow-50"
+                  }`}
                 >
-
-                  <div className="flex gap-4">
-
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-100 text-2xl">
-                      🔔
+                  <div className="flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-yellow-400">
+                      {item.type ===
+                      "order"
+                        ? "📦"
+                        : "🔔"}
                     </div>
 
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <h2 className="text-sm font-black">
+                          {item.title ||
+                            "Notification"}
+                        </h2>
 
-                      <h2 className="font-black">
-                        {item.title ||
-                          "Night Now"}
-                      </h2>
+                        {!item.read && (
+                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                        )}
+                      </div>
 
-                      <p className="mt-1 text-sm leading-6 text-slate-600">
-                        {item.message}
+                      <p className="mt-1 text-xs leading-5 text-zinc-500">
+                        {item.message ||
+                          ""}
                       </p>
 
                       {item.orderId && (
-                        <p className="mt-2 text-xs font-bold text-slate-500">
+                        <p className="mt-2 text-[10px] font-black text-zinc-400">
                           Order: #
-                          {item.orderId.slice(
+                          {String(
+                            item.orderId
+                          ).slice(
                             0,
                             8
                           )}
                         </p>
                       )}
-
-                      <p className="mt-2 text-xs text-slate-400">
-                        {formatDate(
-                          item.createdAt
-                        )}
-                      </p>
-
                     </div>
-
                   </div>
-
-                </div>
+                </button>
               )
-            )}
-
-          </div>
-        )}
+            )
+          )}
+        </div>
 
       </div>
-
     </main>
   );
-}
-
-function getTime(value: any) {
-  if (!value) return 0;
-
-  if (
-    typeof value?.toMillis ===
-    "function"
-  ) {
-    return value.toMillis();
-  }
-
-  if (
-    value instanceof Date
-  ) {
-    return value.getTime();
-  }
-
-  const time = new Date(
-    value
-  ).getTime();
-
-  return Number.isNaN(time)
-    ? 0
-    : time;
-}
-
-function formatDate(
-  value: any
-) {
-  const time = getTime(value);
-
-  if (!time) return "";
-
-  return new Date(
-    time
-  ).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
 }

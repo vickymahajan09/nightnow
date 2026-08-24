@@ -41,6 +41,7 @@ type Order = {
 const STATUSES = [
   "Pending",
   "Confirmed",
+  "Preparing",
   "Packed",
   "Out for Delivery",
   "Delivered",
@@ -552,13 +553,22 @@ function normalizeStatus(
     return "Pending";
   }
 
-  if (status === "Packed") {
-    return "Confirmed";
-  }
+  const allowedStatuses = [
+    "Pending",
+    "Confirmed",
+    "Preparing",
+    "Packed",
+    "Out for Delivery",
+    "Delivered",
+    "Cancelled",
+  ];
 
-  return status;
+  return allowedStatuses.includes(
+    status
+  )
+    ? status
+    : "Pending";
 }
-
 /* ==========================================
    DATE
 ========================================== */

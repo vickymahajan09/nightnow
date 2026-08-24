@@ -5,99 +5,575 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
+  query,
+  runTransaction,
+  startAfter,
   updateDoc,
+  where,
+  type DocumentData,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
 import { db } from "../lib/firebase";
 
 export interface Product {
   id: string;
+
   name: string;
-  price: number;
-  stock: number;
-  active: boolean;
+  nameLower?: string;
+
+  brandId?: string;
+  brandName?: string;
+
   category?: string;
+  categoryId?: string;
+  subcategory?: string;
+  subcategoryId?: string;
+
+  sku?: string;
+  skuLower?: string;
+
+  barcode?: string;
+  barcodeLower?: string;
+
+  hsn?: string;
+  gst?: number;
+
+  mrp: number;
+  price: number;
+  discount?: number;
+
+  unit?: string;
+  packSize?: string;
+  weight?: string;
+
+  stock: number;
+  reservedStock?: number;
+  availableStock?: number;
+  lowStockThreshold?: number;
+
+  active: boolean;
+
   image?: string;
+  images?: string[];
+
+  video?: string;
+
   description?: string;
+  shortDescription?: string;
+
+  specifications?: Record<string, any>;
+  ingredients?: string;
+
+  variants?: any[];
+
+  tags?: string[];
+  keywords?: string[];
+
+  featured?: boolean;
+  bestSeller?: boolean;
+  newArrival?: boolean;
+  recommended?: boolean;
+
+  createdAt?: any;
+  updatedAt?: any;
+
   [key: string]: any;
 }
 
-// ==============================
+export interface ProductPage {
+  products: Product[];
+  hasMore: boolean;
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+}
+
+const PRODUCTS_COLLECTION = "products";
+
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
+
+const cleanString = (value: unknown) =>
+  String(value ?? "").trim();
+
+const normalize = (value: unknown) =>
+  cleanString(value).toLowerCase();
+
+const safeNumber = (
+  value: unknown,
+  fallback = 0
+) => {
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : fallback;
+};
+
+const calculateDiscount = (
+  mrp: number,
+  price: number
+) => {
+  if (
+    mrp <= 0 ||
+    price <= 0 ||
+    price >= mrp
+  ) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.round(
+      ((mrp - price) / mrp) * 100
+    )
+  );
+};
+
+const normalizeProductForSave = (
+  product: any
+) => {
+  const name =
+    cleanString(product?.name);
+
+  const mrp =
+    Math.max(
+      0,
+      safeNumber(product?.mrp ?? product?.MRP)
+    );
+
+  const price =
+    Math.max(
+      0,
+      safeNumber(
+        product?.price ??
+        product?.salePrice
+      )
+    );
+
+  if (!name) {
+    throw new Error(
+      "Product name is required"
+    );
+  }
+
+  if (price <= 0) {
+    throw new Error(
+      "Selling price must be greater than 0"
+    );
+  }
+
+  if (
+    mrp > 0 &&
+    price > mrp
+  ) {
+    throw new Error(
+      "Selling price cannot be greater than MRP"
+    );
+  }
+
+  const stock =
+    Math.max(
+      0,
+      Math.floor(
+        safeNumber(product?.stock)
+      )
+    );
+
+  const reservedStock =
+    Math.max(
+      0,
+      Math.floor(
+        safeNumber(
+          product?.reservedStock
+        )
+      )
+    );
+
+  const availableStock =
+    Math.max(
+      0,
+      stock - reservedStock
+    );
+
+  return {
+    ...product,
+
+    name,
+    nameLower:
+      normalize(name),
+
+    mrp,
+    price,
+
+    discount:
+      calculateDiscount(
+        mrp,
+        price
+      ),
+
+    stock,
+    reservedStock,
+    availableStock,
+
+    sku:
+      cleanString(product?.sku),
+
+    skuLower:
+      normalize(product?.sku),
+
+    barcode:
+      cleanString(product?.barcode),
+
+    barcodeLower:
+      normalize(product?.barcode),
+
+    category:
+      cleanString(product?.category),
+
+    categoryId:
+      cleanString(product?.categoryId),
+
+    subcategory:
+      cleanString(product?.subcategory),
+
+    subcategoryId:
+      cleanString(
+        product?.subcategoryId
+      ),
+
+    brandId:
+      cleanString(product?.brandId),
+
+    brandName:
+      cleanString(
+        product?.brandName
+      ),
+
+    active:
+      product?.active !== false,
+  };
+};
+
+const assertUniqueProductIdentifiers = async (
+  product: any,
+  excludeId?: string
+) => {
+  const skuLower =
+    normalize(product?.sku);
+
+  const barcodeLower =
+    normalize(product?.barcode);
+
+  if (skuLower) {
+    const skuSnapshot =
+      await getDocs(
+        query(
+          collection(
+            db,
+            PRODUCTS_COLLECTION
+          ),
+          where(
+            "skuLower",
+            "==",
+            skuLower
+          ),
+          limit(5)
+        )
+      );
+
+    const duplicate =
+      skuSnapshot.docs.find(
+        (item) =>
+          item.id !== excludeId
+      );
+
+    if (duplicate) {
+      throw new Error(
+        `SKU already exists: ${cleanString(product?.sku)}`
+      );
+    }
+  }
+
+  if (barcodeLower) {
+    const barcodeSnapshot =
+      await getDocs(
+        query(
+          collection(
+            db,
+            PRODUCTS_COLLECTION
+          ),
+          where(
+            "barcodeLower",
+            "==",
+            barcodeLower
+          ),
+          limit(5)
+        )
+      );
+
+    const duplicate =
+      barcodeSnapshot.docs.find(
+        (item) =>
+          item.id !== excludeId
+      );
+
+    if (duplicate) {
+      throw new Error(
+        `Barcode already exists: ${cleanString(product?.barcode)}`
+      );
+    }
+  }
+};
+
+const mapProduct = (
+  id: string,
+  data: DocumentData
+): Product => {
+  const stock =
+    Math.max(
+      0,
+      safeNumber(data?.stock)
+    );
+
+  const reservedStock =
+    Math.max(
+      0,
+      safeNumber(
+        data?.reservedStock
+      )
+    );
+
+  const mrp =
+    Math.max(
+      0,
+      safeNumber(
+        data?.mrp ??
+        data?.MRP
+      )
+    );
+
+  const price =
+    Math.max(
+      0,
+      safeNumber(
+        data?.price
+      )
+    );
+
+  return {
+    id,
+
+    ...data,
+
+    name:
+      cleanString(
+        data?.name
+      ),
+
+    nameLower:
+      normalize(
+        data?.name
+      ),
+
+    mrp,
+    price,
+
+    discount:
+      data?.discount != null
+        ? safeNumber(
+            data.discount
+          )
+        : calculateDiscount(
+            mrp,
+            price
+          ),
+
+    stock,
+
+    reservedStock,
+
+    availableStock:
+      Math.max(
+        0,
+        stock -
+          reservedStock
+      ),
+
+    active:
+      data?.active !== false,
+
+    sku:
+      cleanString(
+        data?.sku
+      ),
+
+    barcode:
+      cleanString(
+        data?.barcode
+      ),
+  } as Product;
+};
+
+// ======================================================
 // ADD PRODUCT
-// ==============================
+// ======================================================
 
 export const addProduct = async (
   product: any
 ) => {
+  const cleanProduct =
+    normalizeProductForSave(
+      product
+    );
+
+  await assertUniqueProductIdentifiers(
+    cleanProduct
+  );
+
   return await addDoc(
-    collection(db, "products"),
+    collection(
+      db,
+      PRODUCTS_COLLECTION
+    ),
     {
-      ...product,
+      ...cleanProduct,
 
-      name: String(
-        product.name || ""
-      ).trim(),
+      createdAt:
+        new Date(),
 
-      price: Number(
-        product.price || 0
-      ),
-
-      stock: Number(
-        product.stock || 0
-      ),
-
-      active:
-        product.active !== false,
-
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      updatedAt:
+        new Date(),
     }
   );
 };
 
-// ==============================
+// ======================================================
 // GET ALL PRODUCTS
-// ==============================
+// Existing compatibility function
+// ======================================================
 
 export const getProducts =
   async (): Promise<Product[]> => {
     const snapshot =
       await getDocs(
-        collection(db, "products")
+        collection(
+          db,
+          PRODUCTS_COLLECTION
+        )
       );
 
     return snapshot.docs.map(
-      (item) => {
-        const data =
-          item.data();
-
-        return {
-          id: item.id,
-
-          name: String(
-            data.name || ""
-          ),
-
-          price: Number(
-            data.price || 0
-          ),
-
-          stock: Number(
-            data.stock || 0
-          ),
-
-          active:
-            data.active !== false,
-
-          ...data,
-        } as Product;
-      }
+      (item) =>
+        mapProduct(
+          item.id,
+          item.data()
+        )
     );
   };
 
-// ==============================
-// GET SINGLE PRODUCT
-// ==============================
+// ======================================================
+// PAGINATED PRODUCTS
+// Use this for large product catalogs.
+// ======================================================
+
+export const getProductsPage =
+  async ({
+    pageSize = DEFAULT_PAGE_SIZE,
+    lastDoc = null,
+    activeOnly = false,
+  }: {
+    pageSize?: number;
+    lastDoc?: QueryDocumentSnapshot<DocumentData> | null;
+    activeOnly?: boolean;
+  } = {}): Promise<ProductPage> => {
+    const safePageSize =
+      Math.min(
+        MAX_PAGE_SIZE,
+        Math.max(
+          1,
+          Math.floor(
+            safeNumber(
+              pageSize,
+              DEFAULT_PAGE_SIZE
+            )
+          )
+        )
+      );
+
+    const constraints: any[] = [
+      orderBy("__name__"),
+      limit(
+        safePageSize + 1
+      ),
+    ];
+
+    if (activeOnly) {
+      constraints.unshift(
+        where(
+          "active",
+          "==",
+          true
+        )
+      );
+    }
+
+    if (lastDoc) {
+      constraints.splice(
+        constraints.length - 1,
+        0,
+        startAfter(lastDoc)
+      );
+    }
+
+    const snapshot =
+      await getDocs(
+        query(
+          collection(
+            db,
+            PRODUCTS_COLLECTION
+          ),
+          ...constraints
+        )
+      );
+
+    const hasMore =
+      snapshot.docs.length >
+      safePageSize;
+
+    const visibleDocs =
+      hasMore
+        ? snapshot.docs.slice(
+            0,
+            safePageSize
+          )
+        : snapshot.docs;
+
+    return {
+      products:
+        visibleDocs.map(
+          (item) =>
+            mapProduct(
+              item.id,
+              item.data()
+            )
+        ),
+
+      hasMore,
+
+      lastDoc:
+        visibleDocs.length
+          ? visibleDocs[
+              visibleDocs.length - 1
+            ]
+          : null,
+    };
+  };
+
+// ======================================================
+// GET PRODUCT BY ID
+// ======================================================
 
 export const getProductById =
   async (
@@ -106,7 +582,7 @@ export const getProductById =
     const productRef =
       doc(
         db,
-        "products",
+        PRODUCTS_COLLECTION,
         id
       );
 
@@ -119,57 +595,197 @@ export const getProductById =
       return null;
     }
 
-    const data =
-      snapshot.data();
-
-    return {
-      id: snapshot.id,
-
-      name: String(
-        data.name || ""
-      ),
-
-      price: Number(
-        data.price || 0
-      ),
-
-      stock: Number(
-        data.stock || 0
-      ),
-
-      active:
-        data.active !== false,
-
-      ...data,
-    } as Product;
+    return mapProduct(
+      snapshot.id,
+      snapshot.data()
+    );
   };
 
-// ==============================
+// ======================================================
 // UPDATE PRODUCT
-// ==============================
+// ======================================================
 
 export const updateProduct =
   async (
     id: string,
     product: any
   ) => {
+    const existing =
+      await getProductById(
+        id
+      );
+
+    if (!existing) {
+      throw new Error(
+        "Product not found"
+      );
+    }
+
+    const merged =
+      normalizeProductForSave({
+        ...existing,
+        ...product,
+      });
+
+    await assertUniqueProductIdentifiers(
+      merged,
+      id
+    );
+
     await updateDoc(
       doc(
         db,
-        "products",
+        PRODUCTS_COLLECTION,
         id
       ),
       {
-        ...product,
+        ...merged,
 
-        updatedAt: new Date(),
+        updatedAt:
+          new Date(),
       }
     );
   };
 
-// ==============================
+// ======================================================
+// ATOMIC STOCK ADJUSTMENT
+// ======================================================
+
+export const adjustProductStockAtomic =
+  async (
+    id: string,
+    quantityChange: number,
+    reason = "manual_adjustment",
+    metadata: Record<string, any> = {}
+  ) => {
+    const change =
+      Math.trunc(
+        safeNumber(
+          quantityChange
+        )
+      );
+
+    if (change === 0) {
+      throw new Error(
+        "Stock change cannot be zero"
+      );
+    }
+
+    const productRef =
+      doc(
+        db,
+        PRODUCTS_COLLECTION,
+        id
+      );
+
+    const result =
+      await runTransaction(
+        db,
+        async (transaction) => {
+          const snapshot =
+            await transaction.get(
+              productRef
+            );
+
+          if (!snapshot.exists()) {
+            throw new Error(
+              "Product not found"
+            );
+          }
+
+          const data =
+            snapshot.data();
+
+          const currentStock =
+            Math.max(
+              0,
+              Math.floor(
+                safeNumber(
+                  data?.stock
+                )
+              )
+            );
+
+          const reservedStock =
+            Math.max(
+              0,
+              Math.floor(
+                safeNumber(
+                  data?.reservedStock
+                )
+              )
+            );
+
+          const nextStock =
+            currentStock +
+            change;
+
+          if (nextStock < 0) {
+            throw new Error(
+              `Insufficient stock for ${cleanString(data?.name)}`
+            );
+          }
+
+          const availableStock =
+            Math.max(
+              0,
+              nextStock -
+                reservedStock
+            );
+
+          transaction.update(
+            productRef,
+            {
+              stock:
+                nextStock,
+
+              availableStock,
+
+              updatedAt:
+                new Date(),
+            }
+          );
+
+          return {
+            productName:
+              cleanString(
+                data?.name
+              ),
+
+            previousStock:
+              currentStock,
+
+            newStock:
+              nextStock,
+
+            change,
+          };
+        }
+      );
+
+    await addDoc(
+      collection(
+        productRef,
+        "stockHistory"
+      ),
+      {
+        ...result,
+
+        reason,
+
+        metadata,
+
+        createdAt:
+          new Date(),
+      }
+    );
+
+    return result;
+  };
+
+// ======================================================
 // UPDATE PRODUCT STOCK
-// ==============================
+// ======================================================
 
 export const updateProductStock =
   async (
@@ -179,68 +795,49 @@ export const updateProductStock =
     const safeStock =
       Math.max(
         0,
-        Number(newStock || 0)
+        Math.floor(
+          safeNumber(
+            newStock
+          )
+        )
       );
 
-    await updateDoc(
-      doc(
-        db,
-        "products",
+    const product =
+      await getProductById(
         id
-      ),
-      {
-        stock: safeStock,
-        updatedAt: new Date(),
-      }
-    );
+      );
 
-    return safeStock;
+    if (!product) {
+      throw new Error(
+        "Product not found"
+      );
+    }
+
+    const difference =
+      safeStock -
+      Number(
+        product.stock || 0
+      );
+
+    if (difference === 0) {
+      return safeStock;
+    }
+
+    const result =
+      await adjustProductStockAtomic(
+        id,
+        difference,
+        "stock_update"
+      );
+
+    return result.newStock;
   };
 
-// ==============================
+// ======================================================
 // VALIDATE LIVE STOCK
-// ==============================
+// ======================================================
 
-export const validateProductStock = async (
-  id: string,
-  quantity: number
-) => {
-  const product = await getProductById(id);
-
-  if (!product) {
-    throw new Error("Product not found");
-  }
-
-  const qty = Number(quantity || 0);
-
-  if (qty <= 0) {
-    throw new Error("Invalid quantity");
-  }
-
-  if (product.active === false) {
-    throw new Error(`${product.name} is currently unavailable`);
-  }
-
-  const stock = Number(product.stock || 0);
-
-  if (stock < qty) {
-    throw new Error(
-      `${product.name} has only ${stock} item(s) in stock`
-    );
-  }
-
-  return {
-    product,
-    stock,
-    remainingStock: stock - qty,
-  };
-};
-
-// ==============================
-// DECREASE STOCK BY QUANTITY
-// ==============================
-
-export const decreaseProductStock =
+export const validateProductStock =
   async (
     id: string,
     quantity: number
@@ -256,14 +853,11 @@ export const decreaseProductStock =
       );
     }
 
-    const currentStock =
-      Number(
-        product.stock || 0
-      );
-
     const qty =
-      Number(
-        quantity || 0
+      Math.floor(
+        safeNumber(
+          quantity
+        )
       );
 
     if (qty <= 0) {
@@ -273,27 +867,81 @@ export const decreaseProductStock =
     }
 
     if (
-      currentStock < qty
+      product.active === false
     ) {
       throw new Error(
-        `Insufficient stock for ${product.name}`
+        `${product.name} is currently unavailable`
       );
     }
 
-    const newStock =
-      currentStock - qty;
+    const availableStock =
+      Math.max(
+        0,
+        safeNumber(
+          product.availableStock ??
+            product.stock
+        )
+      );
 
-    await updateProductStock(
-      id,
-      newStock
-    );
+    if (
+      availableStock <
+      qty
+    ) {
+      throw new Error(
+        `${product.name} has only ${availableStock} item(s) in stock`
+      );
+    }
 
-    return newStock;
+    return {
+      product,
+
+      stock:
+        availableStock,
+
+      remainingStock:
+        availableStock -
+        qty,
+    };
   };
 
-// ==============================
+// ======================================================
+// ATOMIC DECREASE STOCK
+// ======================================================
+
+export const decreaseProductStock =
+  async (
+    id: string,
+    quantity: number
+  ) => {
+    const qty =
+      Math.floor(
+        safeNumber(
+          quantity
+        )
+      );
+
+    if (qty <= 0) {
+      throw new Error(
+        "Invalid quantity"
+      );
+    }
+
+    const result =
+      await adjustProductStockAtomic(
+        id,
+        -qty,
+        "order_stock_decrease",
+        {
+          quantity: qty,
+        }
+      );
+
+    return result.newStock;
+  };
+
+// ======================================================
 // DELETE PRODUCT
-// ==============================
+// ======================================================
 
 export const deleteProduct =
   async (
@@ -302,7 +950,7 @@ export const deleteProduct =
     await deleteDoc(
       doc(
         db,
-        "products",
+        PRODUCTS_COLLECTION,
         id
       )
     );

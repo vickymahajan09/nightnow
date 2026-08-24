@@ -22,6 +22,11 @@ import {
   type Brand,
 } from "./services/brandService";
 
+import {
+  getHomeSections,
+} from "./services/homeSectionService";
+
+import { getOrders } from "./services/orderService";
 import { useCart } from "./context/CartContext";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./lib/firebase";
@@ -35,6 +40,26 @@ const categories = [
   { name: "Grocery", icon: "🛒" },
   { name: "Dairy", icon: "🥛" },
   { name: "Personal Care", icon: "🧴" },
+  { name: "Baby Care", icon: "👶" },
+  { name: "Home Care", icon: "🏠" },
+  { name: "Pet Care", icon: "🐾" },
+];
+
+const HOME_SECTIONS_KEY = "nightnow_home_sections";
+
+const DEFAULT_HOME_CATEGORIES = [
+  { id: "grocery-vegetables", name: "Vegetables & Fruits", section: "Grocery & Kitchen", heading: "Grocery & Kitchen", subtitle: "Everyday essentials", image: "", order: 1, active: true, showOnHome: true },
+  { id: "grocery-attarice", name: "Atta, Rice & Dal", section: "Grocery & Kitchen", heading: "Grocery & Kitchen", subtitle: "Everyday essentials", image: "", order: 2, active: true, showOnHome: true },
+  { id: "grocery-oil", name: "Oil, Ghee & Masala", section: "Grocery & Kitchen", heading: "Grocery & Kitchen", subtitle: "Everyday essentials", image: "", order: 3, active: true, showOnHome: true },
+  { id: "grocery-dairy", name: "Dairy, Bread & Eggs", section: "Grocery & Kitchen", heading: "Grocery & Kitchen", subtitle: "Everyday essentials", image: "", order: 4, active: true, showOnHome: true },
+  { id: "grocery-bakery", name: "Bakery & Biscuits", section: "Grocery & Kitchen", heading: "Grocery & Kitchen", subtitle: "Everyday essentials", image: "", order: 5, active: true, showOnHome: true },
+  { id: "grocery-dryfruit", name: "Dry Fruits & Cereals", section: "Grocery & Kitchen", heading: "Grocery & Kitchen", subtitle: "Everyday essentials", image: "", order: 6, active: true, showOnHome: true },
+  { id: "grocery-meat", name: "Chicken, Meat & Fish", section: "Grocery & Kitchen", heading: "Grocery & Kitchen", subtitle: "Everyday essentials", image: "", order: 7, active: true, showOnHome: true },
+  { id: "grocery-kitchenware", name: "Kitchenware & Appliances", section: "Grocery & Kitchen", heading: "Grocery & Kitchen", subtitle: "Everyday essentials", image: "", order: 8, active: true, showOnHome: true },
+  { id: "snacks-chips", name: "Chips & Namkeen", section: "Snacks & Drinks", heading: "Snacks & Drinks", subtitle: "Tasty picks for every time", image: "", order: 9, active: true, showOnHome: true },
+  { id: "snacks-sweets", name: "Sweets & Chocolates", section: "Snacks & Drinks", heading: "Snacks & Drinks", subtitle: "Tasty picks for every time", image: "", order: 10, active: true, showOnHome: true },
+  { id: "snacks-drinks", name: "Drinks & Juices", section: "Snacks & Drinks", heading: "Snacks & Drinks", subtitle: "Tasty picks for every time", image: "", order: 11, active: true, showOnHome: true },
+  { id: "snacks-tea", name: "Tea, Coffee & More", section: "Snacks & Drinks", heading: "Snacks & Drinks", subtitle: "Tasty picks for every time", image: "", order: 12, active: true, showOnHome: true },
 ];
 
 export default function HomePage() {
@@ -53,13 +78,41 @@ export default function HomePage() {
     name: string;
     section: string;
     image: string;
+    heading?: string;
+    subtitle?: string;
     order: number;
     active?: boolean;
     showOnHome?: boolean;
+    productIds?: string[];
+  };
+
+  type HomeSectionConfig = {
+    key: string;
+    section: string;
+    type: string;
+    heading: string;
+    subtitle: string;
+    order: number;
+    priority: number;
+    active: boolean;
+    showOnHome: boolean;
+    productIds: string[];
+    categories: string[];
+    brands: string[];
+    image: string;
+    mobileImage: string;
+    desktopImage: string;
+    productLimit: number;
+    seeAll: boolean;
+    seeAllText: string;
+    seeAllUrl: string;
+    startDate: string;
+    endDate: string;
   };
 
   const [homeCategories, setHomeCategories] =
     useState<HomeCategory[]>([]);
+  const [homeSections, setHomeSections] = useState<HomeSectionConfig[]>([]);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [needs, setNeeds] = useState<Need[]>([]);
@@ -73,8 +126,52 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] =
     useState("All");
 
-  const [priceSort, setPriceSort] =
+  const [sortMode, setSortMode] =
     useState<"default" | "high" | "low">("default");
+  const [discountFilter, setDiscountFilter] =
+    useState<"all" | "10" | "20" | "50">("all");
+  const [showSortCategory, setShowSortCategory] = useState(false);
+
+  // =====================================================
+  // FILTER / SORT HELPERS
+  // =====================================================
+
+  const closeSortMenu = (target?: HTMLElement | null) => {
+    const details = target?.closest("details") as HTMLDetailsElement | null;
+    if (details) details.open = false;
+  };
+
+  const selectHomeCategory = (categoryName: string, target?: HTMLElement | null) => {
+    setSelectedCategory(categoryName);
+    setShowSortCategory(false);
+    closeSortMenu(target);
+
+    setTimeout(() => {
+      document.getElementById("products")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 40);
+  };
+
+  const clearAllProductFilters = (target?: HTMLElement | null) => {
+    setSearch("");
+    setSelectedCategory("All");
+    setSortMode("default");
+    setDiscountFilter("all");
+    setShowSortCategory(false);
+    closeSortMenu(target);
+  };
+
+  const applyDiscountFilter = (value: "10" | "20" | "50", target?: HTMLElement | null) => {
+    setDiscountFilter(value);
+    closeSortMenu(target);
+  };
+
+  const applySortMode = (value: "default" | "high" | "low", target?: HTMLElement | null) => {
+    setSortMode(value);
+    closeSortMenu(target);
+  };
 
   const [showNeed, setShowNeed] = useState(false);
   const [needText, setNeedText] = useState("");
@@ -82,72 +179,332 @@ export default function HomePage() {
   const [selectedLocation, setSelectedLocation] = useState<SavedLocation | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  const [buyAgainProducts, setBuyAgainProducts] = useState<Product[]>([]);
+  const [smartPickMode, setSmartPickMode] = useState<"fast" | "under99" | "deals" | "value">("fast");
+
+  // All real product categories + the main shopping categories.
+  // This keeps the Sort By menu useful even when Admin adds new categories.
+  const categoryOptions = useMemo(() => {
+    const iconMap: Record<string, string> = {
+      all: "🛍️",
+      medicines: "💊",
+      medicine: "💊",
+      grocery: "🛒",
+      dairy: "🥛",
+      "personal care": "🧴",
+      "baby care": "👶",
+      "home care": "🏠",
+      "pet care": "🐾",
+    };
+
+    const result = [...categories];
+    const seen = new Set(result.map((item) => item.name.toLowerCase()));
+
+    products.forEach((product: any) => {
+      const raw = String(product?.category || product?.categoryName || "").trim();
+      if (!raw) return;
+
+      const name = raw.replace(/\s+/g, " ");
+      const key = name.toLowerCase();
+
+      if (key === "all" || seen.has(key)) return;
+
+      seen.add(key);
+      result.push({
+        name,
+        icon: iconMap[key] || "📦",
+      });
+    });
+
+    return result;
+  }, [products]);
+
   // ==========================================
   // LOAD HOME CATEGORIES FROM ADMIN
   // ==========================================
 
   useEffect(() => {
-    const loadHomeCategories = () => {
+    let cancelled = false;
+
+    const loadHomeCategories = async () => {
       try {
-        const saved = localStorage.getItem(
-          "nightnow_admin_categories"
-        );
+        try {
+          const firestoreSections = await getHomeSections();
+
+          if (!cancelled && firestoreSections.length > 0) {
+            const now = new Date();
+
+            const activeSections = firestoreSections
+              .map((section: any, index: number) => ({
+                key: String(section?.id || section?.key || `firestore-section-${index}`),
+                section: String(section?.title || section?.section || `Section ${index + 1}`).trim(),
+                type: String(section?.type || "product-carousel"),
+                heading: String(section?.title || section?.heading || section?.section || `Section ${index + 1}`).trim(),
+                subtitle: String(section?.subtitle || "Explore more products").trim(),
+                order: Number(section?.order ?? index + 1),
+                priority: Number(section?.priority ?? 1),
+                active: section?.active !== false,
+                showOnHome: section?.showOnHome !== false,
+                productIds: Array.isArray(section?.products) ? section.products.map(String) : [],
+                categories: Array.isArray(section?.categories) ? section.categories.map(String) : [],
+                brands: Array.isArray(section?.brands) ? section.brands.map(String) : [],
+                image: String(section?.image || ""),
+                mobileImage: String(section?.mobileImage || ""),
+                desktopImage: String(section?.desktopImage || ""),
+                productLimit: Math.max(1, Number(section?.productLimit || 10)),
+                seeAll: section?.seeAll !== false,
+                seeAllText: String(section?.seeAllText || "See All"),
+                seeAllUrl: String(section?.seeAllUrl || "/products"),
+                startDate: String(section?.startDate || ""),
+                endDate: String(section?.endDate || ""),
+              }))
+              .filter((section: HomeSectionConfig) => {
+                if (!section.active || !section.showOnHome) return false;
+
+                if (section.startDate) {
+                  const start = new Date(section.startDate);
+                  if (!Number.isNaN(start.getTime()) && now < start) return false;
+                }
+
+                if (section.endDate) {
+                  const end = new Date(section.endDate);
+                  if (!Number.isNaN(end.getTime()) && now > end) return false;
+                }
+
+                return true;
+              })
+              .sort(
+                (a: HomeSectionConfig, b: HomeSectionConfig) =>
+                  a.order - b.order || a.priority - b.priority
+              );
+
+            setHomeSections(activeSections);
+            return;
+          }
+        } catch (firestoreError) {
+          console.error("Firestore home sections load error:", firestoreError);
+        }
+
+        const saved = localStorage.getItem("nightnow_admin_categories");
 
         if (!saved) {
-          setHomeCategories([]);
+          localStorage.setItem(
+            "nightnow_admin_categories",
+            JSON.stringify(DEFAULT_HOME_CATEGORIES)
+          );
+          if (!cancelled) setHomeCategories(DEFAULT_HOME_CATEGORIES);
           return;
         }
 
         const parsed = JSON.parse(saved);
 
-        if (!Array.isArray(parsed)) {
-          setHomeCategories([]);
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          if (!cancelled) setHomeCategories(DEFAULT_HOME_CATEGORIES);
           return;
         }
 
-        setHomeCategories(
-          parsed
-            .filter(
-              (category: HomeCategory) =>
-                category.active !== false &&
-                category.showOnHome !== false
-            )
-            .sort(
-              (a: HomeCategory, b: HomeCategory) =>
-                Number(a.order || 0) - Number(b.order || 0)
-            )
-        );
+        let sectionConfig = new Map<string, any>();
+        let sections: any[] = [];
+
+        try {
+          const rawSections = localStorage.getItem(HOME_SECTIONS_KEY);
+          const parsedSections = rawSections ? JSON.parse(rawSections) : [];
+          sections = Array.isArray(parsedSections) ? parsedSections : [];
+
+          sections.forEach((section: any) => {
+            const sectionName = String(section?.section || "").trim();
+            if (!sectionName) return;
+            sectionConfig.set(sectionName.toLowerCase(), section);
+          });
+        } catch {
+          sectionConfig = new Map<string, any>();
+          sections = [];
+        }
+
+        const activeCategories = parsed
+          .map((category: HomeCategory) => {
+            const sectionName =
+              String(
+                category?.section ||
+                  category?.heading ||
+                  category?.name ||
+                  "Products"
+              ).trim() || "Products";
+
+            const config = sectionConfig.get(
+              sectionName.toLowerCase()
+            );
+
+            return {
+              ...category,
+              section: sectionName,
+              heading:
+                String(
+                  config?.heading ||
+                    category.heading ||
+                    sectionName
+                ).trim() || sectionName,
+              subtitle:
+                String(
+                  config?.subtitle ||
+                    category.subtitle ||
+                    "Explore more products"
+                ).trim() || "Explore more products",
+              order: Number(
+                config?.order ??
+                  category.order ??
+                  0
+              ),
+              productIds: Array.isArray(
+                config?.productIds
+              )
+                ? config.productIds.map(String)
+                : Array.isArray(category.productIds)
+                  ? category.productIds.map(String)
+                  : [],
+            };
+          })
+          .filter(
+            (category: HomeCategory) =>
+              category.active !== false &&
+              category.showOnHome !== false
+          )
+          .sort(
+            (a: HomeCategory, b: HomeCategory) =>
+              Number(a.order || 0) -
+              Number(b.order || 0)
+          );
+
+        if (!cancelled) {
+          setHomeCategories(activeCategories);
+
+          if (Array.isArray(sections) && sections.length > 0) {
+            setHomeSections(
+              sections
+                .map((section: any, index: number) => ({
+                  key: String(
+                    section?.key ||
+                      section?.section ||
+                      `section-${index}`
+                  ),
+                  section: String(
+                    section?.section ||
+                      `Section ${index + 1}`
+                  ),
+                  type: "product-carousel",
+                  heading: String(
+                    section?.heading ||
+                      section?.section ||
+                      `Section ${index + 1}`
+                  ),
+                  subtitle: String(
+                    section?.subtitle ||
+                      "Explore more products"
+                  ),
+                  order: Number(
+                    section?.order ??
+                      index + 1
+                  ),
+                  priority: 1,
+                  active:
+                    section?.active !== false,
+                  showOnHome:
+                    section?.showOnHome !== false,
+                  productIds: Array.isArray(
+                    section?.productIds
+                  )
+                    ? section.productIds.map(String)
+                    : [],
+                  categories: [],
+                  brands: [],
+                  image: "",
+                  mobileImage: "",
+                  desktopImage: "",
+                  productLimit: 10,
+                  seeAll: true,
+                  seeAllText: "See All",
+                  seeAllUrl: "/categories",
+                  startDate: "",
+                  endDate: "",
+                }))
+                .filter(
+                  (section: HomeSectionConfig) =>
+                    section.active &&
+                    section.showOnHome
+                )
+                .sort(
+                  (
+                    a: HomeSectionConfig,
+                    b: HomeSectionConfig
+                  ) => a.order - b.order
+                )
+            );
+          } else {
+            setHomeSections([]);
+          }
+        }
       } catch (error) {
         console.error(
           "Home category loading error:",
           error
         );
-        setHomeCategories([]);
+
+        if (!cancelled) {
+          setHomeCategories([]);
+          setHomeSections([]);
+        }
       }
     };
 
-    loadHomeCategories();
+    void loadHomeCategories();
 
     const handleStorage = (event: StorageEvent) => {
-      if (event.key === "nightnow_admin_categories") {
-        loadHomeCategories();
+      if (
+        event.key === "nightnow_admin_categories" ||
+        event.key === HOME_SECTIONS_KEY
+      ) {
+        void loadHomeCategories();
+      }
+    };
+
+    const handleAdminUpdate = () => {
+      void loadHomeCategories();
+    };
+
+    const handleVisibility = () => {
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
+        void loadHomeCategories();
       }
     };
 
     window.addEventListener("storage", handleStorage);
-
-    const refresh = window.setInterval(
-      loadHomeCategories,
-      1000
+    window.addEventListener(
+      "nightnow_admin_categories_updated",
+      handleAdminUpdate
+    );
+    window.addEventListener("focus", handleAdminUpdate);
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibility
     );
 
     return () => {
+      cancelled = true;
       window.removeEventListener("storage", handleStorage);
-      window.clearInterval(refresh);
+      window.removeEventListener(
+        "nightnow_admin_categories_updated",
+        handleAdminUpdate
+      );
+      window.removeEventListener("focus", handleAdminUpdate);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibility
+      );
     };
-  }, []);
-
- // ==========================================
+  }, []); // ==========================================
 // LOAD PRODUCTS + NEEDS + BRANDS + OFFERS
 // ==========================================
 
@@ -309,6 +666,57 @@ useEffect(() => {
 
     return () => unsubscribe();
   }, []);
+
+  // ==========================================
+  // BUY AGAIN - PREVIOUSLY ORDERED PRODUCTS
+  // ==========================================
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBuyAgainProducts = async () => {
+      if (!isLoggedIn || products.length === 0) {
+        if (!cancelled) setBuyAgainProducts([]);
+        return;
+      }
+
+      try {
+        const orders: any[] = await getOrders();
+        const seen = new Set<string>();
+        const orderedIds: string[] = [];
+
+        for (const order of orders) {
+          if (String(order?.status || "").toLowerCase() === "cancelled") continue;
+
+          const items: any[] = Array.isArray(order?.items) ? order.items : [];
+
+          for (const item of items) {
+            const id = String(item?.id || item?.productId || "");
+            if (id && !seen.has(id)) {
+              seen.add(id);
+              orderedIds.push(id);
+            }
+          }
+        }
+
+        const productMap = new Map(products.map((product) => [String(product.id), product]));
+        const result = orderedIds
+          .map((id) => productMap.get(id))
+          .filter((product): product is Product => Boolean(product))
+          .slice(0, 12);
+
+        if (!cancelled) setBuyAgainProducts(result);
+      } catch (error) {
+        console.error("Buy Again loading error:", error);
+        if (!cancelled) setBuyAgainProducts([]);
+      }
+    };
+
+    void loadBuyAgainProducts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, products]);
 
   const handleLocationSelect = (location: SavedLocation) => {
     setSelectedLocation(location);
@@ -524,7 +932,7 @@ useEffect(() => {
   // ==========================================
 
   const sortByMrp = (items: Product[]) => {
-    if (priceSort === "default") {
+    if (sortMode === "default") {
       return items;
     }
 
@@ -532,7 +940,7 @@ useEffect(() => {
       const aMrp = Number(a?.mrp ?? a?.MRP ?? a?.price ?? 0);
       const bMrp = Number(b?.mrp ?? b?.MRP ?? b?.price ?? 0);
 
-      return priceSort === "high"
+      return sortMode === "high"
         ? bMrp - aMrp
         : aMrp - bMrp;
     });
@@ -581,6 +989,15 @@ useEffect(() => {
         );
       }
 
+      if (discountFilter !== "all") {
+        const minimum = Number(discountFilter);
+        result = result.filter((product: any) => {
+          const mrp = Number(product?.mrp ?? product?.MRP ?? product?.price ?? 0);
+          const price = Number(product?.price ?? 0);
+          const discount = mrp > price && mrp > 0 ? Math.round(((mrp - price) / mrp) * 100) : 0;
+          return discount >= minimum;
+        });
+      }
       return sortByMrp(result);
     }
 
@@ -588,7 +1005,7 @@ useEffect(() => {
     // Normal product search
     // ----------------------------------------
 
-    const result = products.filter(
+    let result = products.filter(
       (product) => {
         const searchable =
           productSearchText(
@@ -637,6 +1054,16 @@ useEffect(() => {
       }
     );
 
+    if (discountFilter !== "all") {
+      const minimum = Number(discountFilter);
+      result = result.filter((product: any) => {
+        const mrp = Number(product?.mrp ?? product?.MRP ?? product?.price ?? 0);
+        const price = Number(product?.price ?? 0);
+        const discount = mrp > price && mrp > 0 ? Math.round(((mrp - price) / mrp) * 100) : 0;
+        return discount >= minimum;
+      });
+    }
+
     return sortByMrp(result);
   }, [
     products,
@@ -644,7 +1071,8 @@ useEffect(() => {
     selectedCategory,
     matchedNeeds,
     productsFromMatchedNeeds,
-    priceSort,
+    sortMode,
+    discountFilter,
   ]);
 
   // ==========================================
@@ -996,8 +1424,233 @@ useEffect(() => {
     } as any);
   };
 
+  // ============================================================
+  // DYNAMIC HOME PAGE BUILDER RENDERER
+  // ============================================================
+  const getSectionProducts = (section: HomeSectionConfig) => {
+    const selectedIds = new Set((section.productIds || []).map(String));
+
+    let result: Product[] = products.filter((product) => product.active !== false);
+
+    if (selectedIds.size > 0) {
+      result = result.filter((product) => selectedIds.has(String(product.id)));
+    } else if ((section.brands || []).length > 0) {
+      const selectedBrands = new Set((section.brands || []).map(String));
+      result = result.filter((product: any) =>
+        selectedBrands.has(String(product.brandId || "")) ||
+        selectedBrands.has(String(product.brandName || "")) ||
+        selectedBrands.has(String(product.brand || ""))
+      );
+    }
+
+    return result.slice(0, Math.max(1, Number(section.productLimit || 10)));
+  };
+
+  const getCompactProductCard = (
+    product: Product,
+    keyPrefix: string
+  ) => {
+    const imageUrl = getProductImage(product);
+    const price = Number(product.price || 0);
+    const mrp = Number(product.mrp || 0);
+    const stock = Number(product.stock || 0);
+    const discount = mrp > price && mrp > 0
+      ? Math.round(((mrp - price) / mrp) * 100)
+      : 0;
+    const quantity = getMobileCartQuantity(product);
+
+    return (
+      <div
+        key={`${keyPrefix}-${product.id}`}
+        className="w-[98px] shrink-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
+      >
+        <Link href={`/product/${product.id}`} className="block">
+          <div className="relative flex aspect-square items-center justify-center bg-white p-1.5">
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={product.name || "Product"}
+                className="h-full w-full object-contain"
+                loading="lazy"
+              />
+            ) : (
+              <span className="text-2xl">📦</span>
+            )}
+
+            {discount > 0 && (
+              <span className="absolute left-0 top-2 rounded-r-full bg-green-500 px-1.5 py-0.5 text-[7px] font-black text-white">
+                {discount}% OFF
+              </span>
+            )}
+          </div>
+
+          <div className="px-1.5 pb-1">
+            <p className="line-clamp-2 min-h-[24px] text-[8px] font-black leading-3 text-zinc-900">
+              {product.name || product.title || product.productName || "Product"}
+            </p>
+
+            <div className="mt-0.5 flex items-center gap-1">
+              <span className="text-[11px] font-black text-green-600">
+                ₹{price}
+              </span>
+              {mrp > price && (
+                <span className="truncate text-[7px] text-zinc-400 line-through">
+                  ₹{mrp}
+                </span>
+              )}
+            </div>
+          </div>
+        </Link>
+
+        <div className="px-1.5 pb-1.5">
+          {quantity > 0 ? (
+            <div className="flex h-7 items-center justify-between rounded-lg bg-yellow-400 px-1">
+              <button
+                type="button"
+                onClick={() => handleMobileDecrease(product)}
+                className="h-5 w-5 rounded-md bg-black text-[12px] font-black text-white"
+              >
+                −
+              </button>
+              <span className="text-[9px] font-black text-black">
+                {quantity}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleMobileIncrease(product)}
+                disabled={stock <= 0 || quantity >= stock}
+                className="h-5 w-5 rounded-md bg-black text-[12px] font-black text-white disabled:opacity-30"
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleAddToCart(product)}
+              disabled={stock <= 0}
+              aria-label={`Add ${product.name || "product"} to cart`}
+              className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500 text-lg font-black leading-none text-white shadow-sm disabled:opacity-30"
+            >
+              +
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const getSmartPickProducts = () => {
+    const active = products.filter((product) => product.active !== false && Number(product.stock || 0) > 0);
+
+    if (smartPickMode === "under99") {
+      return active.filter((product) => Number(product.price || 0) <= 99).slice(0, 12);
+    }
+
+    if (smartPickMode === "deals") {
+      return [...active]
+        .map((product) => {
+          const price = Number(product.price || 0);
+          const mrp = Number(product.mrp || 0);
+          const discount = mrp > price && mrp > 0 ? ((mrp - price) / mrp) * 100 : 0;
+          return { product, discount };
+        })
+        .sort((a, b) => b.discount - a.discount)
+        .filter((item) => item.discount > 0)
+        .slice(0, 12)
+        .map((item) => item.product);
+    }
+
+    if (smartPickMode === "value") {
+      return [...active]
+        .map((product) => {
+          const price = Number(product.price || 0);
+          const mrp = Number(product.mrp || 0);
+          const discount = mrp > price && mrp > 0 ? ((mrp - price) / mrp) * 100 : 0;
+          return { product, score: discount * 2 + Math.max(0, 100 - price) / 10 };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 12)
+        .map((item) => item.product);
+    }
+
+    return active.slice(0, 12);
+  };
+
+  const renderDynamicHomeSection = (section: HomeSectionConfig, mobile: boolean) => {
+    const sectionProducts = getSectionProducts(section);
+    const selectedCategoryIds = new Set((section.categories || []).map(String));
+    const sectionCategories = homeCategories.filter((category) =>
+      selectedCategoryIds.has(String(category.id))
+    );
+
+    const type = String(section.type || "product-carousel");
+    const image = mobile
+      ? section.mobileImage || section.image
+      : section.desktopImage || section.image;
+
+    if (type === "category-carousel") {
+      return (
+        <section key={`${mobile ? "m" : "d"}-${section.key}`} className={mobile ? "px-3 pb-5 pt-4" : "mx-auto max-w-7xl px-4 pb-7 pt-7"}>
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h2 className={mobile ? "text-[18px] font-black" : "text-xl font-black"}>{section.heading}</h2>
+              {section.subtitle && <p className="mt-1 text-xs text-zinc-400">{section.subtitle}</p>}
+            </div>
+            {section.seeAll && <Link href={section.seeAllUrl || "/categories"} className="text-xs font-black text-yellow-600">{section.seeAllText || "See All"} →</Link>}
+          </div>
+          <div className={mobile ? "flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "grid grid-cols-4 gap-4 md:grid-cols-6 lg:grid-cols-8"}>
+            {sectionCategories.map((category) => (
+              <Link key={`${section.key}-${category.id}`} href={`/categories?category=${encodeURIComponent(category.name)}`} className={mobile ? "w-[78px] shrink-0 text-center" : "rounded-2xl border border-zinc-200 bg-white p-3 text-center"}>
+                <div className={mobile ? "flex h-[72px] items-center justify-center rounded-xl bg-zinc-50" : "flex h-24 items-center justify-center rounded-xl bg-zinc-50"}>
+                  {category.image ? <img src={category.image} alt={category.name} className="h-full w-full object-contain" loading="lazy" /> : <span className="text-2xl">🛍️</span>}
+                </div>
+                <p className="mt-2 line-clamp-2 text-[10px] font-black">{category.name}</p>
+              </Link>
+            ))}
+            {sectionCategories.length === 0 && <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-4 text-xs text-zinc-400">Admin में categories select करें।</div>}
+          </div>
+        </section>
+      );
+    }
+
+    if ((type === "banner" || type === "offer") && image) {
+      return (
+        <section key={`${mobile ? "m" : "d"}-${section.key}`} className={mobile ? "px-3 pb-5 pt-4" : "mx-auto max-w-7xl px-4 pb-7 pt-7"}>
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <h2 className={mobile ? "text-[18px] font-black" : "text-xl font-black"}>{section.heading}</h2>
+              {section.subtitle && <p className="mt-1 text-xs text-zinc-400">{section.subtitle}</p>}
+            </div>
+            {section.seeAll && <Link href={section.seeAllUrl || "/products"} className="text-xs font-black text-yellow-600">{section.seeAllText || "See All"} →</Link>}
+          </div>
+          <Link href={section.seeAllUrl || "/products"} className="block overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+            <img src={image} alt={section.heading} className="max-h-[360px] w-full object-cover" loading="lazy" />
+          </Link>
+        </section>
+      );
+    }
+
+    return (
+      <section key={`${mobile ? "m" : "d"}-${section.key}`} className={mobile ? "px-3 pb-5 pt-4" : "mx-auto max-w-7xl px-4 pb-7 pt-7"}>
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className={mobile ? "text-[18px] font-black leading-5" : "text-xl font-black"}>{section.heading}</h2>
+            {section.subtitle && <p className="mt-1 text-xs text-zinc-400">{section.subtitle}</p>}
+          </div>
+          {section.seeAll && <Link href={section.seeAllUrl || "/products"} className="shrink-0 text-xs font-black text-yellow-600">{section.seeAllText || "See All"} →</Link>}
+        </div>
+
+        <div className={mobile ? "flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "grid grid-cols-4 gap-3 lg:grid-cols-6"}>
+          {sectionProducts.map((product) => getCompactProductCard(product, section.key))}
+          {sectionProducts.length === 0 && <div className="col-span-full rounded-2xl border border-dashed border-zinc-300 bg-white p-6 text-center text-xs text-zinc-400">इस section में products select नहीं हैं।</div>}
+        </div>
+      </section>
+    );
+  };
+
   return (
-   <main className="min-h-screen bg-gradient-to-b from-[#fdf4ff] via-[#fff8fc] to-[#f3e8ff] text-zinc-900">
+   <main className="min-h-screen bg-gradient-to-b from-[#f7f3ff] via-[#fffaff] to-[#efe9ff] text-zinc-900">
 
       {/* =================================================
           HEADER
@@ -1094,35 +1747,6 @@ useEffect(() => {
     </button>
 
   </div>
-
-  {/* SEARCH RESULTS DIRECTLY BELOW SEARCH BAR */}
-{/* SEARCH BAR */}
-<div className="px-3">
-  <div className="flex items-center gap-2 rounded-xl bg-zinc-100 px-3 py-2">
-    <span className="text-sm">🔍</span>
-
-    <input
-      type="text"
-      placeholder="Search products..."
-      className="flex-1 bg-transparent text-xs font-medium outline-none"
-    />
-  </div>
-
-  {/* Small tagline below search */}
-  <p className="mt-1.5 px-1 text-[9px] font-semibold text-zinc-500">
-    आपकी जरूरत, हमारी जिम्मेदारी
-  </p>
-</div>
-
-{/* SMALL NEED BUTTON */}
-<div className="mt-2 px-3">
-  <button
-    type="button"
-    className="rounded-full bg-yellow-400 px-3 py-1.5 text-[9px] font-black text-zinc-900"
-  >
-    आपकी जरूरत 🛍️
-  </button>
-</div>
 
   {search.trim() &&
     !loading &&
@@ -1279,6 +1903,46 @@ useEffect(() => {
           </Link>
 
         </div>
+
+        {/* =================================================
+            DESKTOP SORT - DIRECTLY BELOW SEARCH ROW
+        ================================================= */}
+        <div className="hidden w-full border-t border-purple-100 bg-white/95 px-4 py-2 md:block">
+          <div className="mx-auto flex max-w-7xl items-center gap-2">
+            <details className="relative">
+              <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[11px] font-black text-zinc-700 shadow-sm">
+                <span>↕️ Sort By</span>
+                <span className="text-zinc-400">⌄</span>
+              </summary>
+              <div className="absolute left-0 top-[calc(100%+6px)] z-[120] w-[320px] rounded-2xl border border-zinc-200 bg-white p-3 shadow-2xl">
+                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-wider text-zinc-400">Sort & Filter</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={(e) => applySortMode("default", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "default" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Recommended</button>
+                  <button type="button" onClick={(e) => applySortMode("low", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "low" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Low Price</button>
+                  <button type="button" onClick={(e) => applySortMode("high", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "high" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>High Price</button>
+                  <button type="button" onClick={(e) => applyDiscountFilter("10", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "10" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>10%+ OFF</button>
+                  <button type="button" onClick={(e) => applyDiscountFilter("20", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "20" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>20%+ OFF</button>
+                  <button type="button" onClick={(e) => applyDiscountFilter("50", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "50" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>50%+ OFF</button>
+                </div>
+                <button type="button" onClick={(e) => clearAllProductFilters(e.currentTarget)} className="mt-2 w-full rounded-xl border border-yellow-300 bg-yellow-50 px-3 py-2.5 text-[10px] font-black text-yellow-800">🛍️ All Products / Clear All Filters</button>
+                <button type="button" onClick={() => setShowSortCategory((value) => !value)} className="mt-2 flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-[10px] font-black text-zinc-700">
+                  <span>📂 Categories</span><span>{showSortCategory ? "⌃" : "⌄"}</span>
+                </button>
+                {showSortCategory && (
+                  <div className="mt-2 grid max-h-52 grid-cols-2 gap-2 overflow-y-auto">
+                    {categoryOptions.map((category) => (
+                      <button key={`desktop-sort-category-${category.name}`} type="button" onClick={(e) => selectHomeCategory(category.name, e.currentTarget)} className={["rounded-xl border px-2.5 py-2 text-left text-[9px] font-black", selectedCategory === category.name ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>
+                        {category.icon} {category.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </details>
+            <span className="text-[10px] font-bold text-zinc-400">Filter products your way</span>
+          </div>
+        </div>
+
         {/* MOBILE TOP - LOGO + LOCATION */}
         <div className="flex w-full items-center justify-between gap-2 px-4 py-2 md:hidden">
           <Link href="/" className="flex shrink-0 items-center gap-1.5">
@@ -1439,6 +2103,52 @@ useEffect(() => {
             )}
         </div>
 
+
+        {/* =================================================
+            SORT BY - DIRECTLY BELOW SEARCH
+            Mobile placement: immediately under the search bar.
+        ================================================= */}
+        <div className="w-full basis-full border-t border-zinc-100 bg-white px-3 py-2 md:hidden">
+          <details className="relative">
+            <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[11px] font-black text-zinc-700 shadow-sm">
+              <span>↕️ Sort By</span>
+              <span className="text-zinc-400">⌄</span>
+            </summary>
+
+            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[120] rounded-2xl border border-zinc-200 bg-white p-3 shadow-2xl">
+              <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-wider text-zinc-400">
+                Sort & Filter
+              </p>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={(e) => applySortMode("default", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "default" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Recommended</button>
+                <button type="button" onClick={(e) => applySortMode("low", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "low" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Low Price</button>
+                <button type="button" onClick={(e) => applySortMode("high", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "high" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>High Price</button>
+                <button type="button" onClick={(e) => applyDiscountFilter("10", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "10" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>10%+ OFF</button>
+                <button type="button" onClick={(e) => applyDiscountFilter("20", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "20" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>20%+ OFF</button>
+                <button type="button" onClick={(e) => applyDiscountFilter("50", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "50" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>50%+ OFF</button>
+              </div>
+
+              <button type="button" onClick={(e) => clearAllProductFilters(e.currentTarget)} className="mt-2 w-full rounded-xl border border-yellow-300 bg-yellow-50 px-3 py-2.5 text-[10px] font-black text-yellow-800">🛍️ All Products / Clear All Filters</button>
+
+              <button type="button" onClick={() => setShowSortCategory((value) => !value)} className="mt-2 flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-[10px] font-black text-zinc-700">
+                <span>📂 Categories</span>
+                <span>{showSortCategory ? "⌃" : "⌄"}</span>
+              </button>
+
+              {showSortCategory && (
+                <div className="mt-2 grid max-h-52 grid-cols-2 gap-2 overflow-y-auto">
+                  {categoryOptions.map((category) => (
+                    <button key={`mobile-sort-category-${category.name}`} type="button" onClick={(e) => selectHomeCategory(category.name, e.currentTarget)} className={["rounded-xl border px-2.5 py-2 text-left text-[9px] font-black", selectedCategory === category.name ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>
+                      {category.icon} {category.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </details>
+        </div>
+
         {/* MOBILE LOCATION - BELOW SEARCH */}
        <div className="hidden w-full basis-full md:hidden">
           <button
@@ -1470,7 +2180,7 @@ useEffect(() => {
           HERO
       ================================================= */}
 
-      <section className="bg-gradient-to-b from-[#fffaff] via-[#fdf4ff] to-[#f3e8ff]">
+      <section className="hidden bg-gradient-to-b from-[#fffaff] via-[#fdf4ff] to-[#f3e8ff] md:block">
 
         <div className="mx-auto max-w-7xl px-4 py-6 md:py-10">
 
@@ -1557,6 +2267,12 @@ useEffect(() => {
         </div>
 
       </section>
+
+{/* =================================================
+    MOBILE QUICK CATEGORIES REMOVED
+    Categories are now available from the Sort By menu
+    and the dedicated category navigation below.
+================================================= */}
 
 {/* =================================================
     LIVE OFFERS
@@ -1717,6 +2433,86 @@ useEffect(() => {
 )}
 
 
+        {/* =================================================
+            SMART PICKS
+        ================================================= */}
+        <section className="px-3 pb-5 pt-4 md:mx-auto md:max-w-7xl md:px-4 md:pb-7 md:pt-7">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-500">NightNow Smart Picks</p>
+              <h2 className="mt-1 text-[18px] font-black leading-5 md:text-xl">What are you looking for?</h2>
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {[
+              { id: "fast" as const, icon: "⚡", title: "Fast Picks", sub: "Ready now" },
+              { id: "under99" as const, icon: "₹", title: "Under ₹99", sub: "Budget picks" },
+              { id: "deals" as const, icon: "🔥", title: "Hot Deals", sub: "Best discounts" },
+              { id: "value" as const, icon: "💎", title: "Value Picks", sub: "Smart value" },
+            ].map((item) => {
+              const active = smartPickMode === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSmartPickMode(item.id)}
+                  className={`w-[108px] shrink-0 rounded-2xl border px-3 py-2.5 text-left transition ${active ? "border-blue-500 bg-blue-500 text-white shadow-md" : "border-zinc-200 bg-white text-zinc-900"}`}
+                >
+                  <span className="text-base">{item.icon}</span>
+                  <p className="mt-1 text-[10px] font-black">{item.title}</p>
+                  <p className={`text-[8px] ${active ? "text-blue-100" : "text-zinc-400"}`}>{item.sub}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {getSmartPickProducts().map((product) => getCompactProductCard(product, `smart-${smartPickMode}`))}
+            {getSmartPickProducts().length === 0 && (
+              <div className="w-full rounded-2xl border border-dashed border-zinc-300 bg-white p-5 text-center text-xs text-zinc-400">
+                Is category me abhi products available nahi hain.
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* =================================================
+            BUY AGAIN
+        ================================================= */}
+        {isLoggedIn && buyAgainProducts.length > 0 && (
+          <section className="px-3 pb-5 pt-2 md:mx-auto md:max-w-7xl md:px-4">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <h2 className="text-[18px] font-black leading-5 md:text-xl">Buy Again</h2>
+                <p className="mt-1 text-[9px] text-zinc-400">Your recently purchased products</p>
+              </div>
+              <Link href="/orders" className="text-[10px] font-black text-yellow-600">View Orders →</Link>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {buyAgainProducts.map((product) => getCompactProductCard(product, "buy-again"))}
+            </div>
+          </section>
+        )}
+
+        {/* =================================================
+            DYNAMIC HOME PAGE BUILDER - MOBILE
+        ================================================= */}
+        <div className="md:hidden">
+          {homeSections.map((section) =>
+            renderDynamicHomeSection(section, true)
+          )}
+        </div>
+
+        {/* =================================================
+            DYNAMIC HOME PAGE BUILDER - DESKTOP
+        ================================================= */}
+        <div className="hidden md:block">
+          {homeSections.map((section) =>
+            renderDynamicHomeSection(section, false)
+          )}
+        </div>
+
       {/* =================================================
           MATCHED NEEDS FROM MAIN SEARCH
       ================================================= */}
@@ -1795,70 +2591,6 @@ useEffect(() => {
         )}
 
 
-        {/* MOBILE CATEGORY GRID — controlled by Admin */}
-        {(() => {
-          const sections = Array.from(
-            new Set(
-              homeCategories.map((category) => category.section)
-            )
-          );
-
-          return sections.map((section) => {
-            const sectionCategories = homeCategories
-              .filter((category) => category.section === section)
-              .slice(0, 8);
-
-            if (sectionCategories.length === 0) return null;
-
-            return (
-              <section
-                key={section}
-                className="px-3 pt-3 md:hidden"
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-[17px] font-black text-zinc-900">
-                    {section}
-                  </h2>
-                  <Link
-                    href="/categories"
-                    className="text-[10px] font-black text-yellow-600"
-                  >
-                    View all
-                  </Link>
-                </div>
-
-                <div className="grid grid-cols-4 gap-x-2 gap-y-3">
-                  {sectionCategories.map((category) => (
-                    <Link
-                      key={category.id}
-                      href={`/categories?category=${encodeURIComponent(
-                        category.name
-                      )}`}
-                      className="min-w-0 text-center"
-                    >
-                      <div className="flex h-[76px] items-center justify-center overflow-hidden rounded-xl bg-[#faf0ff]">
-                        {category.image ? (
-                          <img
-                            src={category.image}
-                            alt={category.name}
-                            className="h-full w-full object-contain"
-                          />
-                        ) : (
-                          <span className="text-2xl">📦</span>
-                        )}
-                      </div>
-
-                      <p className="mt-1 line-clamp-2 text-[9px] font-bold leading-[11px] text-zinc-800">
-                        {category.name}
-                      </p>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            );
-          });
-        })()}
-
       {/* =================================================
           CATEGORIES
       ================================================= */}
@@ -1877,9 +2609,9 @@ useEffect(() => {
 
         </div>
 
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
+        <div className="mt-5 flex gap-3 overflow-x-auto rounded-3xl border border-violet-100 bg-white/80 p-3 pb-3 shadow-[0_10px_35px_rgba(76,29,149,0.06)] backdrop-blur">
 
-          {categories.map(
+          {categoryOptions.map(
             (category) => (
               <button
                 key={
@@ -1887,9 +2619,7 @@ useEffect(() => {
                 }
                 type="button"
                 onClick={() =>
-                  setSelectedCategory(
-                    category.name
-                  )
+                  selectHomeCategory(category.name)
                 }
                 className={[
                   "min-w-[105px] rounded-2xl border p-4 text-center transition",
@@ -1915,10 +2645,7 @@ useEffect(() => {
         </div>
 
       </section>
-<style jsx>{`
-  ...
-`}</style>
-      {/* =================================================
+{/* =================================================
           TOP BRANDS
       ================================================= */}
 
@@ -2046,7 +2773,7 @@ useEffect(() => {
 
             <h2 className="text-xl font-black">
   <span className="md:hidden">
-    {mobileProductScrollerHeading}
+    {search ? mobileProductScrollerHeading : "More Products"}
   </span>
 
   <span className="hidden md:inline">
@@ -2068,12 +2795,7 @@ useEffect(() => {
 
           <button
             type="button"
-            onClick={() => {
-              setSearch("");
-              setSelectedCategory(
-                "All"
-              );
-            }}
+            onClick={(e) => clearAllProductFilters(e.currentTarget)}
             className="text-xs font-black text-yellow-600"
           >
             View All →
@@ -2081,539 +2803,119 @@ useEffect(() => {
 
         </div>
 
-                {/* PRODUCT FILTER */}
-
-        {/* MOBILE FILTER */}
-        <details className="mt-4 md:hidden">
-          <summary className="flex cursor-pointer list-none items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-[11px] font-black text-zinc-700 shadow-sm">
-            ⚙️ Filter
-          </summary>
-
-          <div className="mt-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
-            <div className="flex flex-wrap gap-2">
-
-              <button
-                type="button"
-                onClick={() =>
-                  setPriceSort(
-                    priceSort === "high"
-                      ? "default"
-                      : "high"
-                  )
-                }
-                className={[
-                  "rounded-xl border px-3 py-2 text-[10px] font-black",
-                  priceSort === "high"
-                    ? "border-yellow-400 bg-yellow-400 text-black"
-                    : "border-zinc-200 bg-white text-zinc-600",
-                ].join(" ")}
-              >
-                MRP High ↓
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setPriceSort(
-                    priceSort === "low"
-                      ? "default"
-                      : "low"
-                  )
-                }
-                className={[
-                  "rounded-xl border px-3 py-2 text-[10px] font-black",
-                  priceSort === "low"
-                    ? "border-yellow-400 bg-yellow-400 text-black"
-                    : "border-zinc-200 bg-white text-zinc-600",
-                ].join(" ")}
-              >
-                MRP Low ↑
-              </button>
-
-              {categories.map((category) => (
-                <button
-                  key={`mobile-product-filter-${category.name}`}
-                  type="button"
-                  onClick={() =>
-                    setSelectedCategory(category.name)
-                  }
-                  className={[
-                    "rounded-xl border px-3 py-2 text-[10px] font-black",
-                    selectedCategory === category.name
-                      ? "border-yellow-400 bg-yellow-400 text-black"
-                      : "border-zinc-200 bg-white text-zinc-600",
-                  ].join(" ")}
-                >
-                  {category.icon} {category.name}
-                </button>
-              ))}
-
-            </div>
-          </div>
-        </details>
-
-        {/* DESKTOP FILTER */}
-        <div className="mt-5 hidden overflow-x-auto pb-2 md:block">
-          <div className="flex min-w-max items-center gap-2">
-
-            <span className="mr-1 flex items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[10px] font-black text-zinc-600">
-              ⚙️ Filter
-            </span>
-
-            <button
-              type="button"
-              onClick={() =>
-                setPriceSort(
-                  priceSort === "high"
-                    ? "default"
-                    : "high"
-                )
-              }
-              className={[
-                "rounded-xl border px-3 py-2 text-[10px] font-black transition-all",
-                priceSort === "high"
-                  ? "border-yellow-400 bg-yellow-400 text-black shadow-sm"
-                  : "border-zinc-200 bg-white text-zinc-600 hover:border-yellow-300 hover:bg-yellow-50",
-              ].join(" ")}
-            >
-              MRP High ↓
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                setPriceSort(
-                  priceSort === "low"
-                    ? "default"
-                    : "low"
-                )
-              }
-              className={[
-                "rounded-xl border px-3 py-2 text-[10px] font-black transition-all",
-                priceSort === "low"
-                  ? "border-yellow-400 bg-yellow-400 text-black shadow-sm"
-                  : "border-zinc-200 bg-white text-zinc-600 hover:border-yellow-300 hover:bg-yellow-50",
-              ].join(" ")}
-            >
-              MRP Low ↑
-            </button>
-
-            {categories.map((category) => (
-              <button
-                key={`product-filter-${category.name}`}
-                type="button"
-                onClick={() =>
-                  setSelectedCategory(category.name)
-                }
-                className={[
-                  "rounded-xl border px-3 py-2 text-[10px] font-black transition-all",
-                  selectedCategory === category.name
-                    ? "border-yellow-400 bg-yellow-400 text-black shadow-sm"
-                    : "border-zinc-200 bg-white text-zinc-600 hover:border-yellow-300 hover:bg-yellow-50",
-                ].join(" ")}
-              >
-                {category.icon} {category.name}
-              </button>
+       {loading ? (
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div key={index} className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                <div className="aspect-square w-full animate-pulse bg-zinc-100" />
+                <div className="space-y-2 p-2.5">
+                  <div className="h-3 w-4/5 animate-pulse rounded bg-zinc-100" />
+                  <div className="h-3 w-3/5 animate-pulse rounded bg-zinc-100" />
+                  <div className="h-7 w-7 animate-pulse rounded-lg bg-zinc-100" />
+                </div>
+              </div>
             ))}
-
           </div>
-        </div>
-
-        {loading ? (
-          <div className="mt-5 flex gap-2 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible md:pb-0 lg:grid-cols-4">
-
-            {Array.from({
-              length: 8,
-            }).map((_, index) => (
-              <div
-                key={index}
-                className="h-32 min-w-[145px] flex-none animate-pulse rounded-2xl bg-zinc-100 md:h-64 md:min-w-0"
-              />
-            ))}
-
-          </div>
-        ) : filteredProducts.length ===
-          0 ? (
-
+        ) : filteredProducts.length === 0 ? (
           <div className="mt-5 rounded-3xl bg-zinc-50 p-10 text-center">
-
-            <div className="text-5xl">
-              🔍
-            </div>
-
-            <h3 className="mt-4 font-black">
-              Product nahi mila
-            </h3>
-
+            <div className="text-5xl">🔍</div>
+            <h3 className="mt-4 font-black">Product nahi mila</h3>
             {search && (
               <p className="mt-2 text-xs text-zinc-400">
-                Search:
-                <span className="font-bold text-zinc-600">
-                  {" "}
-                  {search}
-                </span>
+                Search: <span className="font-bold text-zinc-600">{search}</span>
               </p>
             )}
-
             <button
               type="button"
-              onClick={() => {
-                setSearch("");
-                setSelectedCategory(
-                  "All"
-                );
-              }}
+              onClick={(e) => clearAllProductFilters(e.currentTarget)}
               className="mt-5 rounded-xl bg-yellow-400 px-5 py-3 text-xs font-black"
             >
               Clear Search
             </button>
-
           </div>
         ) : (
-
-          <div className="mt-5 flex gap-2 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible md:pb-0 lg:grid-cols-4">
-
-            {filteredProducts.map(
-              (product) => {
-                const image =
-                  getProductImage(
-                    product
-                  );
-
-                const stock =
-                  Number(
-                    product.stock || 0
-                  );
-
-                const price =
-                  Number(
-                    product.price || 0
-                  );
-
-                const mrp =
-                  Number(
-                    product.mrp || 0
-                  );
-
-                const discount =
-                  mrp > price &&
-                  mrp > 0
-                    ? Math.round(
-                        ((mrp - price) /
-                          mrp) *
-                          100
-                      )
-                    : 0;
-
-                return (
-                  <div
-                    key={product.id}
-                    className="group relative min-w-[132px] max-w-[132px] flex-none snap-start overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 md:min-w-0 md:flex-auto md:rounded-[24px] md:shadow-[0_8px_20px_rgba(0,0,0,0.08),0_18px_45px_rgba(0,0,0,0.06)] md:hover:-translate-y-2 md:hover:scale-[1.015] md:hover:shadow-[0_18px_35px_rgba(0,0,0,0.14),0_30px_65px_rgba(0,0,0,0.10)] md:active:translate-y-0 md:[transform-style:preserve-3d]"
-                  >
-                    <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-px bg-gradient-to-r from-transparent via-yellow-300 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
-                    <Link href={`/product/${product.id}`}>
-                      <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-yellow-50/50 p-2 md:h-48 md:p-0 md:[transform:translateZ(20px)]">
-                        <div className="pointer-events-none absolute bottom-5 h-5 w-24 rounded-full bg-black/10 blur-xl transition-all duration-300 group-hover:w-28 group-hover:bg-black/15" />
-
-                        {image ? (
-                          <img
-                            src={image}
-                            alt={product.name || "Product"}
-                            className="relative z-[1] h-full w-full object-contain p-1.5 md:p-4 drop-shadow-[0_12px_10px_rgba(0,0,0,0.14)] transition-all duration-500 md:group-hover:scale-110 md:group-hover:-translate-y-1"
-                          />
-                        ) : (
-                          <span className="relative z-[1] text-xs text-zinc-400">
-                            No Image
-                          </span>
-                        )}
-
-                        {discount > 0 && (
-                          <div className="absolute left-0 top-4 z-20">
-                            <div className="rounded-r-full bg-gradient-to-r from-emerald-400 to-green-500 px-4 py-2 text-[11px] font-black text-white shadow-[0_6px_14px_rgba(34,197,94,0.25)] transition-transform duration-300 group-hover:translate-x-1">
-                              {discount}% OFF
-                            </div>
-                          </div>
-                        )}
-
-                        {stock > 0 && getMobileCartQuantity(product) <= 0 && (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              handleAddToCart(product);
-                            }}
-                            aria-label={`Add ${product.name || "product"} to cart`}
-                            className="absolute bottom-2 right-2 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xl font-black leading-none text-white shadow-[0_4px_10px_rgba(37,99,235,0.28)] transition-transform active:scale-90 md:hidden"
-                          >
-                            +
-                          </button>
-                        )}
-                      </div>
-                    </Link>
-
-                    <div className="relative border-t border-zinc-100 bg-white p-2 md:p-3.5 md:[transform:translateZ(10px)]">
-                      <Link href={`/product/${product.id}`}>
-                        <h3 className="line-clamp-2 min-h-[30px] text-[10px] font-black leading-3.5 transition-colors md:min-h-[38px] md:text-sm md:leading-5 md:group-hover:text-yellow-600">
-                          {product.name ||
-                            product.title ||
-                            product.productName ||
-                            "Product"}
-                        </h3>
-                      </Link>
-
-                      {product.brandName && (
-                        <p className="mt-1 hidden truncate text-[9px] font-bold text-yellow-600 md:block md:text-[10px]">
-                          {product.brandName}
-                        </p>
-                      )}
-
-                      <div className="mt-1.5 flex items-end gap-1 md:mt-3 md:gap-2">
-                        <p className="text-sm font-black text-green-600 md:text-lg">
-                          ₹{price}
-                        </p>
-
-                        {mrp > price && (
-                          <>
-                            <p className="hidden pb-0.5 text-[9px] text-zinc-400 line-through sm:inline md:text-[10px]">
-                              MRP ₹{mrp}
-                            </p>
-                            <span className="rounded-full bg-green-50 px-1.5 py-0.5 text-[8px] font-black text-green-700 md:px-2 md:text-[9px]">
-                              {discount}% OFF
-                            </span>
-                          </>
-                        )}
-                      </div>
-
-                      {stock > 0 && stock <= 5 && (
-                        <p className="mt-1 text-[8px] font-bold text-orange-500 md:text-[9px]">
-                          Only {stock} left
-                        </p>
-                      )}
-
-                      {stock <= 0 ? (
-                        <div className="mt-2 rounded-lg bg-zinc-100 py-2 text-center text-[9px] font-black text-zinc-400 md:mt-3 md:rounded-xl md:py-3 md:text-[10px]">
-                          Out of Stock
-                        </div>
-                      ) : (
-                        <>
-                          {/* MOBILE ONLY: FIXED QUANTITY AREA */}
-                          {/*
-                            Reserve the same height even when quantity is 0.
-                            This keeps the - / qty / + control locked to the
-                            same vertical position for every product card.
-                          */}
-                          <div className="mt-2 h-9 md:hidden">
-                            {getMobileCartQuantity(product) > 0 ? (
-                              <div className="flex h-9 w-full items-center overflow-hidden rounded-lg bg-yellow-400">
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    handleMobileDecrease(product);
-                                  }}
-                                  aria-label={`Decrease ${product.name || "product"} quantity`}
-                                  className="flex h-full w-10 shrink-0 items-center justify-center bg-black text-lg font-black text-white active:bg-zinc-800"
-                                >
-                                  −
-                                </button>
-
-                                <span className="flex h-full min-w-0 flex-1 items-center justify-center text-xs font-black text-black">
-                                  {getMobileCartQuantity(product)}
-                                </span>
-
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    handleMobileIncrease(product);
-                                  }}
-                                  disabled={getMobileCartQuantity(product) >= stock}
-                                  aria-label={`Increase ${product.name || "product"} quantity`}
-                                  className="flex h-full w-10 shrink-0 items-center justify-center bg-black text-lg font-black text-white disabled:cursor-not-allowed disabled:opacity-40 active:bg-zinc-800"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="h-9 w-full" aria-hidden="true" />
-                            )}
-                          </div>
-
-                          {/* DESKTOP ONLY: EXISTING BUTTON UNCHANGED */}
-                          <button
-                            type="button"
-                            onClick={() => handleAddToCart(product)}
-                            className="mt-3 hidden w-full rounded-xl bg-yellow-400 py-3 text-[10px] font-black text-black shadow-[0_6px_0_#d4a900,0_8px_15px_rgba(0,0,0,0.10)] transition-all duration-150 md:block md:hover:-translate-y-0.5 md:hover:bg-yellow-500 md:hover:shadow-[0_6px_0_#d4a900,0_12px_20px_rgba(0,0,0,0.14)] md:active:translate-y-[3px] md:active:shadow-[0_2px_0_#d4a900]"
-                          >
-                            🛒 Add to Cart
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
+          <div className="mt-5 flex gap-2.5 overflow-x-auto overflow-y-hidden pb-3 scrollbar-hide snap-x snap-mandatory">
+            {filteredProducts.map((product) =>
+              getCompactProductCard(product, "products")
             )}
-
           </div>
         )}
 
       </section>
 
       {/* =================================================
-          MOBILE CART POPUP
-          Appears after an item is added and links to /cart
-      ================================================= */}
-      {cartCount > 0 && (
-        <div className="fixed inset-x-0 bottom-[70px] z-[90] px-3 md:hidden">
-          <Link href="/cart" className="block">
-            <div className="mx-auto flex max-w-md items-center gap-2 rounded-2xl bg-yellow-400 p-3 text-black shadow-[0_8px_30px_rgba(0,0,0,0.20)] active:scale-[0.99]">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-xl text-white">
-                🛒
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold">
-                  {cartCount} {cartCount === 1 ? "item" : "items"} in cart
-                </p>
-                <p className="text-sm font-black">
-                  View your cart
-                </p>
-              </div>
-
-              <span className="shrink-0 rounded-xl bg-black px-3 py-2.5 text-[10px] font-black text-white">
-                View Cart →
-              </span>
-            </div>
-          </Link>
-        </div>
-      )}
-
-      {/* =================================================
-          FOOTER
-      ================================================= */}
-
-      <footer className="border-t border-zinc-200 bg-zinc-50">
-
-        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-3">
-
-          <div>
-
-            <div className="text-2xl font-black">
-              Night
-              <span className="text-yellow-500">
-                Now
-              </span>
-            </div>
-
-            <p className="mt-2 text-sm text-zinc-500">
-              Fast and reliable
-              delivery at your
-              doorstep.
-            </p>
-
-          </div>
-
-          <div>
-
-            <h3 className="font-black">
-              Quick Links
-            </h3>
-
-            <div className="mt-4 grid grid-cols-2 gap-2 text-sm text-zinc-500">
-
-              <Link href="/">
-                Home
-              </Link>
-
-              <Link href="/orders">
-                Orders
-              </Link>
-
-              <Link href="/cart">
-                Cart
-              </Link>
-
-              <Link href="/profile">
-                Profile
-              </Link>
-
-              <Link href="/wishlist">
-                Wishlist
-              </Link>
-
-              <Link href="/offers/buy-1-get-2">
-                Offers
-              </Link>
-
-            </div>
-
-          </div>
-
-          <div>
-
-            <h3 className="font-black">
-              Support
-            </h3>
-
-            <p className="mt-3 text-sm text-zinc-500">
-              Need help with
-              your order?
-            </p>
-
-            <Link
-              href="/support"
-              className="mt-4 inline-block rounded-xl border border-green-500 px-3 py-2.5 text-sm font-black text-green-600"
-            >
-              💬 Customer Support
-            </Link>
-
-          </div>
-
+    MOBILE STICKY CART BAR
+================================================= */}
+{cartCount > 0 && (
+  <div className="fixed inset-x-0 bottom-3 z-[90] px-3 md:hidden">
+    <Link href="/cart" className="block">
+      <div
+        className="
+          mx-auto
+          flex
+          max-w-md
+          items-center
+          gap-2
+          rounded-2xl
+          border
+          border-zinc-200
+          bg-white
+          px-3
+          py-2
+          text-black
+          shadow-[0_8px_30px_rgba(0,0,0,0.18)]
+          active:scale-[0.99]
+        "
+      >
+        {/* CART ICON */}
+        <div
+          className="
+            flex
+            h-9
+            w-9
+            shrink-0
+            items-center
+            justify-center
+            rounded-xl
+            bg-yellow-400
+            text-lg
+          "
+        >
+          🛒
         </div>
 
-        <div className="border-t border-zinc-200 px-4 py-5">
-
-          <div className="mx-auto grid max-w-7xl grid-cols-3 gap-2 text-center">
-
-            <div>
-              🔒
-
-              <p className="mt-1 text-[9px] font-bold text-zinc-400">
-                Secure Payment
-              </p>
-            </div>
-
-            <div>
-              ⚡
-
-              <p className="mt-1 text-[9px] font-bold text-zinc-400">
-                Fast Delivery
-              </p>
-            </div>
-
-            <div>
-              ❤️
-
-              <p className="mt-1 text-[9px] font-bold text-zinc-400">
-                Customer First
-              </p>
-            </div>
-
-          </div>
-
-          <p className="mt-5 text-center text-[10px] text-zinc-400">
-            © 2026 Night Now.
-            All rights reserved.
+        {/* CART INFO */}
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] font-bold text-zinc-500">
+            {cartCount}{" "}
+            {cartCount === 1 ? "item" : "items"} in cart
           </p>
 
+          <p className="truncate text-[12px] font-black text-zinc-900">
+            Ready to checkout
+          </p>
         </div>
 
-      </footer>
+        {/* VIEW CART */}
+        <span
+          className="
+            shrink-0
+            rounded-xl
+            bg-black
+            px-3
+            py-2
+            text-[9px]
+            font-black
+            text-white
+          "
+        >
+          View Cart →
+        </span>
+      </div>
+    </Link>
+  </div>
+)}
+
 
       <LocationSelector
         open={showLocation}

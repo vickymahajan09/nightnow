@@ -1,35 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import {
+  useEffect,
+  useState,
+} from "react";
 
-import { auth } from "../lib/firebase";
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
+
+import {
+  auth,
+} from "../lib/firebase";
 
 import {
   addReview,
   deleteReview,
   getProductReviews,
+  updateReview,
 } from "../services/reviewService";
-
-type Review = {
-  id: string;
-  userId: string;
-  userName?: string;
-  productId?: string;
-  rating: number;
-  comment?: string;
-  createdAt?: any;
-};
-
-type Props = {
-  productId: string;
-};
 
 export default function ReviewSection({
   productId,
-}: Props) {
+}: {
+  productId: string;
+}) {
+  const [user, setUser] =
+    useState<any>(null);
+
   const [reviews, setReviews] =
-    useState<Review[]>([]);
+    useState<any[]>([]);
 
   const [rating, setRating] =
     useState(5);
@@ -40,462 +40,348 @@ export default function ReviewSection({
   const [loading, setLoading] =
     useState(true);
 
-  const [submitting, setSubmitting] =
+  const [saving, setSaving] =
     useState(false);
 
-  const [userId, setUserId] =
-    useState<string | null>(null);
-
-  const [userName, setUserName] =
-    useState("Customer");
-
-  // ==========================================
-  // LOAD REVIEWS
-  // ==========================================
-
-  const loadReviews = async () => {
-    try {
-      setLoading(true);
-
-      const data =
-        await getProductReviews(
-          productId
-        );
-
-      setReviews(
-        Array.isArray(data)
-          ? (data as Review[])
-          : []
-      );
-    } catch (error) {
-      console.error(
-        "Reviews loading error:",
-        error
-      );
-
-      setReviews([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ==========================================
-  // AUTH
-  // ==========================================
+  const [editingId, setEditingId] =
+    useState("");
 
   useEffect(() => {
     const unsubscribe =
       onAuthStateChanged(
         auth,
-        (user) => {
-          setUserId(
-            user?.uid || null
+        (currentUser) => {
+          setUser(
+            currentUser
           );
-
-          if (user) {
-            setUserName(
-              user.displayName ||
-                user.email?.split("@")[0] ||
-                "Customer"
-            );
-          } else {
-            setUserName("Customer");
-          }
         }
       );
 
-    return () => unsubscribe();
+    return () =>
+      unsubscribe();
   }, []);
 
-  // ==========================================
-  // LOAD PRODUCT REVIEWS
-  // ==========================================
+  const loadReviews =
+    async () => {
+      try {
+        setLoading(true);
+
+        const data =
+          await getProductReviews(
+            productId
+          );
+
+        setReviews(data);
+      } catch (
+        error
+      ) {
+        console.error(
+          "Reviews loading error:",
+          error
+        );
+
+        setReviews([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
+    if (!productId) {
+      return;
+    }
+
     loadReviews();
   }, [productId]);
 
-  // ==========================================
-  // AVERAGE RATING
-  // ==========================================
-
-  const averageRating =
-    useMemo(() => {
-      if (reviews.length === 0) {
-        return 0;
-      }
-
-      const total =
-        reviews.reduce(
-          (sum, review) =>
-            sum +
-            Number(
-              review.rating || 0
-            ),
-          0
+  const submitReview =
+    async () => {
+      if (!user) {
+        alert(
+          "Review dene ke liye login karein."
         );
 
-      return total / reviews.length;
-    }, [reviews]);
+        return;
+      }
 
-  // ==========================================
-  // SUBMIT REVIEW
-  // ==========================================
+      const cleanText =
+        text.trim();
 
-  const submitReview = async () => {
-    if (!userId) {
-      alert(
-        "Please login to submit a review."
-      );
-      return;
-    }
+      if (!cleanText) {
+        alert(
+          "Review likhiye."
+        );
 
-    const cleanText =
-      text.trim();
+        return;
+      }
 
-    if (!cleanText) {
-      alert(
-        "Please write your review."
-      );
-      return;
-    }
+      try {
+        setSaving(true);
 
-    if (
-      rating < 1 ||
-      rating > 5
-    ) {
-      alert(
-        "Please select a rating."
-      );
-      return;
-    }
+        if (editingId) {
+          await updateReview(
+            editingId,
+            rating,
+            cleanText
+          );
+        } else {
+          await addReview(
+            productId,
+            user.uid,
+            user.displayName ||
+              "Customer",
+            rating,
+            cleanText
+          );
+        }
 
-    try {
-      setSubmitting(true);
+        setText("");
+        setRating(5);
+        setEditingId("");
 
-      await addReview(
-        productId,
-        userId,
-        userName,
-        rating,
-        cleanText
-      );
+        await loadReviews();
+      } catch (
+        error: any
+      ) {
+        console.error(
+          "Review save error:",
+          error
+        );
 
-      setText("");
-      setRating(5);
+        alert(
+          error?.message ||
+            "Review save failed."
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
 
-      await loadReviews();
-    } catch (error) {
-      console.error(
-        "Review submit error:",
-        error
-      );
-
-      alert(
-        "Review submit nahi ho paya."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ==========================================
-  // DELETE REVIEW
-  // ==========================================
-
-  const removeReview = async (
-    reviewId: string
-  ) => {
-    if (!userId) {
-      return;
-    }
-
-    const confirmed =
-      window.confirm(
-        "Delete this review?"
+  const startEdit =
+    (review: any) => {
+      setEditingId(
+        review.id || ""
       );
 
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await deleteReview(
-        reviewId
-      );
-
-      await loadReviews();
-    } catch (error) {
-      console.error(
-        "Review delete error:",
-        error
-      );
-
-      alert(
-        "Review delete nahi ho paya."
-      );
-    }
-  };
-
-  // ==========================================
-  // STAR DISPLAY
-  // ==========================================
-
-  const renderStars = (
-    value: number
-  ) => {
-    const rounded =
-      Math.max(
-        0,
-        Math.min(
-          5,
-          Math.round(value)
+      setRating(
+        Number(
+          review.rating || 5
         )
       );
 
-    return (
-      <span>
-        <span className="text-yellow-400">
-          {"★".repeat(rounded)}
-        </span>
+      setText(
+        review.comment || ""
+      );
 
-        <span className="text-zinc-300">
-          {"★".repeat(
-            5 - rounded
-          )}
-        </span>
-      </span>
-    );
-  };
+      window.scrollTo({
+        top:
+          document.body.scrollHeight,
+        behavior: "smooth",
+      });
+    };
 
-  // ==========================================
-  // UI
-  // ==========================================
+  const remove =
+    async (
+      id: string
+    ) => {
+      if (
+        !window.confirm(
+          "Delete this review?"
+        )
+      ) {
+        return;
+      }
+
+      try {
+        await deleteReview(
+          id
+        );
+
+        setReviews(
+          (current) =>
+            current.filter(
+              (item) =>
+                item.id !== id
+            )
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          "Review delete error:",
+          error
+        );
+
+        alert(
+          error?.message ||
+            "Unable to delete review."
+        );
+      }
+    };
 
   return (
-    <section className="mt-8 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+    <section className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <h2 className="text-xl font-black">
+        Reviews
+      </h2>
 
-      {/* HEADER */}
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
-        <div>
-          <h2 className="text-xl font-black">
-            Ratings & Reviews ⭐
-          </h2>
-
-          <p className="mt-1 text-xs text-zinc-500">
-            Customer feedback
-          </p>
-        </div>
-
-        <div className="rounded-2xl bg-yellow-50 px-5 py-3 text-center">
-
-          <div className="text-2xl font-black">
-            {averageRating
-              ? averageRating.toFixed(1)
-              : "0.0"}
-          </div>
-
-          <div className="text-sm">
-            {renderStars(
-              averageRating
-            )}
-          </div>
-
-          <div className="mt-1 text-[10px] font-bold text-zinc-500">
-            {reviews.length}{" "}
-            {reviews.length === 1
-              ? "review"
-              : "reviews"}
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* WRITE REVIEW */}
-
-      {userId ? (
+      {user ? (
         <div className="mt-5 rounded-2xl bg-zinc-50 p-4">
 
-          <p className="text-sm font-black">
-            Write a review
-          </p>
-
-          {/* STAR SELECTOR */}
-
-          <div className="mt-3 flex gap-1">
-
+          <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map(
-              (value) => (
+              (star) => (
                 <button
-                  key={value}
+                  key={star}
                   type="button"
                   onClick={() =>
-                    setRating(value)
+                    setRating(
+                      star
+                    )
                   }
-                  aria-label={`Rate ${value} stars`}
-                  className={`text-2xl transition hover:scale-110 ${
-                    value <= rating
-                      ? "text-yellow-400"
-                      : "text-zinc-300"
-                  }`}
+                  className="text-2xl"
                 >
-                  ★
+                  {star <=
+                  rating
+                    ? "★"
+                    : "☆"}
                 </button>
               )
             )}
-
           </div>
-
-          {/* TEXT */}
 
           <textarea
             value={text}
-            onChange={(event) =>
+            onChange={(e) =>
               setText(
-                event.target.value
+                e.target.value
               )
             }
-            placeholder="Apna review likhein..."
             rows={4}
-            maxLength={1000}
-            className="mt-3 w-full resize-none rounded-xl border border-zinc-200 bg-white p-3 text-sm outline-none transition focus:border-yellow-400"
+            placeholder="Write your review..."
+            className="mt-3 w-full resize-none rounded-xl border border-zinc-200 bg-white p-3 text-sm outline-none focus:border-yellow-400"
           />
 
-          <div className="mt-1 text-right text-[10px] text-zinc-400">
-            {text.length}/1000
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={
+                saving
+              }
+              onClick={
+                submitReview
+              }
+              className="flex-1 rounded-xl bg-yellow-400 py-3 text-sm font-black disabled:opacity-50"
+            >
+              {saving
+                ? "Saving..."
+                : editingId
+                  ? "Update Review"
+                  : "Submit Review"}
+            </button>
+
+            {editingId && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingId(
+                    ""
+                  );
+                  setText("");
+                  setRating(5);
+                }}
+                className="rounded-xl bg-zinc-200 px-4 text-sm font-black"
+              >
+                Cancel
+              </button>
+            )}
           </div>
-
-          {/* SUBMIT */}
-
-          <button
-            type="button"
-            onClick={
-              submitReview
-            }
-            disabled={submitting}
-            className="mt-2 rounded-xl bg-yellow-400 px-5 py-3 text-xs font-black text-black transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting
-              ? "Submitting..."
-              : "Submit Review"}
-          </button>
-
         </div>
       ) : (
-        <div className="mt-5 rounded-2xl bg-zinc-50 p-5 text-center">
-
-          <div className="text-2xl">
-            🔐
-          </div>
-
-          <p className="mt-2 text-sm font-black">
-            Login to write a review
-          </p>
-
-          <p className="mt-1 text-xs text-zinc-400">
-            Product purchase experience
-            share karne ke liye login
-            karein.
-          </p>
-
-        </div>
+        <p className="mt-4 rounded-xl bg-zinc-50 p-4 text-sm text-zinc-500">
+          Login karke review de sakte hain.
+        </p>
       )}
 
-      {/* REVIEWS */}
-
-      <div className="mt-5 space-y-3">
-
+      <div className="mt-6 space-y-3">
         {loading ? (
-          <div className="rounded-2xl bg-zinc-50 p-6 text-center text-sm font-bold text-zinc-400">
+          <p className="text-sm text-zinc-500">
             Loading reviews...
-          </div>
-        ) : reviews.length === 0 ? (
-          <div className="rounded-2xl bg-zinc-50 p-6 text-center">
-
-            <div className="text-3xl">
-              ⭐
-            </div>
-
-            <p className="mt-2 text-sm font-black">
-              No reviews yet
-            </p>
-
-            <p className="mt-1 text-xs text-zinc-400">
-              Be the first to review
-              this product.
-            </p>
-
-          </div>
+          </p>
+        ) : reviews.length ===
+          0 ? (
+          <p className="rounded-xl bg-zinc-50 p-5 text-center text-sm text-zinc-500">
+            No reviews yet.
+          </p>
         ) : (
           reviews.map(
-            (review) => (
-              <div
-                key={review.id}
-                className="rounded-2xl border border-zinc-100 bg-white p-4"
-              >
+            (review) => {
+              const ownReview =
+                user?.uid ===
+                review.userId;
 
-                <div className="flex items-start justify-between gap-3">
-
-                  <div className="min-w-0">
-
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-black">
+              return (
+                <div
+                  key={
+                    review.id
+                  }
+                  className="rounded-2xl border border-zinc-200 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black">
                         {review.userName ||
                           "Customer"}
                       </p>
 
-                      <span className="text-[9px] text-zinc-400">
-                        •
-                      </span>
-
-                      <span className="text-[9px] font-bold text-green-600">
-                        Verified
-                      </span>
+                      <div className="mt-1 text-yellow-500">
+                        {"★".repeat(
+                          Number(
+                            review.rating ||
+                              0
+                          )
+                        )}
+                      </div>
                     </div>
 
-                    <div className="mt-1 text-sm">
-                      {renderStars(
-                        Number(
-                          review.rating ||
-                            0
-                        )
-                      )}
-                    </div>
+                    {ownReview && (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            startEdit(
+                              review
+                            )
+                          }
+                          className="text-xs font-black text-blue-600"
+                        >
+                          Edit
+                        </button>
 
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700">
-                      {review.comment ||
-                        ""}
-                    </p>
-
+                        <button
+                          type="button"
+                          onClick={() =>
+                            remove(
+                              review.id
+                            )
+                          }
+                          className="text-xs font-black text-red-600"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {userId ===
-                    review.userId && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        removeReview(
-                          review.id
-                        )
-                      }
-                      className="shrink-0 text-xs font-black text-red-500 hover:text-red-600"
-                    >
-                      Delete
-                    </button>
-                  )}
-
+                  <p className="mt-3 whitespace-pre-line text-sm leading-6 text-zinc-600">
+                    {review.comment}
+                  </p>
                 </div>
-
-              </div>
-            )
+              );
+            }
           )
         )}
-
       </div>
-
     </section>
   );
 }

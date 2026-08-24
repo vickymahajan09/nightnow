@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 export interface SavedLocation {
   name: string;
@@ -34,9 +38,15 @@ function normalizeResult(item: any): SavedLocation {
 
   return {
     name: String(name),
-    address: String(item?.display_name || name),
-    lat: Number.isFinite(Number(item?.lat)) ? Number(item.lat) : undefined,
-    lon: Number.isFinite(Number(item?.lon)) ? Number(item.lon) : undefined,
+    address: String(
+      item?.display_name || name
+    ),
+    lat: Number.isFinite(Number(item?.lat))
+      ? Number(item.lat)
+      : undefined,
+    lon: Number.isFinite(Number(item?.lon))
+      ? Number(item.lon)
+      : undefined,
   };
 }
 
@@ -48,11 +58,14 @@ export default function LocationSelector({
 }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
-  const [loadingSearch, setLoadingSearch] = useState(false);
-  const [loadingCurrent, setLoadingCurrent] = useState(false);
+  const [loadingSearch, setLoadingSearch] =
+    useState(false);
+  const [loadingCurrent, setLoadingCurrent] =
+    useState(false);
   const [error, setError] = useState("");
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestId = useRef(0);
+
+  const abortController =
+    useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -62,131 +75,241 @@ export default function LocationSelector({
     setError("");
     setLoadingSearch(false);
     setLoadingCurrent(false);
+
+    if (abortController.current) {
+      abortController.current.abort();
+      abortController.current = null;
+    }
   }, [open]);
 
   useEffect(() => {
     return () => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
+      if (abortController.current) {
+        abortController.current.abort();
+      }
     };
   }, []);
 
-  const searchAddress = (value: string) => {
-    setQuery(value);
-    setError("");
-
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-
+  const searchAddress = async (
+    value = query
+  ) => {
     const cleanValue = value.trim();
+
+    setError("");
 
     if (cleanValue.length < 3) {
       setResults([]);
-      setLoadingSearch(false);
+      setError(
+        "Kam se kam 3 characters enter karein."
+      );
       return;
     }
 
-    const id = ++requestId.current;
+    if (abortController.current) {
+      abortController.current.abort();
+    }
+
+    const controller =
+      new AbortController();
+
+    abortController.current =
+      controller;
+
     setLoadingSearch(true);
+    setResults([]);
 
-    searchTimer.current = setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `/api/location/search?q=${encodeURIComponent(cleanValue)}`,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
+    try {
+      const response = await fetch(
+        `/api/location/search?q=${encodeURIComponent(
+          cleanValue
+        )}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        }
+      );
+
+      const payload =
+        await response
+          .json()
+          .catch(() => ({
+            results: [],
+          }));
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.error ||
+            "Search failed"
         );
-
-        const payload = await response.json().catch(() => ({ results: [] }));
-
-        if (id !== requestId.current) return;
-
-        if (!response.ok) {
-          throw new Error(payload?.error || "Search failed");
-        }
-
-        setResults(Array.isArray(payload?.results) ? payload.results : []);
-      } catch (searchError) {
-        console.error("Location search error:", searchError);
-
-        if (id === requestId.current) {
-          setResults([]);
-          setError("Location search nahi ho payi. Dobara try karein.");
-        }
-      } finally {
-        if (id === requestId.current) setLoadingSearch(false);
       }
-    }, 450);
+
+      const nextResults =
+        Array.isArray(
+          payload?.results
+        )
+          ? payload.results
+          : [];
+
+      setResults(
+        nextResults
+      );
+
+      if (
+        nextResults.length === 0
+      ) {
+        setError(
+          "Location nahi mili. Area, society, road aur city ke saath try karein."
+        );
+      }
+    } catch (searchError: any) {
+      if (
+        searchError?.name ===
+        "AbortError"
+      ) {
+        return;
+      }
+
+      console.error(
+        "Location search error:",
+        searchError
+      );
+
+      setResults([]);
+
+      setError(
+        "Location search nahi ho payi. Dobara try karein."
+      );
+    } finally {
+      if (
+        abortController.current ===
+        controller
+      ) {
+        setLoadingSearch(false);
+      }
+    }
   };
 
-  const selectLocation = (item: any) => {
-    const place = normalizeResult(item);
+  const selectLocation = (
+    item: any
+  ) => {
+    const place =
+      normalizeResult(item);
+
     onSelect(place);
   };
 
-  const useCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setError("Aapke browser me location support nahi hai.");
-      return;
-    }
+  const useCurrentLocation =
+    () => {
+      if (
+        !navigator.geolocation
+      ) {
+        setError(
+          "Aapke browser me location support nahi hai."
+        );
+        return;
+      }
 
-    setLoadingCurrent(true);
-    setError("");
+      setLoadingCurrent(true);
+      setError("");
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat =
+            position.coords.latitude;
 
-        try {
-          const response = await fetch(
-            `/api/location/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
-            {
-              method: "GET",
-              cache: "no-store",
+          const lon =
+            position.coords.longitude;
+
+          try {
+            const response =
+              await fetch(
+                `/api/location/reverse?lat=${encodeURIComponent(
+                  lat
+                )}&lon=${encodeURIComponent(
+                  lon
+                )}`,
+                {
+                  method: "GET",
+                  cache: "no-store",
+                }
+              );
+
+            const data =
+              await response
+                .json()
+                .catch(
+                  () => null
+                );
+
+            if (!response.ok) {
+              throw new Error(
+                "Reverse geocode failed"
+              );
             }
+
+            onSelect({
+              ...normalizeResult(
+                data
+              ),
+              lat,
+              lon,
+            });
+          } catch (
+            reverseError
+          ) {
+            console.error(
+              "Current location reverse lookup error:",
+              reverseError
+            );
+
+            onSelect({
+              name:
+                "Current Location",
+              address: `${lat.toFixed(
+                6
+              )}, ${lon.toFixed(6)}`,
+              lat,
+              lon,
+            });
+          } finally {
+            setLoadingCurrent(
+              false
+            );
+          }
+        },
+        (geoError) => {
+          setLoadingCurrent(
+            false
           );
 
-          const data = await response.json().catch(() => null);
-
-          if (!response.ok) throw new Error("Reverse geocode failed");
-
-          onSelect({
-            ...normalizeResult(data),
-            lat,
-            lon,
-          });
-        } catch (reverseError) {
-          console.error("Current location reverse lookup error:", reverseError);
-
-          onSelect({
-            name: "Current Location",
-            address: `${lat.toFixed(6)}, ${lon.toFixed(6)}`,
-            lat,
-            lon,
-          });
-        } finally {
-          setLoadingCurrent(false);
+          if (
+            geoError.code ===
+            geoError.PERMISSION_DENIED
+          ) {
+            setError(
+              "Location permission allow karein, phir dobara try karein."
+            );
+          } else if (
+            geoError.code ===
+            geoError.TIMEOUT
+          ) {
+            setError(
+              "Location detect hone me time lag raha hai. Dobara try karein."
+            );
+          } else {
+            setError(
+              "Current location detect nahi ho payi."
+            );
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 30000,
         }
-      },
-      (geoError) => {
-        setLoadingCurrent(false);
-
-        if (geoError.code === geoError.PERMISSION_DENIED) {
-          setError("Location permission allow karein, phir dobara try karein.");
-        } else if (geoError.code === geoError.TIMEOUT) {
-          setError("Location detect hone me time lag raha hai. Dobara try karein.");
-        } else {
-          setError("Current location detect nahi ho payi.");
-        }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 30000,
-      }
-    );
-  };
+      );
+    };
 
   if (!open) return null;
 
@@ -195,7 +318,10 @@ export default function LocationSelector({
       <div className="mx-auto max-h-[88vh] max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b p-4">
           <div>
-            <h2 className="text-lg font-black">Select Location</h2>
+            <h2 className="text-lg font-black">
+              Select Location
+            </h2>
+
             <p className="text-xs text-zinc-500">
               Delivery address select karein
             </p>
@@ -214,11 +340,17 @@ export default function LocationSelector({
         <div className="max-h-[calc(88vh-74px)] overflow-y-auto p-4">
           <button
             type="button"
-            onClick={useCurrentLocation}
-            disabled={loadingCurrent}
+            onClick={
+              useCurrentLocation
+            }
+            disabled={
+              loadingCurrent
+            }
             className="flex w-full items-center gap-3 rounded-2xl border border-yellow-300 bg-yellow-50 p-4 text-left disabled:opacity-60"
           >
-            <span className="text-2xl">📍</span>
+            <span className="text-2xl">
+              📍
+            </span>
 
             <span className="flex-1">
               <span className="block font-black">
@@ -232,32 +364,71 @@ export default function LocationSelector({
               </span>
             </span>
 
-            <span className="font-black">→</span>
+            <span className="font-black">
+              →
+            </span>
           </button>
 
           <div className="my-4 flex items-center gap-3">
             <div className="h-px flex-1 bg-zinc-200" />
-            <span className="text-xs font-bold text-zinc-400">OR SEARCH</span>
+
+            <span className="text-xs font-bold text-zinc-400">
+              SEARCH ADDRESS
+            </span>
+
             <div className="h-px flex-1 bg-zinc-200" />
           </div>
 
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-3 focus-within:border-yellow-400 focus-within:bg-white">
-            <input
-              autoFocus
-              value={query}
-              onChange={(event) => searchAddress(event.target.value)}
-              placeholder="Enter area, society, road, city..."
-              className="h-12 w-full bg-transparent text-sm font-semibold outline-none"
-            />
-          </div>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void searchAddress(
+                query
+              );
+            }}
+            className="flex gap-2"
+          >
+            <div className="min-w-0 flex-1 rounded-2xl border border-zinc-200 bg-zinc-50 px-3 focus-within:border-yellow-400 focus-within:bg-white">
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => {
+                  setQuery(
+                    event.target
+                      .value
+                  );
+                  setError("");
+                }}
+                placeholder="Area, society, road, city..."
+                className="h-12 w-full bg-transparent text-sm font-semibold outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={
+                loadingSearch ||
+                query.trim()
+                  .length < 3
+              }
+              className="shrink-0 rounded-2xl bg-yellow-400 px-4 text-xs font-black text-black disabled:opacity-50"
+            >
+              {loadingSearch
+                ? "..."
+                : "SEARCH"}
+            </button>
+          </form>
 
           <p className="mt-2 px-1 text-[10px] text-zinc-400">
-            Example: Dindoli, Kharwasa, Ring Road, society name...
+            Search par Enter/SEARCH dabayein. Example:
+            Abhinav Heights Dindoli, Kharwasa Road Surat.
           </p>
 
           {loadingSearch && (
             <div className="mt-3 flex items-center gap-2 rounded-2xl bg-zinc-50 p-3 text-xs font-semibold text-zinc-500">
-              <span className="animate-pulse">📍</span>
+              <span className="animate-pulse">
+                📍
+              </span>
               Address search ho raha hai...
             </div>
           )}
@@ -268,42 +439,48 @@ export default function LocationSelector({
             </div>
           )}
 
-          {!loadingSearch && query.trim().length >= 3 && results.length === 0 && !error && (
-            <div className="py-8 text-center">
-              <div className="text-3xl">📍</div>
-              <p className="mt-2 text-sm font-bold text-zinc-500">
-                Location nahi mili. Thoda different address try karein.
-              </p>
-            </div>
-          )}
-
           <div className="mt-3 space-y-2">
-            {results.map((item) => {
-              const place = normalizeResult(item);
+            {results.map(
+              (item) => {
+                const place =
+                  normalizeResult(
+                    item
+                  );
 
-              return (
-                <button
-                  key={`${item.place_id}-${item.lat}-${item.lon}`}
-                  type="button"
-                  onClick={() => selectLocation(item)}
-                  className="flex w-full items-start gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-3 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
-                >
-                  <span className="mt-0.5 text-lg">📍</span>
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-black text-zinc-900">
-                      {place.name}
+                return (
+                  <button
+                    key={`${item.place_id}-${item.lat}-${item.lon}`}
+                    type="button"
+                    onClick={() =>
+                      selectLocation(
+                        item
+                      )
+                    }
+                    className="flex w-full items-start gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-3 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+                  >
+                    <span className="mt-0.5 text-lg">
+                      📍
                     </span>
 
-                    <span className="mt-1 block text-xs leading-5 text-zinc-500">
-                      {place.address}
-                    </span>
-                  </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-black text-zinc-900">
+                        {place.name}
+                      </span>
 
-                  <span className="pt-1 text-sm font-black text-zinc-400">›</span>
-                </button>
-              );
-            })}
+                      <span className="mt-1 block text-xs leading-5 text-zinc-500">
+                        {
+                          place.address
+                        }
+                      </span>
+                    </span>
+
+                    <span className="pt-1 text-sm font-black text-zinc-400">
+                      ›
+                    </span>
+                  </button>
+                );
+              }
+            )}
           </div>
 
           {location?.address && (
@@ -311,9 +488,11 @@ export default function LocationSelector({
               <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">
                 Selected delivery location
               </p>
+
               <p className="mt-1 text-sm font-black text-emerald-950">
                 {location.name}
               </p>
+
               <p className="mt-1 text-xs leading-5 text-emerald-800">
                 {location.address}
               </p>

@@ -12,9 +12,14 @@ import {
   where,
 } from "firebase/firestore";
 
-import { onAuthStateChanged } from "firebase/auth";
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
 
-import { db, auth } from "../lib/firebase";
+import {
+  db,
+  auth,
+} from "../lib/firebase";
 
 // =====================================================
 // ADMIN CHECK
@@ -34,473 +39,673 @@ const isAdminUser = () => {
 };
 
 // =====================================================
-// CUSTOMER NOTIFICATION
+// AUTH READY
 // =====================================================
 
-const createOrderNotification = async (
-  order: any,
-  title: string,
-  message: string,
-  status: string
+const waitForAuthUser = async (
+  timeoutMs = 15000
 ) => {
   try {
-    const userId =
-      order?.userId ||
-      order?.customer?.uid ||
-      order?.customer?.userId ||
-      "";
+    await auth.authStateReady();
 
-    if (!userId) {
-      console.warn(
-        "No userId found for customer notification"
-      );
-      return;
+    if (auth.currentUser) {
+      return auth.currentUser;
     }
-
-    await addDoc(
-      collection(db, "notifications"),
-      {
-        userId,
-        orderId:
-          order?.orderId ||
-          order?.id ||
-          "",
-        type: "order",
-        title,
-        message,
-        status,
-        read: false,
-        createdAt: new Date(),
-      }
-    );
   } catch (error) {
     console.error(
-      "Notification creation failed:",
+      "Firebase authStateReady error:",
       error
     );
   }
+
+  return new Promise<any | null>(
+    (resolve) => {
+      let finished = false;
+
+      let unsubscribe:
+        | (() => void)
+        | null = null;
+
+      let timer:
+        | ReturnType<typeof setTimeout>
+        | null = null;
+
+      const finish = (
+        user: any | null
+      ) => {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        if (unsubscribe) {
+          unsubscribe();
+          unsubscribe = null;
+        }
+
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+
+        resolve(user);
+      };
+
+      unsubscribe =
+        onAuthStateChanged(
+          auth,
+          (user) => {
+            if (user) {
+              finish(user);
+            }
+          },
+          (error) => {
+            console.error(
+              "Firebase auth state listener error:",
+              error
+            );
+
+            finish(null);
+          }
+        );
+
+      timer = setTimeout(() => {
+        finish(
+          auth.currentUser
+        );
+      }, timeoutMs);
+    }
+  );
 };
+
+// =====================================================
+// CUSTOMER NOTIFICATION
+// =====================================================
+
+const createOrderNotification =
+  async (
+    order: any,
+    title: string,
+    message: string,
+    status: string
+  ) => {
+    try {
+      const userId =
+        order?.userId ||
+        order?.customer?.uid ||
+        order?.customer?.userId ||
+        "";
+
+      if (!userId) {
+        console.warn(
+          "No userId found for customer notification"
+        );
+        return;
+      }
+
+      await addDoc(
+        collection(
+          db,
+          "notifications"
+        ),
+        {
+          userId,
+
+          orderId:
+            order?.orderId ||
+            order?.id ||
+            "",
+
+          type: "order",
+
+          title,
+
+          message,
+
+          status,
+
+          read: false,
+
+          createdAt:
+            new Date(),
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Notification creation failed:",
+        error
+      );
+    }
+  };
 
 // =====================================================
 // ADD ORDER
 // =====================================================
 
-export const addOrder = async (
-  order: any
-) => {
-  const currentUser =
-    auth.currentUser;
+export const addOrder =
+  async (
+    order: any
+  ) => {
+    const currentUser =
+      await waitForAuthUser();
 
-  if (!currentUser) {
-    throw new Error(
-      "Please login before placing an order."
-    );
-  }
+    if (!currentUser) {
+      throw new Error(
+        "Please login before placing an order."
+      );
+    }
 
-  // IMPORTANT:
-  // Never trust userId coming from frontend order object.
-  // Always use Firebase Auth UID.
-  const userId =
-    currentUser.uid;
+    // IMPORTANT:
+    // Always use Firebase Auth UID.
+    const userId =
+      currentUser.uid;
 
-  const existingCustomer =
-    order?.customer || {};
+    const existingCustomer =
+      order?.customer || {};
 
-  const customer = {
-    ...existingCustomer,
-    uid: userId,
-    userId,
-    name:
-      existingCustomer?.name ||
-      currentUser.displayName ||
-      "Customer",
-    phone:
-      existingCustomer?.phone ||
-      currentUser.phoneNumber ||
-      "",
-  };
+    const customer = {
+      ...existingCustomer,
 
-  const orderData = {
-    ...order,
-
-    // FORCE authenticated customer UID
-    userId,
-
-    customer,
-
-    status: "Pending",
-
-    createdAt:
-      order?.createdAt ||
-      new Date(),
-
-    updatedAt:
-      new Date(),
-  };
-
-  // -------------------------------
-  // CREATE ORDER
-  // -------------------------------
-
-  const orderRef =
-    await addDoc(
-      collection(db, "orders"),
-      orderData
-    );
-
-  const savedOrder = {
-    ...orderData,
-    id: orderRef.id,
-  };
-
-  // ===================================================
-  // ADMIN NEW ORDER NOTIFICATION
-  // ===================================================
-
-  try {
-    await addDoc(
-      collection(
-        db,
-        "notifications"
-      ),
-      {
-        audience: "admin",
-
-        type: "new-order",
-
-        title:
-          "New Order Received 🔔",
-
-        message:
-          `New order #${orderRef.id.slice(
-            0,
-            8
-          )} received from ${
-            customer?.name ||
-            "Customer"
-          } for ₹${Number(
-            orderData?.total || 0
-          )}.`,
-
-        orderId:
-          orderRef.id,
-
+      uid:
         userId,
 
-        customer,
+      userId:
+        userId,
 
-        read: false,
+      name:
+        existingCustomer?.name ||
+        currentUser.displayName ||
+        "Customer",
 
-        createdAt:
-          new Date(),
-      }
+      phone:
+        existingCustomer?.phone ||
+        currentUser.phoneNumber ||
+        "",
+    };
+
+    const orderData = {
+      ...order,
+
+      // FORCE AUTHENTICATED USER ID
+      userId,
+
+      customer,
+
+      status:
+        "Pending",
+
+      createdAt:
+        order?.createdAt ||
+        new Date(),
+
+      updatedAt:
+        new Date(),
+    };
+
+    // ===================================================
+    // CREATE ORDER
+    // ===================================================
+
+    const orderRef =
+      await addDoc(
+        collection(
+          db,
+          "orders"
+        ),
+        orderData
+      );
+
+    const savedOrder = {
+      ...orderData,
+
+      id:
+        orderRef.id,
+    };
+
+    // ===================================================
+    // ADMIN NEW ORDER NOTIFICATION
+    // ===================================================
+
+    try {
+      await addDoc(
+        collection(
+          db,
+          "notifications"
+        ),
+        {
+          audience:
+            "admin",
+
+          type:
+            "new-order",
+
+          title:
+            "New Order Received 🔔",
+
+          message:
+            `New order #${orderRef.id.slice(
+              0,
+              8
+            )} received from ${
+              customer?.name ||
+              "Customer"
+            } for ₹${Number(
+              orderData?.total ||
+                0
+            )}.`,
+
+          orderId:
+            orderRef.id,
+
+          userId,
+
+          customer,
+
+          read:
+            false,
+
+          createdAt:
+            new Date(),
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Admin notification creation failed:",
+        error
+      );
+    }
+
+    // ===================================================
+    // CUSTOMER ORDER CONFIRMATION
+    // ===================================================
+
+    await createOrderNotification(
+      savedOrder,
+
+      "Order Confirmed 🎉",
+
+      `Your order #${orderRef.id.slice(
+        0,
+        8
+      )} has been placed successfully. We will start processing it shortly.`,
+
+      "Pending"
     );
-  } catch (error) {
-    console.error(
-      "Admin notification creation failed:",
-      error
-    );
-  }
 
-  // ===================================================
-  // CUSTOMER ORDER CONFIRMATION
-  // ===================================================
-
-  await createOrderNotification(
-    savedOrder,
-
-    "Order Confirmed 🎉",
-
-    `Your order #${orderRef.id.slice(
-      0,
-      8
-    )} has been placed successfully. We will start processing it shortly.`,
-
-    "Pending"
-  );
-
-  return orderRef;
-};
+    return orderRef;
+  };
 
 // =====================================================
 // GET ORDERS
-//
-// ADMIN:
-//   gets all orders.
-//
-// CUSTOMER:
-//   gets only current customer's orders.
-//
-// This is IMPORTANT because Firestore Rules
-// do not allow a customer to read the entire
-// orders collection.
 // =====================================================
 
-export const getOrders = async () => {
-  const currentUser =
-    auth.currentUser;
+export const getOrders =
+  async () => {
+    const currentUser =
+      await waitForAuthUser();
 
-  if (!currentUser) {
-    return [];
-  }
-
-  let snapshot;
-
-  if (isAdminUser()) {
-    const ordersQuery =
-      query(
-        collection(db, "orders"),
-        orderBy(
-          "createdAt",
-          "desc"
-        )
-      );
-
-    snapshot =
-      await getDocs(
-        ordersQuery
-      );
-  } else {
-    const ordersQuery =
-      query(
-        collection(db, "orders"),
-        where(
-          "userId",
-          "==",
-          currentUser.uid
-        )
-      );
-
-    snapshot =
-      await getDocs(
-        ordersQuery
-      );
-  }
-
-  const orders =
-    snapshot.docs.map(
-      (item) => ({
-        id: item.id,
-        ...item.data(),
-      })
-    );
-
-  // Customer query is intentionally not
-  // orderBy("createdAt") to avoid unnecessary
-  // composite-index requirements.
-  orders.sort(
-    (a: any, b: any) => {
-      const getTime =
-        (value: any) => {
-          if (
-            typeof value?.toMillis ===
-            "function"
-          ) {
-            return value.toMillis();
-          }
-
-          if (
-            typeof value?.seconds ===
-            "number"
-          ) {
-            return (
-              value.seconds * 1000
-            );
-          }
-
-          const time =
-            new Date(
-              value || 0
-            ).getTime();
-
-          return Number.isNaN(time)
-            ? 0
-            : time;
-        };
-
-      return (
-        getTime(b.createdAt) -
-        getTime(a.createdAt)
-      );
+    if (!currentUser) {
+      return [];
     }
-  );
 
-  return orders;
-};
+    let snapshot;
 
-// =====================================================
-// REAL-TIME ORDERS
-//
-// ADMIN -> all orders
-// CUSTOMER -> own orders only
-// =====================================================
+    if (
+      isAdminUser()
+    ) {
+      const ordersQuery =
+        query(
+          collection(
+            db,
+            "orders"
+          ),
+          orderBy(
+            "createdAt",
+            "desc"
+          )
+        );
 
-export const subscribeToOrders = (
-  callback: (
-    orders: any[]
-  ) => void
-) => {
-  const currentUser =
-    auth.currentUser;
+      snapshot =
+        await getDocs(
+          ordersQuery
+        );
+    } else {
+      const ordersQuery =
+        query(
+          collection(
+            db,
+            "orders"
+          ),
+          where(
+            "userId",
+            "==",
+            currentUser.uid
+          )
+        );
 
-  if (!currentUser) {
-    callback([]);
-    return () => {};
-  }
+      snapshot =
+        await getDocs(
+          ordersQuery
+        );
+    }
 
-  let ordersQuery;
+    const orders =
+      snapshot.docs.map(
+        (item) => ({
+          id:
+            item.id,
 
-  if (isAdminUser()) {
-    ordersQuery =
-      query(
-        collection(db, "orders"),
-        orderBy(
-          "createdAt",
-          "desc"
-        )
+          ...item.data(),
+        })
       );
-  } else {
-    ordersQuery =
-      query(
-        collection(db, "orders"),
-        where(
-          "userId",
-          "==",
-          currentUser.uid
-        )
-      );
-  }
 
-  const unsubscribe =
-    onSnapshot(
-      ordersQuery,
-
-      (snapshot) => {
-        const orders =
-          snapshot.docs.map(
-            (item) => {
-              const data =
-                item.data();
-
-              return {
-                id: item.id,
-                ...data,
-                status:
-                  data.status ||
-                  "Pending",
-              };
+    orders.sort(
+      (
+        a: any,
+        b: any
+      ) => {
+        const getTime =
+          (
+            value: any
+          ) => {
+            if (
+              typeof value?.toMillis ===
+              "function"
+            ) {
+              return value.toMillis();
             }
-          );
 
-        orders.sort(
-          (a: any, b: any) => {
-            const getTime =
-              (value: any) => {
-                if (
-                  typeof value?.toMillis ===
-                  "function"
-                ) {
-                  return value.toMillis();
-                }
+            if (
+              typeof value?.seconds ===
+              "number"
+            ) {
+              return (
+                value.seconds *
+                1000
+              );
+            }
 
-                if (
-                  typeof value?.seconds ===
-                  "number"
-                ) {
-                  return (
-                    value.seconds *
-                    1000
-                  );
-                }
+            const time =
+              new Date(
+                value || 0
+              ).getTime();
 
-                const time =
-                  new Date(
-                    value || 0
-                  ).getTime();
+            return Number.isNaN(
+              time
+            )
+              ? 0
+              : time;
+          };
 
-                return Number.isNaN(
-                  time
-                )
-                  ? 0
-                  : time;
-              };
-
-            return (
-              getTime(
-                b.createdAt
-              ) -
-              getTime(
-                a.createdAt
-              )
-            );
-          }
+        return (
+          getTime(
+            b.createdAt
+          ) -
+          getTime(
+            a.createdAt
+          )
         );
-
-        callback(orders);
-      },
-
-      (error) => {
-        console.error(
-          "Orders subscription error:",
-          error
-        );
-
-        callback([]);
       }
     );
 
-  return unsubscribe;
-};
+    return orders;
+  };
+
+// =====================================================
+// REAL-TIME ORDERS
+// =====================================================
+
+export const subscribeToOrders =
+  (
+    callback: (
+      orders: any[]
+    ) => void
+  ) => {
+    let unsubscribeAuth:
+      | (() => void)
+      | null = null;
+
+    let unsubscribeSnapshot:
+      | (() => void)
+      | null = null;
+
+    let active = true;
+
+    const start = () => {
+      const currentUser =
+        auth.currentUser;
+
+      if (!active) {
+        return;
+      }
+
+      if (!currentUser) {
+        callback([]);
+        return;
+      }
+
+      let ordersQuery;
+
+      if (
+        isAdminUser()
+      ) {
+        ordersQuery =
+          query(
+            collection(
+              db,
+              "orders"
+            ),
+            orderBy(
+              "createdAt",
+              "desc"
+            )
+          );
+      } else {
+        ordersQuery =
+          query(
+            collection(
+              db,
+              "orders"
+            ),
+            where(
+              "userId",
+              "==",
+              currentUser.uid
+            )
+          );
+      }
+
+      unsubscribeSnapshot =
+        onSnapshot(
+          ordersQuery,
+
+          (snapshot) => {
+            const orders =
+              snapshot.docs.map(
+                (item) => {
+                  const data =
+                    item.data();
+
+                  return {
+                    id:
+                      item.id,
+
+                    ...data,
+
+                    status:
+                      data.status ||
+                      "Pending",
+                  };
+                }
+              );
+
+            orders.sort(
+              (
+                a: any,
+                b: any
+              ) => {
+                const getTime =
+                  (
+                    value: any
+                  ) => {
+                    if (
+                      typeof value?.toMillis ===
+                      "function"
+                    ) {
+                      return value.toMillis();
+                    }
+
+                    if (
+                      typeof value?.seconds ===
+                      "number"
+                    ) {
+                      return (
+                        value.seconds *
+                        1000
+                      );
+                    }
+
+                    const time =
+                      new Date(
+                        value || 0
+                      ).getTime();
+
+                    return Number.isNaN(
+                      time
+                    )
+                      ? 0
+                      : time;
+                  };
+
+                return (
+                  getTime(
+                    b.createdAt
+                  ) -
+                  getTime(
+                    a.createdAt
+                  )
+                );
+              }
+            );
+
+            callback(
+              orders
+            );
+          },
+
+          (error) => {
+            console.error(
+              "Orders subscription error:",
+              error
+            );
+
+            callback([]);
+          }
+        );
+    };
+
+    if (
+      auth.currentUser
+    ) {
+      start();
+    } else {
+      unsubscribeAuth =
+        onAuthStateChanged(
+          auth,
+          () => {
+            if (
+              auth.currentUser
+            ) {
+              if (
+                unsubscribeAuth
+              ) {
+                unsubscribeAuth();
+                unsubscribeAuth =
+                  null;
+              }
+
+              start();
+            }
+          }
+        );
+    }
+
+    return () => {
+      active = false;
+
+      if (
+        unsubscribeAuth
+      ) {
+        unsubscribeAuth();
+        unsubscribeAuth =
+          null;
+      }
+
+      if (
+        unsubscribeSnapshot
+      ) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot =
+          null;
+      }
+    };
+  };
 
 // =====================================================
 // REAL-TIME SINGLE ORDER
 // =====================================================
 
-export const subscribeToOrder = (
-  id: string,
-  callback: (
-    order: any | null
-  ) => void
-) => {
-  if (!id) {
-    callback(null);
-    return () => {};
-  }
+export const subscribeToOrder =
+  (
+    id: string,
+    callback: (
+      order: any | null
+    ) => void
+  ) => {
+    if (!id) {
+      callback(null);
 
-  const orderRef =
-    doc(
-      db,
-      "orders",
-      id
-    );
+      return () => {};
+    }
 
-  return onSnapshot(
-    orderRef,
-
-    (snapshot) => {
-      if (
-        !snapshot.exists()
-      ) {
-        callback(null);
-        return;
-      }
-
-      callback({
-        id: snapshot.id,
-        ...snapshot.data(),
-      });
-    },
-
-    (error) => {
-      console.error(
-        "Single order subscription error:",
-        error
+    const orderRef =
+      doc(
+        db,
+        "orders",
+        id
       );
 
-      callback(null);
-    }
-  );
-};
+    return onSnapshot(
+      orderRef,
+
+      (snapshot) => {
+        if (
+          !snapshot.exists()
+        ) {
+          callback(null);
+
+          return;
+        }
+
+        callback({
+          id:
+            snapshot.id,
+
+          ...snapshot.data(),
+        });
+      },
+
+      (error) => {
+        console.error(
+          "Single order subscription error:",
+          error
+        );
+
+        callback(null);
+      }
+    );
+  };
 
 // =====================================================
 // GET ORDER BY ID
@@ -511,7 +716,7 @@ export const getOrderById =
     id: string
   ) => {
     const currentUser =
-      auth.currentUser;
+      await waitForAuthUser();
 
     if (!currentUser) {
       return null;
@@ -538,8 +743,6 @@ export const getOrderById =
     const data =
       orderSnapshot.data();
 
-    // Customer can only receive
-    // his/her own order.
     if (
       !isAdminUser() &&
       data.userId !==
@@ -551,6 +754,7 @@ export const getOrderById =
     return {
       id:
         orderSnapshot.id,
+
       ...data,
     };
   };
@@ -566,7 +770,7 @@ export const cancelOrderByCustomer =
     userId: string
   ) => {
     const currentUser =
-      auth.currentUser;
+      await waitForAuthUser();
 
     if (
       !currentUser ||
@@ -602,6 +806,7 @@ export const cancelOrderByCustomer =
       {
         id:
           orderSnapshot.id,
+
         ...orderSnapshot.data(),
       } as any;
 
@@ -623,11 +828,12 @@ export const cancelOrderByCustomer =
       existingOrder?.status ||
       "Pending";
 
-    const allowedStatuses = [
-      "Pending",
-      "Confirmed",
-      "Preparing",
-    ];
+    const allowedStatuses =
+      [
+        "Pending",
+        "Confirmed",
+        "Preparing",
+      ];
 
     if (
       !allowedStatuses.includes(
@@ -668,7 +874,9 @@ export const cancelOrderByCustomer =
       }
     );
 
-    // ADMIN NOTIFICATION
+    // =================================================
+    // ADMIN CANCELLATION NOTIFICATION
+    // =================================================
 
     try {
       await addDoc(
@@ -697,7 +905,8 @@ export const cancelOrderByCustomer =
               "Customer"
             }. Reason: ${cleanReason}`,
 
-          orderId: id,
+          orderId:
+            id,
 
           userId,
 
@@ -708,7 +917,8 @@ export const cancelOrderByCustomer =
           cancellationReason:
             cleanReason,
 
-          read: false,
+          read:
+            false,
 
           createdAt:
             new Date(),
@@ -721,12 +931,16 @@ export const cancelOrderByCustomer =
       );
     }
 
-    // CUSTOMER NOTIFICATION
+    // =================================================
+    // CUSTOMER CANCELLATION NOTIFICATION
+    // =================================================
 
     await createOrderNotification(
       {
         ...existingOrder,
+
         id,
+
         userId,
       },
 
@@ -776,6 +990,7 @@ export const updateOrderStatus =
       {
         id:
           orderSnapshot.id,
+
         ...orderSnapshot.data(),
       };
 

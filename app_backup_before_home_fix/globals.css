@@ -1,0 +1,307 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f7f8fa;
+  color: #18181b;
+  font-family: Arial, Helvetica, sans-serif;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+html.dark body {
+  background: #09090b;
+  color: #fafafa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+img {
+  max-width: 100%;
+}
+
+::selection {
+  background: #facc15;
+  color: #000000;
+}
+
+/* Horizontal scrollbar helpers */
+
+.no-scrollbar,
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Better mobile tap */
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+  Global Appearance support.
+  Pages that already use Tailwind dark:* classes keep their own
+  design. These rules also convert the most common light surfaces
+  when the user selects Dark from Profile.
+*/
+
+html.dark .bg-white {
+  background-color: #18181b !important;
+}
+
+html.dark .bg-zinc-50 {
+  background-color: #09090b !important;
+}
+
+html.dark .bg-zinc-100 {
+  background-color: #27272a !important;
+}
+
+html.dark .bg-zinc-200 {
+  background-color: #3f3f46 !important;
+}
+
+html.dark .border-zinc-200 {
+  border-color: #3f3f46 !important;
+}
+
+html.dark .border-zinc-300 {
+  border-color: #52525b !important;
+}
+
+html.dark .text-zinc-900 {
+  color: #fafafa !important;
+}
+
+html.dark .text-zinc-800 {
+  color: #f4f4f5 !important;
+}
+
+/* Convert common hard-coded black text to readable dark-mode text. */
+html.dark .text-black {
+  color: #fafafa !important;
+}
+
+/*
+  Keep yellow CTA buttons and their intended black foreground.
+*/
+html.dark .bg-yellow-400.text-black,
+html.dark .bg-yellow-300.text-black {
+  color: #000000 !important;
+}
+
+html.dark .bg-black {
+  background-color: #000000 !important;
+}
+
+/* Mobile */
+
+@media (max-width: 767px) {
+  body {
+    padding-bottom: 68px;
+  }
+}
+
+/* =========================================================
+   NIGHT NOW ADMIN - LIGHT THEME
+========================================================= */
+
+.admin-light {
+  --admin-bg: #f7f8fa;
+  --admin-card: #ffffff;
+  --admin-soft: #f8fafc;
+  --admin-border: #e5e7eb;
+  --admin-text: #27272a;
+  --admin-muted: #71717a;
+}
+
+.admin-light .bg-black,
+.admin-light .bg-zinc-950,
+.admin-light .bg-zinc-900,
+.admin-light .bg-zinc-800 {
+  background-color: var(--admin-card) !important;
+}
+
+.admin-light .bg-black\/95 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+}
+
+.admin-light .bg-zinc-700,
+.admin-light .bg-zinc-600 {
+  background-color: #f4f4f5 !important;
+}
+
+.admin-light .text-white {
+  color: var(--admin-text) !important;
+}
+
+.admin-light .text-zinc-300,
+.admin-light .text-zinc-400 {
+  color: #52525b !important;
+}
+
+.admin-light .text-zinc-500 {
+  color: #71717a !important;
+}
+
+.admin-light .text-zinc-600 {
+  color: #52525b !important;
+}
+
+.admin-light .border-zinc-800,
+.admin-light .border-zinc-700,
+.admin-light .border-zinc-600 {
+  border-color: var(--admin-border) !important;
+}
+
+.admin-light .hover\:bg-zinc-800:hover,
+.admin-light .hover\:bg-zinc-700:hover {
+  background-color: #fefce8 !important;
+}
+
+.admin-light input,
+.admin-light select,
+.admin-light textarea {
+  color: #27272a;
+}
+
+.admin-light select option {
+  background: #ffffff;
+  color: #27272a;
+}
+/* NIGHTNOW LIVE OFFER */
+
+.nightnow-live-offer {
+  transform: translateZ(0);
+  animation: nightnowOfferFloat 3.5s ease-in-out infinite;
+}
+
+.nightnow-live-offer:nth-child(2) {
+  animation-delay: 0.25s;
+}
+
+.nightnow-live-offer:nth-child(3) {
+  animation-delay: 0.5s;
+}
+
+.nightnow-live-offer:nth-child(4) {
+  animation-delay: 0.75s;
+}
+
+.nightnow-live-offer:hover {
+  transform: translateY(-3px) scale(1.01);
+}
+
+.nightnow-offer-shine {
+  animation: nightnowOfferShine 4s ease-in-out infinite;
+}
+
+.nightnow-offer-badge {
+  animation: nightnowOfferBadge 2s ease-in-out infinite;
+}
+
+.nightnow-offer-arrow {
+  animation: nightnowOfferArrow 1.2s ease-in-out infinite;
+}
+
+@keyframes nightnowOfferFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes nightnowOfferShine {
+  0% {
+    transform: translateX(-70px) skewX(-18deg);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 0.7;
+  }
+
+  40% {
+    opacity: 0.25;
+  }
+
+  60%,
+  100% {
+    transform: translateX(450px) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+@keyframes nightnowOfferBadge {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes nightnowOfferArrow {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nightnow-live-offer,
+  .nightnow-offer-shine,
+  .nightnow-offer-badge,
+  .nightnow-offer-arrow {
+    animation: none;
+  }
+}
