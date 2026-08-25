@@ -123,6 +123,27 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
+
+  const searchPlaceholders = [
+    "Search here...",
+    "Search face wash",
+    "Search Maggi",
+    "Search medicines",
+    "Search grocery",
+    "Search personal care",
+  ];
+
+  const [searchPlaceholderIndex, setSearchPlaceholderIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setSearchPlaceholderIndex((current) =>
+        (current + 1) % searchPlaceholders.length
+      );
+    }, 2200);
+
+    return () => window.clearInterval(timer);
+  }, []);
   const [selectedCategory, setSelectedCategory] =
     useState("All");
 
@@ -130,7 +151,7 @@ export default function HomePage() {
     useState<"default" | "high" | "low">("default");
   const [discountFilter, setDiscountFilter] =
     useState<"all" | "10" | "20" | "50">("all");
-  const [showSortCategory, setShowSortCategory] = useState(false);
+  const [showCategoryBy, setShowCategoryBy] = useState(false);
 
   // =====================================================
   // FILTER / SORT HELPERS
@@ -143,7 +164,7 @@ export default function HomePage() {
 
   const selectHomeCategory = (categoryName: string, target?: HTMLElement | null) => {
     setSelectedCategory(categoryName);
-    setShowSortCategory(false);
+    setShowCategoryBy(false);
     closeSortMenu(target);
 
     setTimeout(() => {
@@ -159,7 +180,7 @@ export default function HomePage() {
     setSelectedCategory("All");
     setSortMode("default");
     setDiscountFilter("all");
-    setShowSortCategory(false);
+    setShowCategoryBy(false);
     closeSortMenu(target);
   };
 
@@ -181,6 +202,11 @@ export default function HomePage() {
 
   const [buyAgainProducts, setBuyAgainProducts] = useState<Product[]>([]);
   const [smartPickMode, setSmartPickMode] = useState<"fast" | "under99" | "deals" | "value">("fast");
+
+  const [budgetMode, setBudgetMode] = useState<"49" | "99" | "199">("99");
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
+
+  const RECENTLY_VIEWED_KEY = "nightnow_recently_viewed";
 
   // All real product categories + the main shopping categories.
   // This keeps the Sort By menu useful even when Admin adds new categories.
@@ -658,6 +684,78 @@ useEffect(() => {
       console.error("Location load error:", error);
     }
   }, []);
+
+  // ==========================================
+  // RECENTLY VIEWED PRODUCTS
+  // ==========================================
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(RECENTLY_VIEWED_KEY);
+      if (!saved) return;
+
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        setRecentlyViewedIds(
+          parsed.map(String).filter(Boolean).slice(0, 12)
+        );
+      }
+    } catch (error) {
+      console.error("Recently viewed load error:", error);
+    }
+  }, []);
+
+  const recordRecentlyViewed = (productId: string) => {
+    const id = String(productId);
+    if (!id) return;
+
+    setRecentlyViewedIds((current) => {
+      const updated = [
+        id,
+        ...current.filter((item) => item !== id),
+      ].slice(0, 12);
+
+      try {
+        localStorage.setItem(
+          RECENTLY_VIEWED_KEY,
+          JSON.stringify(updated)
+        );
+      } catch (error) {
+        console.error("Recently viewed save error:", error);
+      }
+
+      return updated;
+    });
+  };
+
+  const recentlyViewedProducts = useMemo(() => {
+    const productMap = new Map(
+      products
+        .filter((product) => product.active !== false)
+        .map((product) => [String(product.id), product])
+    );
+
+    return recentlyViewedIds
+      .map((id) => productMap.get(id))
+      .filter((product): product is Product => Boolean(product))
+      .slice(0, 12);
+  }, [products, recentlyViewedIds]);
+
+  const budgetProducts = useMemo(() => {
+    const limit = Number(budgetMode);
+
+    return products
+      .filter(
+        (product) =>
+          product.active !== false &&
+          Number(product.stock || 0) > 0 &&
+          Number(product.price || 0) > 0 &&
+          Number(product.price || 0) <= limit
+      )
+      .sort((a, b) =>
+        Number(a.price || 0) - Number(b.price || 0)
+      )
+      .slice(0, 12);
+  }, [products, budgetMode]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -1464,7 +1562,11 @@ useEffect(() => {
         key={`${keyPrefix}-${product.id}`}
         className="w-[98px] shrink-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
       >
-        <Link href={`/product/${product.id}`} className="block">
+        <Link
+          href={`/product/${product.id}`}
+          className="block"
+          onClick={() => recordRecentlyViewed(product.id)}
+        >
           <div className="relative flex aspect-square items-center justify-center bg-white p-1.5">
             {imageUrl ? (
               <img
@@ -1650,7 +1752,7 @@ useEffect(() => {
   };
 
   return (
-   <main className="min-h-screen bg-gradient-to-b from-[#f7f3ff] via-[#fffaff] to-[#efe9ff] text-zinc-900">
+   <main className="min-h-screen bg-gradient-to-br from-[#fff7ed] via-[#f5f7ff] to-[#f3efff] text-zinc-900">
 
       {/* =================================================
           HEADER
@@ -1723,7 +1825,7 @@ useEffect(() => {
       onChange={(e) =>
         setSearch(e.target.value)
       }
-      placeholder="Search products, brands, needs..."
+      placeholder={searchPlaceholders[searchPlaceholderIndex]}
       className="h-11 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-400"
     />
 
@@ -1736,15 +1838,6 @@ useEffect(() => {
         ×
       </button>
     )}
-
-    <button
-      type="button"
-      onClick={startVoiceSearch}
-      title="Voice Search"
-      className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-400 text-sm"
-    >
-      🎙️
-    </button>
 
   </div>
 
@@ -1874,7 +1967,7 @@ useEffect(() => {
   {search.trim() &&
     !loading &&
     filteredProducts.length === 0 && (
-      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[100] rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-2xl">
+      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[100] rounded-2xl border border-zinc-200 bg-white p-3 text-center shadow-2xl">
 
         <div className="text-2xl">
           🔍
@@ -1905,7 +1998,7 @@ useEffect(() => {
         </div>
 
         {/* =================================================
-            DESKTOP SORT - DIRECTLY BELOW SEARCH ROW
+            DESKTOP FILTER BAR - SORT BY + CATEGORY BY
         ================================================= */}
         <div className="hidden w-full border-t border-purple-100 bg-white/95 px-4 py-2 md:block">
           <div className="mx-auto flex max-w-7xl items-center gap-2">
@@ -1915,7 +2008,7 @@ useEffect(() => {
                 <span className="text-zinc-400">⌄</span>
               </summary>
               <div className="absolute left-0 top-[calc(100%+6px)] z-[120] w-[320px] rounded-2xl border border-zinc-200 bg-white p-3 shadow-2xl">
-                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-wider text-zinc-400">Sort & Filter</p>
+                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-wider text-zinc-400">Sort By</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={(e) => applySortMode("default", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "default" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Recommended</button>
                   <button type="button" onClick={(e) => applySortMode("low", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "low" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Low Price</button>
@@ -1924,22 +2017,32 @@ useEffect(() => {
                   <button type="button" onClick={(e) => applyDiscountFilter("20", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "20" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>20%+ OFF</button>
                   <button type="button" onClick={(e) => applyDiscountFilter("50", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "50" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>50%+ OFF</button>
                 </div>
-                <button type="button" onClick={(e) => clearAllProductFilters(e.currentTarget)} className="mt-2 w-full rounded-xl border border-yellow-300 bg-yellow-50 px-3 py-2.5 text-[10px] font-black text-yellow-800">🛍️ All Products / Clear All Filters</button>
-                <button type="button" onClick={() => setShowSortCategory((value) => !value)} className="mt-2 flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-[10px] font-black text-zinc-700">
-                  <span>📂 Categories</span><span>{showSortCategory ? "⌃" : "⌄"}</span>
-                </button>
-                {showSortCategory && (
-                  <div className="mt-2 grid max-h-52 grid-cols-2 gap-2 overflow-y-auto">
-                    {categoryOptions.map((category) => (
-                      <button key={`desktop-sort-category-${category.name}`} type="button" onClick={(e) => selectHomeCategory(category.name, e.currentTarget)} className={["rounded-xl border px-2.5 py-2 text-left text-[9px] font-black", selectedCategory === category.name ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>
-                        {category.icon} {category.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             </details>
-            <span className="text-[10px] font-bold text-zinc-400">Filter products your way</span>
+
+            <details className="relative">
+              <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[11px] font-black text-zinc-700 shadow-sm">
+                <span>🗂️ Category By</span>
+                <span className="text-zinc-400">⌄</span>
+              </summary>
+              <div className="absolute left-0 top-[calc(100%+6px)] z-[120] w-[340px] rounded-2xl border border-zinc-200 bg-white p-3 shadow-2xl">
+                <div className="flex items-center justify-between px-1 pb-2">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-zinc-400">Category By</p>
+                  <button type="button" onClick={(e) => clearAllProductFilters(e.currentTarget)} className="text-[9px] font-black text-yellow-700">All Products</button>
+                </div>
+                <div className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto">
+                  {categoryOptions.map((category) => (
+                    <button key={`desktop-category-by-${category.name}`} type="button" onClick={(e) => selectHomeCategory(category.name, e.currentTarget)} className={["rounded-xl border px-2.5 py-2.5 text-left text-[9px] font-black", selectedCategory === category.name ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>
+                      {category.icon} {category.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </details>
+
+            {(selectedCategory !== "All" || sortMode !== "default" || discountFilter !== "all") && (
+              <button type="button" onClick={(e) => clearAllProductFilters(e.currentTarget)} className="rounded-xl border border-yellow-300 bg-yellow-50 px-3 py-2.5 text-[10px] font-black text-yellow-800">Clear Filters</button>
+            )}
           </div>
         </div>
 
@@ -1982,7 +2085,7 @@ useEffect(() => {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search products, brands, needs..."
+                placeholder={searchPlaceholders[searchPlaceholderIndex]}
                 className="h-9 min-w-0 flex-1 bg-transparent px-2 text-[11px] outline-none placeholder:text-zinc-400"
               />
 
@@ -1995,15 +2098,6 @@ useEffect(() => {
                   ×
                 </button>
               )}
-
-              <button
-                type="button"
-                onClick={startVoiceSearch}
-                title="Voice Search"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-xs"
-              >
-                🎙️
-              </button>
             </div>
             <Link
               href={isLoggedIn ? "/profile" : "/login"}
@@ -2105,48 +2199,53 @@ useEffect(() => {
 
 
         {/* =================================================
-            SORT BY - DIRECTLY BELOW SEARCH
-            Mobile placement: immediately under the search bar.
+            MOBILE FILTERS - SORT BY + CATEGORY BY
+            Both filters stay directly below the search bar.
         ================================================= */}
         <div className="w-full basis-full border-t border-zinc-100 bg-white px-3 py-2 md:hidden">
-          <details className="relative">
-            <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[11px] font-black text-zinc-700 shadow-sm">
-              <span>↕️ Sort By</span>
-              <span className="text-zinc-400">⌄</span>
-            </summary>
-
-            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[120] rounded-2xl border border-zinc-200 bg-white p-3 shadow-2xl">
-              <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-wider text-zinc-400">
-                Sort & Filter
-              </p>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={(e) => applySortMode("default", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "default" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Recommended</button>
-                <button type="button" onClick={(e) => applySortMode("low", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "low" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Low Price</button>
-                <button type="button" onClick={(e) => applySortMode("high", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "high" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>High Price</button>
-                <button type="button" onClick={(e) => applyDiscountFilter("10", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "10" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>10%+ OFF</button>
-                <button type="button" onClick={(e) => applyDiscountFilter("20", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "20" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>20%+ OFF</button>
-                <button type="button" onClick={(e) => applyDiscountFilter("50", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "50" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>50%+ OFF</button>
+          <div className="flex gap-2">
+            <details className="relative min-w-0 flex-1">
+              <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-[10px] font-black text-zinc-700 shadow-sm">
+                <span>↕️ Sort By</span>
+                <span className="text-zinc-400">⌄</span>
+              </summary>
+              <div className="absolute left-0 top-[calc(100%+6px)] z-[120] w-[280px] max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 bg-white p-3 shadow-2xl">
+                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-wider text-zinc-400">Sort By</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={(e) => applySortMode("default", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "default" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Recommended</button>
+                  <button type="button" onClick={(e) => applySortMode("low", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "low" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>Low Price</button>
+                  <button type="button" onClick={(e) => applySortMode("high", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", sortMode === "high" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>High Price</button>
+                  <button type="button" onClick={(e) => applyDiscountFilter("10", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "10" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>10%+ OFF</button>
+                  <button type="button" onClick={(e) => applyDiscountFilter("20", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "20" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>20%+ OFF</button>
+                  <button type="button" onClick={(e) => applyDiscountFilter("50", e.currentTarget)} className={["rounded-xl border px-3 py-2 text-[10px] font-black", discountFilter === "50" ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>50%+ OFF</button>
+                </div>
               </div>
+            </details>
 
-              <button type="button" onClick={(e) => clearAllProductFilters(e.currentTarget)} className="mt-2 w-full rounded-xl border border-yellow-300 bg-yellow-50 px-3 py-2.5 text-[10px] font-black text-yellow-800">🛍️ All Products / Clear All Filters</button>
-
-              <button type="button" onClick={() => setShowSortCategory((value) => !value)} className="mt-2 flex w-full items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-[10px] font-black text-zinc-700">
-                <span>📂 Categories</span>
-                <span>{showSortCategory ? "⌃" : "⌄"}</span>
-              </button>
-
-              {showSortCategory && (
-                <div className="mt-2 grid max-h-52 grid-cols-2 gap-2 overflow-y-auto">
+            <details className="relative min-w-0 flex-1">
+              <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-[10px] font-black text-zinc-700 shadow-sm">
+                <span>🗂️ Category By</span>
+                <span className="text-zinc-400">⌄</span>
+              </summary>
+              <div className="absolute right-0 top-[calc(100%+6px)] z-[120] w-[300px] max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 bg-white p-3 shadow-2xl">
+                <div className="flex items-center justify-between px-1 pb-2">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-zinc-400">Category By</p>
+                  <button type="button" onClick={(e) => clearAllProductFilters(e.currentTarget)} className="text-[9px] font-black text-yellow-700">All Products</button>
+                </div>
+                <div className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto">
                   {categoryOptions.map((category) => (
-                    <button key={`mobile-sort-category-${category.name}`} type="button" onClick={(e) => selectHomeCategory(category.name, e.currentTarget)} className={["rounded-xl border px-2.5 py-2 text-left text-[9px] font-black", selectedCategory === category.name ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>
+                    <button key={`mobile-category-by-${category.name}`} type="button" onClick={(e) => selectHomeCategory(category.name, e.currentTarget)} className={["rounded-xl border px-2.5 py-2.5 text-left text-[9px] font-black", selectedCategory === category.name ? "border-yellow-400 bg-yellow-400 text-black" : "border-zinc-200 bg-white text-zinc-600"].join(" ")}>
                       {category.icon} {category.name}
                     </button>
                   ))}
                 </div>
-              )}
-            </div>
-          </details>
+              </div>
+            </details>
+          </div>
+
+          {(selectedCategory !== "All" || sortMode !== "default" || discountFilter !== "all") && (
+            <button type="button" onClick={(e) => clearAllProductFilters(e.currentTarget)} className="mt-2 w-full rounded-xl border border-yellow-300 bg-yellow-50 px-3 py-2 text-[9px] font-black text-yellow-800">Clear Filters</button>
+          )}
         </div>
 
         {/* MOBILE LOCATION - BELOW SEARCH */}
@@ -2274,177 +2373,19 @@ useEffect(() => {
     and the dedicated category navigation below.
 ================================================= */}
 
-{/* =================================================
-    LIVE OFFERS
-================================================= */}
-
-{offers.filter(
-  (offer: Offer) =>
-    offer.active !== false
-).length > 0 && (
-  <section className="w-full px-3 pt-2 pb-3">
-
-    {/* LIVE HEADER */}
-
-    <div className="mb-2 flex items-center justify-between">
-
-      <div className="flex items-center gap-2">
-
-        <span className="relative flex h-2.5 w-2.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-70" />
-
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-        </span>
-
-        <span className="text-[11px] font-black text-zinc-900">
-          LIVE OFFERS
-        </span>
-
-      </div>
-
-      {offers.filter(
-        (offer: Offer) =>
-          offer.active !== false
-      ).length > 1 && (
-        <span className="text-[9px] font-bold text-zinc-400">
-          Swipe →
-        </span>
-      )}
-
-    </div>
-
-
-    {/* OFFER SCROLLER */}
-
-    <div
-      className="flex gap-2.5 overflow-x-auto pb-1"
-      style={{
-        scrollbarWidth: "none",
-        msOverflowStyle: "none",
-      }}
-    >
-
-      {offers
-        .filter(
-          (offer: Offer) =>
-            offer.active !== false
-        )
-        .map(
-          (offer: Offer) => {
-
-            let offerType =
-              "SPECIAL OFFER";
-
-            if (
-              offer.type ===
-              "BUY_1_GET_1"
-            ) {
-              offerType =
-                "BUY 1 GET 1";
-            }
-
-            if (
-              offer.type ===
-              "BUY_1_GET_2"
-            ) {
-              offerType =
-                "BUY 1 GET 2";
-            }
-
-            if (
-              offer.type ===
-              "BUY_X_GET_Y"
-            ) {
-              offerType =
-                `BUY ${offer.buyQuantity} GET ${offer.freeQuantity}`;
-            }
-
-            return (
-              <Link
-                key={offer.id}
-                href={`/offers/${offer.id}`}
-                className="group relative min-w-[calc(100vw-36px)] max-w-[360px] overflow-hidden rounded-[18px] border border-yellow-300 bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-300 px-3 py-2.5 shadow-[0_5px_16px_rgba(0,0,0,0.12)] transition-all duration-200 active:scale-[0.98]"
-              >
-
-                {/* MOVING SHINE */}
-
-                <span
-                  className="pointer-events-none absolute inset-y-0 -left-16 w-10 -skew-x-12 bg-white/40 transition-transform duration-[1800ms] group-hover:translate-x-[430px]"
-                />
-
-                {/* TOP */}
-
-                <div className="relative z-10 flex items-center justify-between gap-2">
-
-                  <div className="min-w-0">
-
-                    <div className="flex items-center gap-1.5">
-
-                      <span className="text-[8px] font-black text-black/60">
-                        {offerType}
-                      </span>
-
-                    </div>
-
-                    <h3 className="mt-0.5 truncate text-[14px] font-black leading-tight text-black">
-                      {offer.title}
-                    </h3>
-
-                    {offer.description && (
-                      <p className="mt-0.5 truncate text-[8px] font-semibold text-black/60">
-                        {offer.description}
-                      </p>
-                    )}
-
-                  </div>
-
-
-                  {/* OFFER BADGE */}
-
-                  <span className="shrink-0 animate-pulse rounded-full bg-black px-2.5 py-1 text-[7px] font-black text-white">
-                    OFFER
-                  </span>
-
-                </div>
-
-
-                {/* BOTTOM */}
-
-                <div className="relative z-10 mt-2 flex items-center justify-between">
-
-                  <span className="text-[8px] font-bold text-black/55">
-                    Tap to see offer
-                  </span>
-
-                  <span className="rounded-lg bg-black px-3 py-1.5 text-[8px] font-black text-white transition-transform group-hover:translate-x-1">
-                    View Offer →
-                  </span>
-
-                </div>
-
-              </Link>
-            );
-          }
-        )}
-
-    </div>
-
-  </section>
-)}
-
-
         {/* =================================================
             SMART PICKS
         ================================================= */}
-        <section className="px-3 pb-5 pt-4 md:mx-auto md:max-w-7xl md:px-4 md:pb-7 md:pt-7">
+        <section className="mx-2 rounded-3xl border border-indigo-100 bg-gradient-to-br from-[#e8f1ff] via-[#ffffff] to-[#f7eaff] px-3 pb-4 pt-4 shadow-[0_10px_30px_rgba(79,70,229,0.10)] md:mx-auto md:max-w-7xl md:px-4 md:pb-6 md:pt-6">
           <div className="mb-3 flex items-end justify-between gap-3">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-500">NightNow Smart Picks</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-500">NightNow 
+Smart Picks</p>
               <h2 className="mt-1 text-[18px] font-black leading-5 md:text-xl">What are you looking for?</h2>
             </div>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {[
               { id: "fast" as const, icon: "⚡", title: "Fast Picks", sub: "Ready now" },
               { id: "under99" as const, icon: "₹", title: "Under ₹99", sub: "Budget picks" },
@@ -2457,11 +2398,11 @@ useEffect(() => {
                   key={item.id}
                   type="button"
                   onClick={() => setSmartPickMode(item.id)}
-                  className={`w-[108px] shrink-0 rounded-2xl border px-3 py-2.5 text-left transition ${active ? "border-blue-500 bg-blue-500 text-white shadow-md" : "border-zinc-200 bg-white text-zinc-900"}`}
+                  className={`w-[60px] h-[58px] shrink-0 rounded-xl border px-1.5 py-1 text-left transition ${active ? "border-blue-500 bg-blue-500 text-white shadow-md" : "border-zinc-200 bg-white/95 text-zinc-900 shadow-sm"}`}
                 >
-                  <span className="text-base">{item.icon}</span>
-                  <p className="mt-1 text-[10px] font-black">{item.title}</p>
-                  <p className={`text-[8px] ${active ? "text-blue-100" : "text-zinc-400"}`}>{item.sub}</p>
+                  <span className="text-xs">{item.icon}</span>
+                  <p className="mt-0.5 truncate text-[8px] font-black leading-3">{item.title}</p>
+                  <p className={`truncate text-[6px] leading-3 ${active ? "text-blue-100" : "text-zinc-400"}`}>{item.sub}</p>
                 </button>
               );
             })}
@@ -2470,12 +2411,78 @@ useEffect(() => {
           <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {getSmartPickProducts().map((product) => getCompactProductCard(product, `smart-${smartPickMode}`))}
             {getSmartPickProducts().length === 0 && (
-              <div className="w-full rounded-2xl border border-dashed border-zinc-300 bg-white p-5 text-center text-xs text-zinc-400">
+              <div className="w-full rounded-2xl border border-dashed border-zinc-300 bg-white p-3 text-center text-xs text-zinc-400">
                 Is category me abhi products available nahi hain.
               </div>
             )}
           </div>
         </section>
+
+        {/* =================================================
+            BUDGET ZONE
+        ================================================= */}
+        <section className="mx-2 rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-yellow-50 px-3 pb-5 pt-3 md:mx-auto md:max-w-7xl md:px-4 md:pb-7">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-600">NightNow Budget Zone</p>
+              <h2 className="mt-1 text-[18px] font-black leading-5 md:text-xl">Best Picks Under Your Budget</h2>
+              <p className="mt-1 text-[9px] text-zinc-400">Smart products at pocket-friendly prices</p>
+            </div>
+          </div>
+
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {[
+              { id: "49" as const, label: "Under ₹49", icon: "💸" },
+              { id: "99" as const, label: "Under ₹99", icon: "🔥" },
+              { id: "199" as const, label: "Under ₹199", icon: "💰" },
+            ].map((item) => {
+              const active = budgetMode === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setBudgetMode(item.id)}
+                  className={`shrink-0 rounded-xl border px-3 py-2 text-left transition ${active ? "border-emerald-500 bg-emerald-500 text-white shadow-sm" : "border-zinc-200 bg-white text-zinc-900"}`}
+                >
+                  <span className="mr-1 text-sm">{item.icon}</span>
+                  <span className="text-[10px] font-black">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-4 md:gap-3 lg:grid-cols-6">
+            {budgetProducts.map((product) =>
+              getCompactProductCard(product, `budget-${budgetMode}`)
+            )}
+            {budgetProducts.length === 0 && (
+              <div className="w-full rounded-2xl border border-dashed border-zinc-300 bg-white p-3 text-center text-xs text-zinc-400 md:col-span-full">
+                Is budget range me abhi products available nahi hain.
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* =================================================
+            RECENTLY VIEWED
+        ================================================= */}
+        {recentlyViewedProducts.length > 0 && (
+          <section className="px-3 pb-5 pt-1 md:mx-auto md:max-w-7xl md:px-4 md:pb-7">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-violet-500">Continue Shopping</p>
+                <h2 className="mt-1 text-[18px] font-black leading-5 md:text-xl">Recently Viewed</h2>
+                <p className="mt-1 text-[9px] text-zinc-400">Pick up where you left off</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-4 md:gap-3 lg:grid-cols-6">
+              {recentlyViewedProducts.map((product) =>
+                getCompactProductCard(product, "recently-viewed")
+              )}
+            </div>
+          </section>
+        )}
 
         {/* =================================================
             BUY AGAIN
@@ -2522,7 +2529,7 @@ useEffect(() => {
           0 && (
           <section className="mx-auto max-w-7xl px-3 pt-4">
 
-            <div className="rounded-3xl border border-yellow-200 bg-yellow-50 p-5">
+            <div className="rounded-3xl border border-yellow-200 bg-yellow-50 p-3">
 
               <div className="flex items-center gap-2">
                 <span className="text-xl">

@@ -2,29 +2,45 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 
 import { useCart } from "../context/CartContext";
 
 export default function MobileNav() {
   const pathname = usePathname();
+  const { cartCount } = useCart();
 
-  const { cartCount } =
-    useCart();
-
-  const [mounted, setMounted] =
-    useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [isOffersPage, setIsOffersPage] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+
+    const checkOffersPage = () => {
+      const params = new URLSearchParams(window.location.search);
+
+      setIsOffersPage(
+        window.location.pathname === "/" &&
+          params.get("offers") === "true"
+      );
+    };
+
+    checkOffersPage();
+
+    window.addEventListener(
+      "popstate",
+      checkOffersPage
+    );
+
+    return () => {
+      window.removeEventListener(
+        "popstate",
+        checkOffersPage
+      );
+    };
   }, []);
 
-  const active = (
-    path: string
-  ) => {
+  const active = (path: string) => {
     if (path === "/") {
       return pathname === "/";
     }
@@ -35,12 +51,7 @@ export default function MobileNav() {
     );
   };
 
-  // IMPORTANT:
-  // During SSR and first client render, keep
-  // cart badge hidden so local-storage/cart
-  // differences cannot cause hydration mismatch.
-  const safeCartCount =
-    mounted ? cartCount : 0;
+  const safeCartCount = mounted ? cartCount : 0;
 
   return (
     <>
@@ -63,7 +74,7 @@ export default function MobileNav() {
           <Link
             href="/"
             className={`flex min-w-[64px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[10px] font-black active:scale-95 ${
-              active("/")
+              active("/") && !isOffersPage
                 ? "text-yellow-600"
                 : "text-zinc-500"
             }`}
@@ -77,20 +88,26 @@ export default function MobileNav() {
             </span>
           </Link>
 
-          {/* CATEGORIES */}
+
+          {/* OFFERS */}
 
           <Link
-            href="/?category=1"
-            className="flex min-w-[64px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[10px] font-black text-zinc-500 active:scale-95"
+            href="/?offers=true"
+            className={`flex min-w-[64px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[10px] font-black active:scale-95 ${
+              isOffersPage
+                ? "text-yellow-600"
+                : "text-zinc-500"
+            }`}
           >
             <span className="text-xl leading-none">
-              🗂️
+              🔥
             </span>
 
             <span>
-              Categories
+              Offers
             </span>
           </Link>
+
 
           {/* ORDERS */}
 
@@ -110,6 +127,7 @@ export default function MobileNav() {
               Orders
             </span>
           </Link>
+
 
           {/* CART */}
 

@@ -1,285 +1,748 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const NOMINATIM_URL =
-  "https://nominatim.openstreetmap.org/search";
-
 const PHOTON_URL =
   "https://photon.komoot.io/api/";
 
+const NOMINATIM_URL =
+  "https://nominatim.openstreetmap.org/search";
+
 const USER_AGENT =
-  "NightNow/1.0 (delivery location search)";
+  "NightNow/1.0 (delivery location autocomplete)";
 
-const buildNominatimUrl = (query: string) => {
-  const url = new URL(NOMINATIM_URL);
+/*
+  Words that are NOT unique building/society identifiers.
+  Example:
+    "Abhinav Heights Dindoli"
+  becomes:
+    importantWords = ["abhinav", "dindoli"]
 
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("addressdetails", "1");
-  url.searchParams.set("namedetails", "1");
-  url.searchParams.set("limit", "8");
-  url.searchParams.set("countrycodes", "in");
-  url.searchParams.set("accept-language", "en");
-  url.searchParams.set("q", query);
+  "heights" is ignored, so "Abhilasha Heights"
+  can NEVER match only because of "Heights".
+*/
+const GENERIC_WORDS = new Set([
+  "road",
+  "rd",
+  "street",
+  "st",
+  "roadway",
+  "lane",
+  "ln",
+  "avenue",
+  "ave",
+  "highway",
+  "area",
+  "near",
+  "nearby",
+  "main",
+  "city",
+  "town",
+  "village",
+  "india",
+  "gujarat",
+  "maharashtra",
+  "rajasthan",
+  "delhi",
+  "mumbai",
+  "surat",
 
-  return url.toString();
-};
+  // Building / society generic words
+  "height",
+  "heights",
+  "society",
+  "soc",
+  "residency",
+  "residence",
+  "residential",
+  "apartment",
+  "apartments",
+  "flat",
+  "flats",
+  "building",
+  "buildings",
+  "tower",
+  "towers",
+  "complex",
+  "enclave",
+  "colony",
+  "nagar",
+  "park",
+  "garden",
+  "gardens",
+  "homes",
+  "home",
+  "villa",
+  "villas",
+  "view",
+  "phase",
+  "block",
+  "sector",
+  "extension",
+  "layout",
+  "locality",
+  "district",
+]);
 
-const buildPhotonUrl = (query: string) => {
-  const url = new URL(PHOTON_URL);
+function cleanWords(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
 
-  url.searchParams.set("q", query);
-  url.searchParams.set("limit", "8");
-  url.searchParams.set("lang", "en");
+function normalizeText(value: unknown) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  return url.toString();
-};
+function uniqueParts(parts: unknown[]) {
+  const seen = new Set<string>();
 
-const fetchJson = async (
-  url: string,
-  headers: Record<string, string>
-) => {
-  const response = await fetch(url, {
-    method: "GET",
-    headers,
-    cache: "no-store",
-  });
+  return parts
+    .map((part) => String(part || "").trim())
+    .filter((part) => {
+      if (!part) return false;
+
+      const key = normalizeText(part);
+
+      if (seen.has(key)) return false;
+
+      seen.add(key);
+      return true;
+    });
+}
+
+function getPhotonAddress(properties: any) {
+  return uniqueParts([
+    properties?.housenumber,
+    properties?.street,
+    properties?.neighbourhood,
+    properties?.suburb,
+    properties?.district,
+    properties?.city,
+    properties?.town,
+    properties?.village,
+    properties?.state,
+    properties?.postcode,
+    properties?.country,
+  ]).join(", ");
+}
+
+function getNominatimAddress(item: any) {
+  const address = item?.address || {};
+
+  return uniqueParts([
+    address?.house_number,
+    address?.road,
+    address?.neighbourhood,
+    address?.suburb,
+    address?.quarter,
+    address?.residential,
+    address?.hamlet,
+    address?.village,
+    address?.town,
+    address?.city,
+    address?.municipality,
+    address?.district,
+    address?.state_district,
+    address?.state,
+    address?.postcode,
+    address?.country,
+  ]).join(", ");
+}
+
+function getName(item: any) {
+  const properties = item?.properties || {};
+  const address = item?.address || {};
+
+  return String(
+    item?.namedetails?.name ||
+      properties?.name ||
+      address?.building ||
+      address?.amenity ||
+      address?.shop ||
+      address?.road ||
+      address?.suburb ||
+      address?.neighbourhood ||
+      address?.city ||
+      properties?.street ||
+      "Location"
+  ).trim();
+}
+
+function photonToResult(
+  item: any,
+  index: number
+) {
+  const properties = item?.properties || {};
+
+  const coordinates = Array.isArray(
+    item?.geometry?.coordinates
+  )
+    ? item.geometry.coordinates
+    : [];
+
+  const lat = Number(coordinates[1]);
+  const lon = Number(coordinates[0]);
+
+  const name = String(
+    properties?.name ||
+      properties?.street ||
+      properties?.suburb ||
+      properties?.neighbourhood ||
+      properties?.city ||
+      properties?.town ||
+      properties?.village ||
+      "Location"
+  ).trim();
+
+  const address =
+    getPhotonAddress(properties);
+
+  return {
+    place_id:
+      `photon-${index}-${lat}-${lon}`,
+
+    display_name:
+      uniqueParts([
+        name,
+        address,
+      ]).join(", "),
+
+    lat: Number.isFinite(lat)
+      ? lat
+      : undefined,
+
+    lon: Number.isFinite(lon)
+      ? lon
+      : undefined,
+
+    address: {
+      building:
+        properties?.name || "",
+
+      house_number:
+        properties?.housenumber || "",
+
+      road:
+        properties?.street || "",
+
+      neighbourhood:
+        properties?.neighbourhood || "",
+
+      suburb:
+        properties?.suburb || "",
+
+      district:
+        properties?.district || "",
+
+      city:
+        properties?.city ||
+        properties?.town ||
+        properties?.village ||
+        "",
+
+      state:
+        properties?.state || "",
+
+      postcode:
+        properties?.postcode || "",
+
+      country:
+        properties?.country || "India",
+    },
+
+    namedetails: {
+      name,
+    },
+
+    source: "photon",
+  };
+}
+
+function nominatimToResult(
+  item: any,
+  index: number
+) {
+  const address = item?.address || {};
+  const name = getName(item);
+
+  const fullAddress =
+    getNominatimAddress(item);
+
+  const lat = Number(item?.lat);
+  const lon = Number(item?.lon);
+
+  return {
+    place_id:
+      `nominatim-${item?.place_id || index}`,
+
+    display_name:
+      uniqueParts([
+        name,
+        fullAddress,
+      ]).join(", "),
+
+    lat: Number.isFinite(lat)
+      ? lat
+      : undefined,
+
+    lon: Number.isFinite(lon)
+      ? lon
+      : undefined,
+
+    address,
+
+    namedetails: {
+      name,
+    },
+
+    source: "nominatim",
+  };
+}
+
+function makeSearchUrl(
+  base: string,
+  query: string
+) {
+  const url = new URL(base);
+
+  url.searchParams.set(
+    "q",
+    query
+  );
+
+  return url;
+}
+
+async function fetchJson(
+  url: URL
+) {
+  const response =
+    await fetch(
+      url.toString(),
+      {
+        method: "GET",
+
+        headers: {
+          Accept:
+            "application/json",
+
+          "Accept-Language":
+            "en-IN,en;q=0.9",
+
+          "User-Agent":
+            USER_AGENT,
+        },
+
+        cache: "no-store",
+      }
+    );
 
   if (!response.ok) {
-    throw new Error(`Location provider HTTP ${response.status}`);
+    throw new Error(
+      `HTTP ${response.status}`
+    );
   }
 
   return response.json();
-};
+}
 
-const searchNominatim = async (query: string) => {
-  const data = await fetchJson(
-    buildNominatimUrl(query),
-    {
-      Accept: "application/json",
-      "Accept-Language": "en-IN,en;q=0.9",
-      "User-Agent": USER_AGENT,
-    }
-  );
+/*
+  HARD RELEVANCE FILTER
 
-  return Array.isArray(data) ? data : [];
-};
+  This is the fix for:
 
-const searchPhoton = async (query: string) => {
-  const data = await fetchJson(
-    buildPhotonUrl(query),
-    {
-      Accept: "application/json",
-      "Accept-Language": "en-IN,en;q=0.9",
-      "User-Agent": USER_AGENT,
-    }
-  );
+      Search:
+      Abhinav Heights Dindoli
 
-  const features = Array.isArray(data?.features)
-    ? data.features
-    : [];
+      Wrong result:
+      Abhilasha Heights
 
-  return features.map((feature: any, index: number) => {
-    const properties = feature?.properties || {};
-    const coordinates = feature?.geometry?.coordinates || [];
+  Important words become:
 
-    const parts = [
-      properties.name,
-      properties.street,
-      properties.suburb,
-      properties.district,
-      properties.city,
-      properties.state,
-      properties.postcode,
-      properties.country,
-    ].filter(Boolean);
+      ["abhinav", "dindoli"]
 
-    return {
-      place_id: `photon-${index}-${coordinates[1] || ""}-${coordinates[0] || ""}`,
-      display_name:
-        parts.join(", ") ||
-        properties.name ||
-        "Selected Location",
-      lat: coordinates[1],
-      lon: coordinates[0],
-      address: {
-        road: properties.street,
-        suburb: properties.suburb,
-        neighbourhood: properties.neighbourhood,
-        district: properties.district,
-        city: properties.city,
-        state: properties.state,
-        postcode: properties.postcode,
-        country: properties.country,
-        country_code: properties.countrycode,
-      },
-      namedetails: {
-        name: properties.name,
-      },
-      source: "photon",
-    };
-  });
-};
+  The PRIMARY word is "abhinav".
 
-const normalizeText = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[.,/\\_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  A result MUST contain the PRIMARY word.
+  "heights" is generic and is ignored.
 
-const buildQueries = (query: string) => {
-  const clean = query.trim();
-  const normalized = normalizeText(clean);
+  Therefore:
 
-  const queries = [
-    clean,
-    `${clean}, Dindoli, Surat, Gujarat, India`,
-    `${clean}, Surat, Gujarat, India`,
-  ];
+      Abhilasha Heights
+      -> contains "heights"
+      -> does NOT contain "abhinav"
+      -> REJECT
 
-  // Common singular/plural correction:
-  // "Abhinav Height" -> "Abhinav Heights"
+  This is intentionally strict. It is better to
+  show no result than to show the wrong building.
+*/
+function scoreAndFilter(
+  items: any[],
+  query: string
+) {
+  const words =
+    cleanWords(query);
+
+  const importantWords =
+    words.filter(
+      (word) =>
+        word.length >= 3 &&
+        !GENERIC_WORDS.has(word)
+    );
+
+  /*
+    If the user only typed generic words such as
+    "road" or "society", don't pretend we know
+    which place they mean.
+  */
   if (
-    /\bheight\b/i.test(clean) &&
-    !/\bheights\b/i.test(clean)
+    importantWords.length === 0
   ) {
-    queries.push(
-      clean.replace(/\bheight\b/gi, "Heights")
-    );
+    return [];
   }
 
-  // If user typed "heights", also try singular.
-  if (/\bheights\b/i.test(clean)) {
-    queries.push(
-      clean.replace(/\bheights\b/gi, "Height")
-    );
-  }
+  const primaryWord =
+    importantWords[0];
 
-  // Try the last meaningful address tokens.
-  const tokens = normalized
-    .split(" ")
-    .filter((token) => token.length >= 3);
+  const scored =
+    items
+      .map((item) => {
+        const nameText =
+          normalizeText(
+            getName(item)
+          );
 
-  if (tokens.length >= 2) {
-    queries.push(
-      `${tokens.slice(-5).join(" ")}, Surat, Gujarat, India`
-    );
-  }
+        const displayText =
+          normalizeText(
+            item?.display_name
+          );
 
-  return Array.from(
-    new Set(
-      queries
-        .map((item) => item.trim())
-        .filter((item) => item.length >= 3)
-    )
+        const addressText =
+          normalizeText(
+            [
+              item?.address?.building,
+              item?.address?.road,
+              item?.address?.neighbourhood,
+              item?.address?.suburb,
+              item?.address?.district,
+              item?.address?.city,
+              item?.address?.town,
+              item?.address?.village,
+              item?.address?.state,
+              item?.address?.postcode,
+            ].join(" ")
+          );
+
+        const combined =
+          `${nameText} ${displayText} ${addressText}`;
+
+        /*
+          CRITICAL:
+          Primary building/search word MUST exist.
+
+          Do NOT use fuzzy matching here.
+          Do NOT use startsWith.
+          Do NOT use partial similarity.
+
+          "abhinav" != "abhilasha".
+        */
+        if (
+          !combined
+            .split(/\s+/)
+            .includes(primaryWord)
+        ) {
+          return null;
+        }
+
+        let score = 100;
+
+        /*
+          Exact primary word in the place name
+          gets the highest priority.
+        */
+        if (
+          nameText
+            .split(/\s+/)
+            .includes(primaryWord)
+        ) {
+          score += 300;
+        }
+
+        /*
+          Exact other search words improve ranking.
+        */
+        for (
+          const word of importantWords
+        ) {
+          if (
+            combined
+              .split(/\s+/)
+              .includes(word)
+          ) {
+            score += 40;
+          }
+        }
+
+        /*
+          If the user typed an area/city after the
+          building name, prefer results containing it.
+        */
+        const locationWords =
+          importantWords.slice(1);
+
+        for (
+          const word of locationWords
+        ) {
+          if (
+            combined
+              .split(/\s+/)
+              .includes(word)
+          ) {
+            score += 60;
+          }
+        }
+
+        return {
+          item,
+          score,
+        };
+      })
+      .filter(
+        (
+          entry
+        ): entry is {
+          item: any;
+          score: number;
+        } => Boolean(entry)
+      )
+      .sort(
+        (a, b) =>
+          b.score - a.score
+      );
+
+  return scored.map(
+    (entry) => entry.item
   );
-};
+}
 
-const normalizeResults = (results: any[]) => {
-  const seen = new Set<string>();
+function dedupe(
+  items: any[]
+) {
+  const seen =
+    new Set<string>();
 
-  return results.filter((item) => {
-    const lat = Number(item?.lat);
-    const lon = Number(item?.lon);
+  return items.filter(
+    (item) => {
+      const key =
+        normalizeText(
+          `${item?.display_name || ""}|${item?.lat || ""}|${item?.lon || ""}`
+        );
 
-    const key =
-      String(item?.place_id || "") ||
-      `${lat.toFixed(6)}-${lon.toFixed(6)}-${normalizeText(
-        String(item?.display_name || "")
-      )}`;
+      if (
+        !key ||
+        seen.has(key)
+      ) {
+        return false;
+      }
 
-    if (seen.has(key)) {
-      return false;
+      seen.add(key);
+
+      return true;
     }
+  );
+}
 
-    seen.add(key);
-    return true;
-  });
-};
-
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest
+) {
   const query =
-    request.nextUrl.searchParams.get("q")?.trim() || "";
+    request.nextUrl.searchParams
+      .get("q")
+      ?.trim() || "";
 
-  if (query.length < 3) {
+  if (query.length < 2) {
     return NextResponse.json({
       results: [],
     });
   }
 
-  const queries = buildQueries(query);
-  let results: any[] = [];
-
   try {
-    // First use Nominatim.
-    // It supports free-form address searches and addressdetails.
-    for (const searchQuery of queries) {
+    let results: any[] =
+      [];
+
+    /*
+      --------------------------------------------------
+      1. PHOTON
+      --------------------------------------------------
+    */
+    try {
+      const photonUrl =
+        makeSearchUrl(
+          PHOTON_URL,
+          query
+        );
+
+      photonUrl.searchParams.set(
+        "limit",
+        "20"
+      );
+
+      photonUrl.searchParams.set(
+        "lang",
+        "en"
+      );
+
+      const data =
+        await fetchJson(
+          photonUrl
+        );
+
+      const features =
+        Array.isArray(
+          data?.features
+        )
+          ? data.features
+          : [];
+
+      results =
+        features.map(
+          photonToResult
+        );
+    } catch (error) {
+      console.warn(
+        "Photon search failed:",
+        error
+      );
+    }
+
+    /*
+      IMPORTANT:
+      Never return raw Photon fuzzy results.
+
+      First apply the HARD filter.
+    */
+    let filtered =
+      scoreAndFilter(
+        results,
+        query
+      );
+
+    /*
+      --------------------------------------------------
+      2. NOMINATIM FALLBACK
+      --------------------------------------------------
+
+      Only call it when Photon has NO correct
+      result.
+
+      If Nominatim is rate-limited, we simply
+      return no result instead of returning a
+      wrong Photon result.
+    */
+    if (
+      filtered.length === 0
+    ) {
       try {
-        const found = await searchNominatim(searchQuery);
+        const nominatimUrl =
+          makeSearchUrl(
+            NOMINATIM_URL,
+            query
+          );
 
-        if (found.length > 0) {
-          results.push(...found);
-        }
+        nominatimUrl.searchParams.set(
+          "format",
+          "jsonv2"
+        );
 
-        if (results.length >= 8) {
-          break;
-        }
+        nominatimUrl.searchParams.set(
+          "addressdetails",
+          "1"
+        );
+
+        nominatimUrl.searchParams.set(
+          "namedetails",
+          "1"
+        );
+
+        nominatimUrl.searchParams.set(
+          "limit",
+          "15"
+        );
+
+        nominatimUrl.searchParams.set(
+          "countrycodes",
+          "in"
+        );
+
+        nominatimUrl.searchParams.set(
+          "accept-language",
+          "en"
+        );
+
+        const data =
+          await fetchJson(
+            nominatimUrl
+          );
+
+        results =
+          Array.isArray(data)
+            ? data.map(
+                nominatimToResult
+              )
+            : [];
+
+        filtered =
+          scoreAndFilter(
+            results,
+            query
+          );
       } catch (error) {
         console.warn(
-          "Nominatim query failed:",
-          searchQuery,
+          "Nominatim fallback failed:",
           error
         );
+
+        /*
+          DO NOT fall back to the old Photon
+          fuzzy results here.
+        */
+        filtered = [];
       }
     }
 
-    results = normalizeResults(results).slice(0, 8);
-
-    // Photon fallback for buildings/societies/POIs that
-    // are not returned by Nominatim.
-    if (results.length === 0) {
-      for (const searchQuery of queries) {
-        try {
-          const found = await searchPhoton(searchQuery);
-
-          if (found.length > 0) {
-            results.push(...found);
-          }
-
-          if (results.length >= 8) {
-            break;
-          }
-        } catch (error) {
-          console.warn(
-            "Photon query failed:",
-            searchQuery,
-            error
-          );
-        }
-      }
-
-      results = normalizeResults(results).slice(0, 8);
-    }
+    const finalResults =
+      dedupe(
+        filtered
+      ).slice(0, 8);
 
     return NextResponse.json(
       {
-        results,
+        results:
+          finalResults,
       },
       {
         headers: {
-          "Cache-Control": "no-store",
+          "Cache-Control":
+            "no-store",
         },
       }
     );
   } catch (error) {
     console.error(
-      "Location search API error:",
+      "Location search error:",
       error
     );
 
     return NextResponse.json(
       {
         results: [],
-        error: "Location search failed",
+        error:
+          "Location search failed",
       },
       {
         status: 500,
