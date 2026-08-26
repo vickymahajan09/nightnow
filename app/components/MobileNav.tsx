@@ -8,36 +8,14 @@ import { useCart } from "../context/CartContext";
 
 export default function MobileNav() {
   const pathname = usePathname();
+
   const { cartCount } = useCart();
 
-  const [mounted, setMounted] = useState(false);
-  const [isOffersPage, setIsOffersPage] = useState(false);
+  const [mounted, setMounted] =
+    useState(false);
 
   useEffect(() => {
     setMounted(true);
-
-    const checkOffersPage = () => {
-      const params = new URLSearchParams(window.location.search);
-
-      setIsOffersPage(
-        window.location.pathname === "/" &&
-          params.get("offers") === "true"
-      );
-    };
-
-    checkOffersPage();
-
-    window.addEventListener(
-      "popstate",
-      checkOffersPage
-    );
-
-    return () => {
-      window.removeEventListener(
-        "popstate",
-        checkOffersPage
-      );
-    };
   }, []);
 
   const active = (path: string) => {
@@ -51,14 +29,19 @@ export default function MobileNav() {
     );
   };
 
-  const safeCartCount = mounted ? cartCount : 0;
+  const safeCartCount =
+    mounted ? cartCount : 0;
 
   return (
     <>
+      {/* Bottom navigation space */}
+
       <div
         className="h-[76px] md:hidden"
         aria-hidden="true"
       />
+
+      {/* MOBILE NAV */}
 
       <nav
         className="fixed inset-x-0 bottom-0 z-[9999] border-t border-zinc-200 bg-white/95 shadow-[0_-5px_20px_rgba(0,0,0,0.10)] backdrop-blur-xl md:hidden"
@@ -67,6 +50,7 @@ export default function MobileNav() {
             "max(env(safe-area-inset-bottom), 6px)",
         }}
       >
+
         <div className="mx-auto flex h-[70px] w-full max-w-md items-center justify-around px-2">
 
           {/* HOME */}
@@ -74,7 +58,7 @@ export default function MobileNav() {
           <Link
             href="/"
             className={`flex min-w-[64px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[10px] font-black active:scale-95 ${
-              active("/") && !isOffersPage
+              active("/")
                 ? "text-yellow-600"
                 : "text-zinc-500"
             }`}
@@ -92,15 +76,15 @@ export default function MobileNav() {
           {/* OFFERS */}
 
           <Link
-            href="/?offers=true"
+            href="/offers"
             className={`flex min-w-[64px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[10px] font-black active:scale-95 ${
-              isOffersPage
+              active("/offers")
                 ? "text-yellow-600"
                 : "text-zinc-500"
             }`}
           >
             <span className="text-xl leading-none">
-              🔥
+              🎁
             </span>
 
             <span>
@@ -139,7 +123,9 @@ export default function MobileNav() {
                 : "text-zinc-500"
             }`}
           >
+
             <span className="relative text-xl leading-none">
+
               🛒
 
               {safeCartCount > 0 && (
@@ -149,14 +135,17 @@ export default function MobileNav() {
                     : safeCartCount}
                 </span>
               )}
+
             </span>
 
             <span>
               Cart
             </span>
+
           </Link>
 
         </div>
+
       </nav>
     </>
   );

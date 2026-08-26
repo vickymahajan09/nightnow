@@ -16,8 +16,6 @@ import {
   db,
 } from "../lib/firebase";
 
-
-
 export type OfferType =
   | "NONE"
   | "BUY_1_GET_1"
@@ -26,20 +24,14 @@ export type OfferType =
 
 export type Offer = {
   id: string;
-
   title: string;
   description?: string;
-
   type: OfferType;
-
   buyQuantity: number;
   freeQuantity: number;
-
   brandIds: string[];
   productIds: string[];
-
   active: boolean;
-
   createdAt?: any;
   updatedAt?: any;
 };
@@ -48,78 +40,68 @@ const offersRef = collection(
   db,
   "offers"
 );
-const requireAdmin =
-  async () => {
-    const user =
-      await new Promise<any>(
-        (resolve, reject) => {
-          if (auth.currentUser) {
-            resolve(
-              auth.currentUser
-            );
-            return;
-          }
 
-          const unsubscribe =
-            onAuthStateChanged(
-              auth,
-              (currentUser) => {
-                unsubscribe();
-
-                if (
-                  currentUser
-                ) {
-                  resolve(
-                    currentUser
-                  );
-                } else {
-                  reject(
-                    new Error(
-                      "Please login first."
-                    )
-                  );
-                }
-              }
-            );
-
-          setTimeout(() => {
-            unsubscribe();
-
-            reject(
-              new Error(
-                "Login session not found. Please login again."
-              )
-            );
-          }, 10000);
+const requireAdmin = async () => {
+  const user =
+    await new Promise<any>(
+      (resolve, reject) => {
+        if (auth.currentUser) {
+          resolve(
+            auth.currentUser
+          );
+          return;
         }
-      );
 
-    const email =
-      user?.email
-        ?.trim()
-        .toLowerCase();
+        const unsubscribe =
+          onAuthStateChanged(
+            auth,
+            (currentUser) => {
+              unsubscribe();
 
-    console.log(
-      "🔥 FIREBASE AUTH EMAIL:",
-      email
+              if (currentUser) {
+                resolve(
+                  currentUser
+                );
+              } else {
+                reject(
+                  new Error(
+                    "Please login first."
+                  )
+                );
+              }
+            }
+          );
+
+        setTimeout(() => {
+          unsubscribe();
+
+          reject(
+            new Error(
+              "Login session not found. Please login again."
+            )
+          );
+        }, 10000);
+      }
     );
 
-    console.log(
-      "🔥 FIREBASE AUTH UID:",
-      user?.uid
+  const email =
+    user?.email
+      ?.trim()
+      .toLowerCase();
+
+  if (
+    email !==
+    "mahajanvicky04@gmail.com"
+  ) {
+    throw new Error(
+      "Admin account required."
     );
+  }
 
-    if (
-      email !==
-      "mahajanvicky04@gmail.com"
-    ) {
-      throw new Error(
-        "Admin account required."
-      );
-    }
+  return user;
+};
 
-    return user;
-  };
+
 /* =====================================================
    NORMALIZE OFFER
 ===================================================== */
@@ -132,9 +114,12 @@ const normalizeOffer = (
     "NONE";
 
   if (
-    data.type === "BUY_1_GET_1" ||
-    data.type === "BUY_1_GET_2" ||
-    data.type === "BUY_X_GET_Y"
+    data.type ===
+      "BUY_1_GET_1" ||
+    data.type ===
+      "BUY_1_GET_2" ||
+    data.type ===
+      "BUY_X_GET_Y"
   ) {
     type = data.type;
   }
@@ -148,10 +133,6 @@ const normalizeOffer = (
     Number(
       data.freeQuantity ?? 0
     );
-
-  /* ==========================
-     FIXED OFFERS
-  ========================== */
 
   if (
     type ===
@@ -168,10 +149,6 @@ const normalizeOffer = (
     buyQuantity = 1;
     freeQuantity = 2;
   }
-
-  /* ==========================
-     CUSTOM OFFER
-  ========================== */
 
   if (
     type ===
@@ -193,10 +170,6 @@ const normalizeOffer = (
         )
       );
   }
-
-  /* ==========================
-     NONE
-  ========================== */
 
   if (
     type === "NONE"
@@ -255,6 +228,7 @@ const normalizeOffer = (
   };
 };
 
+
 /* =====================================================
    GET OFFERS
 ===================================================== */
@@ -278,27 +252,61 @@ export const getOffers =
   };
 
 /* =====================================================
+   GET OFFER BY ID
+===================================================== */
+
+export const getOfferById =
+  async (
+    id: string
+  ): Promise<Offer | null> => {
+    try {
+      const snapshot =
+        await getDocs(
+          offersRef
+        );
+
+      const found =
+        snapshot.docs.find(
+          (item) =>
+            item.id === id
+        );
+
+      if (!found) {
+        return null;
+      }
+
+      return normalizeOffer(
+        found.data(),
+        found.id
+      );
+
+    } catch (error) {
+      console.error(
+        "getOfferById error:",
+        error
+      );
+
+      return null;
+    }
+  };
+/* =====================================================
    ADD OFFER
 ===================================================== */
 
 export const addOffer =
   async (data: {
     title: string;
-
     description?: string;
-
     type: OfferType;
-
     buyQuantity?: number;
-
     freeQuantity?: number;
-
     brandIds?: string[];
-
     productIds?: string[];
-
     active?: boolean;
   }) => {
+
+    await requireAdmin();
+
     const title =
       data.title.trim();
 
@@ -318,10 +326,6 @@ export const addOffer =
         data.freeQuantity ?? 0
       );
 
-    /* ==========================
-       BUY 1 GET 1
-    ========================== */
-
     if (
       data.type ===
       "BUY_1_GET_1"
@@ -330,10 +334,6 @@ export const addOffer =
       freeQuantity = 1;
     }
 
-    /* ==========================
-       BUY 1 GET 2
-    ========================== */
-
     if (
       data.type ===
       "BUY_1_GET_2"
@@ -341,10 +341,6 @@ export const addOffer =
       buyQuantity = 1;
       freeQuantity = 2;
     }
-
-    /* ==========================
-       BUY X GET Y
-    ========================== */
 
     if (
       data.type ===
@@ -374,10 +370,6 @@ export const addOffer =
         );
       }
     }
-
-    /* ==========================
-       TARGET CHECK
-    ========================== */
 
     if (
       data.type !==
@@ -437,6 +429,7 @@ export const addOffer =
     );
   };
 
+
 /* =====================================================
    UPDATE OFFER
 ===================================================== */
@@ -446,22 +439,18 @@ export const updateOffer =
     id: string,
     data: {
       title: string;
-
       description?: string;
-
       type: OfferType;
-
       buyQuantity?: number;
-
       freeQuantity?: number;
-
       brandIds?: string[];
-
       productIds?: string[];
-
       active?: boolean;
     }
   ) => {
+
+    await requireAdmin();
+
     const title =
       data.title.trim();
 
@@ -585,6 +574,7 @@ export const updateOffer =
     );
   };
 
+
 /* =====================================================
    TOGGLE OFFER
 ===================================================== */
@@ -594,6 +584,9 @@ export const toggleOffer =
     id: string,
     active: boolean
   ) => {
+
+    await requireAdmin();
+
     await updateDoc(
       doc(
         db,
@@ -609,6 +602,7 @@ export const toggleOffer =
     );
   };
 
+
 /* =====================================================
    DELETE OFFER
 ===================================================== */
@@ -617,6 +611,9 @@ export const deleteOffer =
   async (
     id: string
   ) => {
+
+    await requireAdmin();
+
     await deleteDoc(
       doc(
         db,

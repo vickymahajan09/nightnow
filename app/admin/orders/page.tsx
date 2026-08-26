@@ -3,10 +3,21 @@
 import { useEffect, useState } from "react";
 
 import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
+
+import {
   getOrders,
   updateOrderStatus,
   deleteOrder,
 } from "../../services/orderService";
+
+import { db, auth } from "../../lib/firebase";
 
 type Order = {
   id: string;
@@ -35,6 +46,34 @@ type Order = {
 
   status?: string;
 
+  isOfferOrder?: boolean;
+  offerId?: string | null;
+  offerType?: string | null;
+  offerLabel?: string | null;
+  offerTitle?: string | null;
+  offerBuyQuantity?: number;
+  offerFreeQuantity?: number;
+  offerDescription?: string | null;
+
+  createdAt?: any;
+};
+
+type AdminNotification = {
+  id: string;
+
+  audience?: string;
+  type?: string;
+
+  title?: string;
+  message?: string;
+
+  orderId?: string;
+  userId?: string;
+
+  customer?: any;
+
+  read?: boolean;
+
   createdAt?: any;
 };
 
@@ -48,6 +87,9 @@ const STATUSES = [
   "Cancelled",
 ];
 
+const ADMIN_EMAIL =
+  "mahajanvicky04@gmail.com";
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] =
     useState<Order[]>([]);
@@ -55,19 +97,47 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] =
     useState(true);
 
+  // =====================================================
+  // ADMIN NOTIFICATIONS
+  // =====================================================
+
+  const [
+    notifications,
+    setNotifications,
+  ] =
+    useState<AdminNotification[]>(
+      []
+    );
+
+  const [
+    showNotifications,
+    setShowNotifications,
+  ] =
+    useState(false);
+
+  const [
+    notificationLoading,
+    setNotificationLoading,
+  ] =
+    useState(true);
+
+  // =====================================================
+  // LOAD ORDERS
+  // =====================================================
+
   const loadOrders = async () => {
     try {
       setLoading(true);
 
-      const data = await getOrders();
+      const data =
+        await getOrders();
 
-      const sorted = (
-        data as Order[]
-      ).sort(
-        (a, b) =>
-          getTime(b.createdAt) -
-          getTime(a.createdAt)
-      );
+      const sorted =
+        (data as Order[]).sort(
+          (a, b) =>
+            getTime(b.createdAt) -
+            getTime(a.createdAt)
+        );
 
       setOrders(sorted);
     } catch (error) {
@@ -76,7 +146,9 @@ export default function AdminOrdersPage() {
         error
       );
 
-      alert("Orders loading failed");
+      alert(
+        "Orders loading failed"
+      );
     } finally {
       setLoading(false);
     }
@@ -85,6 +157,228 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     loadOrders();
   }, []);
+
+  // =====================================================
+  // REAL-TIME ADMIN NOTIFICATIONS
+  // =====================================================
+
+  useEffect(() => {
+    const unsubscribeAuth =
+      auth.onAuthStateChanged(
+        (user) => {
+          if (!user) {
+            setNotifications([]);
+            setNotificationLoading(false);
+            return;
+          }
+
+          const email =
+            user.email?.toLowerCase();
+
+          if (
+            email !==
+            ADMIN_EMAIL.toLowerCase()
+          ) {
+            setNotifications([]);
+            setNotificationLoading(false);
+            return;
+          }
+
+          const notificationsQuery =
+            query(
+              collection(
+                db,
+                "notifications"
+              ),
+              where(
+                "audience",
+                "==",
+                "admin"
+              )
+            );
+
+          const unsubscribeNotifications =
+            onSnapshot(
+              notificationsQuery,
+              (snapshot) => {
+                const data =
+                  snapshot.docs.map(
+                    (item) => ({
+                      id: item.id,
+                      ...item.data(),
+                    })
+                  ) as AdminNotification[];
+
+                data.sort(
+                  (a, b) =>
+                    getTime(
+                      b.createdAt
+                    ) -
+                    getTime(
+                      a.createdAt
+                    )
+                );
+
+                setNotifications(
+                  data.slice(0, 50)
+                );
+
+                setNotificationLoading(
+                  false
+                );
+              },
+              (error) => {
+                console.error(
+                  "Admin notifications error:",
+                  error
+                );
+
+                setNotifications([]);
+                setNotificationLoading(
+                  false
+                );
+              }
+            );
+
+          return () => {
+            unsubscribeNotifications();
+          };
+        }
+      );
+
+    return () => {
+      unsubscribeAuth();
+    };
+  }, []);
+
+  // =====================================================
+  // UNREAD COUNT
+  // =====================================================
+
+  const unreadCount =
+    notifications.filter(
+      (item) =>
+        item.read !== true
+    ).length;
+
+  // =====================================================
+  // MARK ONE NOTIFICATION READ
+  // =====================================================
+
+  const markNotificationRead =
+    async (
+      notificationId: string
+    ) => {
+      try {
+        await updateDoc(
+          doc(
+            db,
+            "notifications",
+            notificationId
+          ),
+          {
+            read: true,
+          }
+        );
+      } catch (error) {
+        console.error(
+          "Notification read error:",
+          error
+        );
+      }
+    };
+
+  // =====================================================
+  // MARK ALL READ
+  // =====================================================
+
+  const markAllNotificationsRead =
+    async () => {
+      try {
+        const unread =
+          notifications.filter(
+            (item) =>
+              item.read !== true
+          );
+
+        await Promise.all(
+          unread.map(
+            (item) =>
+              updateDoc(
+                doc(
+                  db,
+                  "notifications",
+                  item.id
+                ),
+                {
+                  read: true,
+                }
+              )
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Mark all notifications error:",
+          error
+        );
+      }
+    };
+
+  // =====================================================
+  // OPEN NOTIFICATION
+  // =====================================================
+
+  const openNotification =
+    async (
+      notification: AdminNotification
+    ) => {
+      if (!notification.read) {
+        await markNotificationRead(
+          notification.id
+        );
+      }
+
+      setShowNotifications(
+        false
+      );
+
+      const orderId =
+        notification.orderId;
+
+      if (!orderId) {
+        return;
+      }
+
+      const orderElement =
+        document.getElementById(
+          `order-${orderId}`
+        );
+
+      if (orderElement) {
+        orderElement.scrollIntoView(
+          {
+            behavior: "smooth",
+            block: "center",
+          }
+        );
+
+        orderElement.classList.add(
+          "ring-4",
+          "ring-yellow-300"
+        );
+
+        setTimeout(() => {
+          orderElement.classList.remove(
+            "ring-4",
+            "ring-yellow-300"
+          );
+        }, 2500);
+      }
+    };
+
+  // =====================================================
+  // CHANGE STATUS
+  // =====================================================
 
   const changeStatus = async (
     id: string,
@@ -117,6 +411,10 @@ export default function AdminOrdersPage() {
       );
     }
   };
+
+  // =====================================================
+  // DELETE ORDER
+  // =====================================================
 
   const removeOrder = async (
     id: string
@@ -152,28 +450,193 @@ export default function AdminOrdersPage() {
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 text-slate-900 md:p-8">
-
       <div className="mx-auto max-w-7xl">
 
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
-        <div className="rounded-3xl bg-white p-6 shadow-sm">
+        <div className="relative rounded-3xl bg-white p-6 shadow-sm">
 
-          <p className="text-xs font-black uppercase tracking-widest text-yellow-600">
-            NIGHT NOW ADMIN
-          </p>
+          <div className="flex items-start justify-between gap-4">
 
-          <h1 className="mt-1 text-3xl font-black">
-            Orders
-          </h1>
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-yellow-600">
+                NIGHT NOW ADMIN
+              </p>
 
-          <p className="mt-2 text-sm text-slate-500">
-            Customer, address, items aur order status.
-          </p>
+              <h1 className="mt-1 text-3xl font-black">
+                Orders
+              </h1>
 
+              <p className="mt-2 text-sm text-slate-500">
+                Customer, address, items aur order status.
+              </p>
+            </div>
+
+            {/* =================================================
+                NOTIFICATION BUTTON
+            ================================================= */}
+
+            <div className="relative">
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowNotifications(
+                    !showNotifications
+                  )
+                }
+                className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-xl transition hover:bg-yellow-50"
+              >
+                🔔
+
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-black text-white">
+                    {unreadCount > 99
+                      ? "99+"
+                      : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* =================================================
+                  NOTIFICATION DROPDOWN
+              ================================================= */}
+
+              {showNotifications && (
+                <div className="absolute right-0 top-14 z-[100] w-[min(380px,calc(100vw-32px))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+
+                  <div className="flex items-center justify-between border-b border-slate-100 p-4">
+
+                    <div>
+                      <h2 className="text-base font-black">
+                        Notifications
+                      </h2>
+
+                      <p className="mt-0.5 text-[10px] text-slate-400">
+                        {unreadCount} unread
+                      </p>
+                    </div>
+
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={
+                          markAllNotificationsRead
+                        }
+                        className="rounded-xl bg-yellow-400 px-3 py-2 text-[10px] font-black text-black"
+                      >
+                        Mark All Read
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-[420px] overflow-y-auto">
+
+                    {notificationLoading ? (
+                      <div className="p-8 text-center">
+                        <div className="text-3xl">
+                          🔔
+                        </div>
+
+                        <p className="mt-2 text-xs font-bold text-slate-400">
+                          Loading notifications...
+                        </p>
+                      </div>
+                    ) : notifications.length ===
+                      0 ? (
+                      <div className="p-8 text-center">
+                        <div className="text-4xl">
+                          🔕
+                        </div>
+
+                        <p className="mt-3 text-sm font-black">
+                          No notifications
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-400">
+                          New orders will appear here.
+                        </p>
+                      </div>
+                    ) : (
+                      notifications.map(
+                        (notification) => (
+                          <button
+                            key={
+                              notification.id
+                            }
+                            type="button"
+                            onClick={() =>
+                              openNotification(
+                                notification
+                              )
+                            }
+                            className={`w-full border-b border-slate-100 p-4 text-left transition hover:bg-yellow-50 ${
+                              notification.read
+                                ? "bg-white"
+                                : "bg-yellow-50/70"
+                            }`}
+                          >
+                            <div className="flex gap-3">
+
+                              <div
+                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${
+                                  notification.type ===
+                                  "order-cancelled"
+                                    ? "bg-red-100"
+                                    : "bg-yellow-100"
+                                }`}
+                              >
+                                {notification.type ===
+                                "order-cancelled"
+                                  ? "❌"
+                                  : "🔔"}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+
+                                <div className="flex items-start justify-between gap-2">
+
+                                  <p className="text-xs font-black">
+                                    {notification.title ||
+                                      "Admin Notification"}
+                                  </p>
+
+                                  {!notification.read && (
+                                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                                  )}
+
+                                </div>
+
+                                <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                                  {notification.message ||
+                                    "New notification received."}
+                                </p>
+
+                                <p className="mt-2 text-[9px] font-bold text-slate-400">
+                                  {formatDate(
+                                    notification.createdAt
+                                  )}
+                                </p>
+
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      )
+                    )}
+
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* STATUS SUMMARY */}
+        {/* =================================================
+            STATUS SUMMARY
+        ================================================= */}
 
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
 
@@ -194,7 +657,6 @@ export default function AdminOrdersPage() {
                     status
                   )}`}
                 >
-
                   <p className="text-[10px] font-black">
                     {status}
                   </p>
@@ -202,7 +664,6 @@ export default function AdminOrdersPage() {
                   <p className="mt-1 text-2xl font-black">
                     {count}
                   </p>
-
                 </div>
               );
             }
@@ -210,16 +671,15 @@ export default function AdminOrdersPage() {
 
         </div>
 
-        {/* ORDERS */}
+        {/* =================================================
+            ORDERS
+        ================================================= */}
 
         {loading ? (
-
           <div className="mt-5 rounded-3xl bg-white py-20 text-center font-bold">
             Loading orders...
           </div>
-
         ) : orders.length === 0 ? (
-
           <div className="mt-5 rounded-3xl bg-white p-10 text-center">
             <div className="text-4xl">
               📦
@@ -229,14 +689,11 @@ export default function AdminOrdersPage() {
               No orders found.
             </p>
           </div>
-
         ) : (
-
           <div className="mt-5 space-y-5">
 
             {orders.map(
               (order) => {
-
                 const customerName =
                   order.customer?.name ||
                   order.name ||
@@ -277,10 +734,62 @@ export default function AdminOrdersPage() {
                   order.payment ||
                   "COD";
 
+                const offerItem =
+                  (
+                    order.items || []
+                  ).find(
+                    (item: any) =>
+                      Boolean(
+                        item?.offerId ||
+                        item?.offerType ||
+                        item?.offerLabel
+                      )
+                  ) as any;
+
+                const isOfferOrder =
+                  Boolean(
+                    order.isOfferOrder ||
+                    order.offerId ||
+                    order.offerType ||
+                    order.offerLabel ||
+                    offerItem
+                  );
+
+                const offerType =
+                  order.offerType ||
+                  offerItem?.offerType ||
+                  "";
+
+                const offerLabel =
+                  order.offerLabel ||
+                  offerItem?.offerLabel ||
+                  "";
+
+                const offerTitle =
+                  order.offerTitle ||
+                  offerItem?.offerTitle ||
+                  offerItem?.offerName ||
+                  "";
+
+                const offerBuyQuantity =
+                  Number(
+                    order.offerBuyQuantity ??
+                      offerItem?.offerBuyQuantity ??
+                      0
+                  );
+
+                const offerFreeQuantity =
+                  Number(
+                    order.offerFreeQuantity ??
+                      offerItem?.offerFreeQuantity ??
+                      0
+                  );
+
                 return (
                   <div
                     key={order.id}
-                    className="rounded-3xl bg-white p-5 shadow-sm"
+                    id={`order-${order.id}`}
+                    className="rounded-3xl bg-white p-5 shadow-sm transition-all duration-500"
                   >
 
                     {/* TOP */}
@@ -303,6 +812,32 @@ export default function AdminOrdersPage() {
                           )}
                         </p>
 
+                        {isOfferOrder ? (
+                          <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-yellow-300 bg-yellow-50 px-3 py-2">
+
+                            <span className="text-base">
+                              🎁
+                            </span>
+
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-yellow-700">
+                                OFFER ORDER
+                              </p>
+
+                              <p className="mt-0.5 text-xs font-black text-slate-900">
+                                {offerLabel ||
+                                  offerTitle ||
+                                  "Special Offer"}
+                              </p>
+                            </div>
+
+                          </div>
+                        ) : (
+                          <div className="mt-3 inline-flex rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                            NORMAL ORDER
+                          </div>
+                        )}
+
                       </div>
 
                       {/* STATUS */}
@@ -319,7 +854,6 @@ export default function AdminOrdersPage() {
                           status
                         )}`}
                       >
-
                         {STATUSES.map(
                           (item) => (
                             <option
@@ -330,7 +864,6 @@ export default function AdminOrdersPage() {
                             </option>
                           )
                         )}
-
                       </select>
 
                     </div>
@@ -415,8 +948,85 @@ export default function AdminOrdersPage() {
                         )}
 
                       </div>
-
                     </div>
+
+                    {/* OFFER DETAILS */}
+
+                    {isOfferOrder && (
+                      <div className="mt-5 rounded-2xl border border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50 p-4">
+
+                        <div className="flex items-start gap-3">
+
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-yellow-400 text-xl">
+                            🎁
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+
+                            <p className="text-[10px] font-black uppercase tracking-wider text-yellow-700">
+                              OFFER DETAILS
+                            </p>
+
+                            <p className="mt-1 text-base font-black text-slate-900">
+                              {offerTitle ||
+                                offerLabel ||
+                                "Special Offer"}
+                            </p>
+
+                            {offerLabel &&
+                              offerTitle && (
+                                <p className="mt-1 text-xs font-black text-yellow-700">
+                                  {offerLabel}
+                                </p>
+                              )}
+
+                            {offerType && (
+                              <p className="mt-1 text-[10px] font-bold text-slate-500">
+                                Type: {offerType}
+                              </p>
+                            )}
+
+                            {(offerBuyQuantity >
+                              0 ||
+                              offerFreeQuantity >
+                                0) && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+
+                                {offerBuyQuantity >
+                                  0 && (
+                                  <span className="rounded-lg bg-white px-2.5 py-1 text-[10px] font-black text-slate-700 shadow-sm">
+                                    Buy{" "}
+                                    {
+                                      offerBuyQuantity
+                                    }
+                                  </span>
+                                )}
+
+                                {offerFreeQuantity >
+                                  0 && (
+                                  <span className="rounded-lg bg-green-100 px-2.5 py-1 text-[10px] font-black text-green-700">
+                                    Free{" "}
+                                    {
+                                      offerFreeQuantity
+                                    }
+                                  </span>
+                                )}
+
+                              </div>
+                            )}
+
+                            {order.offerDescription && (
+                              <p className="mt-3 text-xs leading-5 text-slate-600">
+                                {
+                                  order.offerDescription
+                                }
+                              </p>
+                            )}
+
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* ITEMS */}
 
@@ -434,7 +1044,6 @@ export default function AdminOrdersPage() {
                               item,
                               index
                             ) => {
-
                               const quantity =
                                 Number(
                                   item?.quantity ||
@@ -452,12 +1061,13 @@ export default function AdminOrdersPage() {
                                   key={`${item?.id || index}-${index}`}
                                   className="flex justify-between gap-3 border-b border-slate-100 py-2 last:border-0"
                                 >
-
                                   <span className="text-sm font-bold">
                                     {item?.name ||
                                       "Product"}{" "}
                                     ×{" "}
-                                    {quantity}
+                                    {
+                                      quantity
+                                    }
                                   </span>
 
                                   <span className="font-black">
@@ -465,7 +1075,6 @@ export default function AdminOrdersPage() {
                                     {price *
                                       quantity}
                                   </span>
-
                                 </div>
                               );
                             }
@@ -480,7 +1089,6 @@ export default function AdminOrdersPage() {
                         )}
 
                       </div>
-
                     </div>
 
                     {/* TOTAL */}
@@ -488,7 +1096,6 @@ export default function AdminOrdersPage() {
                     <div className="mt-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
 
                       <div>
-
                         <p className="text-xs text-slate-400">
                           PAYMENT
                         </p>
@@ -496,7 +1103,6 @@ export default function AdminOrdersPage() {
                         <p className="font-black">
                           {payment}
                         </p>
-
                       </div>
 
                       <div className="text-left sm:text-right">
@@ -533,18 +1139,16 @@ export default function AdminOrdersPage() {
             )}
 
           </div>
-
         )}
 
       </div>
-
     </main>
   );
 }
 
-/* ==========================================
+/* =====================================================
    STATUS NORMALIZE
-========================================== */
+===================================================== */
 
 function normalizeStatus(
   status?: string
@@ -569,13 +1173,12 @@ function normalizeStatus(
     ? status
     : "Pending";
 }
-/* ==========================================
-   DATE
-========================================== */
 
-function getTime(
-  value: any
-) {
+/* =====================================================
+   DATE
+===================================================== */
+
+function getTime(value: any) {
   if (!value) {
     return 0;
   }
@@ -609,9 +1212,7 @@ function getTime(
     : time;
 }
 
-function formatDate(
-  value: any
-) {
+function formatDate(value: any) {
   const time =
     getTime(value);
 
@@ -624,9 +1225,9 @@ function formatDate(
   ).toLocaleString("en-IN");
 }
 
-/* ==========================================
+/* =====================================================
    STATUS COLORS
-========================================== */
+===================================================== */
 
 function getStatusBoxClass(
   status: string
@@ -639,8 +1240,12 @@ function getStatusBoxClass(
     return "border-blue-200 bg-blue-50 text-blue-800";
   }
 
-  if (status === "Packed") {
+  if (status === "Preparing") {
     return "border-purple-200 bg-purple-50 text-purple-800";
+  }
+
+  if (status === "Packed") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-800";
   }
 
   if (
@@ -672,8 +1277,12 @@ function getStatusSelectClass(
     return "border-blue-300 bg-blue-100 text-blue-800";
   }
 
-  if (status === "Packed") {
+  if (status === "Preparing") {
     return "border-purple-300 bg-purple-100 text-purple-800";
+  }
+
+  if (status === "Packed") {
+    return "border-indigo-300 bg-indigo-100 text-indigo-800";
   }
 
   if (

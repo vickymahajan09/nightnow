@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
+
 import "./globals.css";
 
 import { CartProvider } from "./context/CartContext";
 import MobileNav from "./components/MobileNav";
-import ThemeProvider from "./components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Night Now | Fast Delivery",
-  description:
-    "Night Now - Fast delivery for medicines, groceries and daily essentials.",
+  title: "Night Now",
+  description: "15 Minute Delivery",
 };
 
 export default function RootLayout({
@@ -21,14 +20,14 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
     >
-      <body>
-        <ThemeProvider>
-          <CartProvider>
-            {children}
+      <body className="min-h-screen bg-white">
 
-            <MobileNav />
-          </CartProvider>
-        </ThemeProvider>
+        <CartProvider>
+          {children}
+
+          <MobileNav />
+        </CartProvider>
+
       </body>
     </html>
   );

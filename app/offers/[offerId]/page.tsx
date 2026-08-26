@@ -1,50 +1,44 @@
 "use client";
 
-"use client";
-
+import Link from "next/link";
 import {
   useEffect,
   useMemo,
   useState,
 } from "react";
-
-import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import {
-  getOffers,
+  getOfferById,
   type Offer,
 } from "../../services/offerService";
 
 import {
   getProducts,
-  type Product,
 } from "../../services/productService";
 
 import { useCart } from "../../context/CartContext";
 
-
-export default function OfferDetailsPage() {
+export default function OfferDetailPage() {
   const params = useParams();
 
-  const offerId =
-    typeof params?.offerId === "string"
-      ? params.offerId
-      : Array.isArray(params?.offerId)
-        ? params.offerId[0]
-        : "";
+  const offerId = String(
+    params?.offerId || ""
+  );
 
   const {
     addToCart,
     removeFromCart,
     getItemQuantity,
+    cartCount,
+    cartTotal,
   } = useCart();
 
   const [offer, setOffer] =
     useState<Offer | null>(null);
 
   const [products, setProducts] =
-    useState<Product[]>([]);
+    useState<any[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -52,46 +46,27 @@ export default function OfferDetailsPage() {
   const [error, setError] =
     useState("");
 
+  const [showCartBar, setShowCartBar] =
+    useState(false);
 
-  /* =====================================================
-     LOAD OFFER + PRODUCTS
-  ===================================================== */
+
+  // =====================================================
+  // LOAD OFFER + PRODUCTS
+  // =====================================================
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadOffer() {
-      if (!offerId) {
-        console.error(
-          "Offer ID missing from URL"
-        );
-
-        if (!cancelled) {
-          setOffer(null);
-          setProducts([]);
-          setError(
-            "Offer ID nahi mila."
-          );
-          setLoading(false);
-        }
-
-        return;
-      }
-
+    const loadOffer = async () => {
       try {
         setLoading(true);
         setError("");
 
-        console.log(
-          "OFFER ID:",
-          offerId
-        );
-
         const [
-          offers,
-          allProducts,
+          selectedOffer,
+          productData,
         ] = await Promise.all([
-          getOffers(),
+          getOfferById(offerId),
           getProducts(),
         ]);
 
@@ -99,228 +74,129 @@ export default function OfferDetailsPage() {
           return;
         }
 
-        const offerList =
-          Array.isArray(offers)
-            ? offers
-            : [];
-
-        const productList =
-          Array.isArray(allProducts)
-            ? allProducts
-            : [];
-
-
-        /* =================================================
-           FIND OFFER
-        ================================================= */
-
-        const selectedOffer =
-          offerList.find(
-            (item: Offer) =>
-              String(item.id) ===
-              String(offerId)
-          );
-
-
         if (!selectedOffer) {
-          console.error(
-            "Offer not found:",
-            offerId
-          );
-
-          setOffer(null);
-          setProducts([]);
           setError(
-            "Offer nahi mila."
+            "Offer not found."
           );
-
           return;
         }
 
+        if (
+          selectedOffer.active === false
+        ) {
+          setError(
+            "This offer is no longer active."
+          );
+          return;
+        }
 
         setOffer(
           selectedOffer
         );
 
-
-        /* =================================================
-           ACTIVE PRODUCTS
-        ================================================= */
-
-        const activeProducts =
-          productList.filter(
-            (product: any) =>
-              product?.active !== false
-          );
-
-
-        /* =================================================
-           OFFER PRODUCT IDS
-        ================================================= */
-
         const selectedProductIds =
-          Array.isArray(
-            selectedOffer.productIds
-          )
-            ? selectedOffer.productIds.map(
-                (id: any) =>
-                  String(id)
-                    .trim()
-              )
-            : [];
-
-
-        /* =================================================
-           OFFER BRAND IDS
-        ================================================= */
+          new Set(
+            Array.isArray(
+              selectedOffer.productIds
+            )
+              ? selectedOffer.productIds.map(
+                  String
+                )
+              : []
+          );
 
         const selectedBrandIds =
-          Array.isArray(
-            selectedOffer.brandIds
-          )
-            ? selectedOffer.brandIds.map(
-                (id: any) =>
-                  String(id)
-                    .trim()
-                    .toLowerCase()
+          new Set(
+            Array.isArray(
+              selectedOffer.brandIds
+            )
+              ? selectedOffer.brandIds.map(
+                  String
+                )
+              : []
+          );
+
+        const relatedProducts =
+          Array.isArray(productData)
+            ? productData.filter(
+                (product: any) => {
+
+                  if (
+                    product?.active === false
+                  ) {
+                    return false;
+                  }
+
+                  const productId =
+                    String(
+                      product?.id || ""
+                    );
+
+                  const brandId =
+                    String(
+                      product?.brandId ||
+                        product?.brand ||
+                        product?.brandID ||
+                        ""
+                    );
+
+                  return (
+                    selectedProductIds.has(
+                      productId
+                    ) ||
+                    (
+                      brandId &&
+                      selectedBrandIds.has(
+                        brandId
+                      )
+                    )
+                  );
+                }
               )
             : [];
 
-
-        /* =================================================
-           MATCH PRODUCTS
-        ================================================= */
-
-        const matchedProducts =
-          activeProducts.filter(
-            (product: any) => {
-
-              const productId =
-                String(
-                  product?.id ?? ""
-                ).trim();
-
-
-              const brandId =
-                String(
-                  product?.brandId ??
-                  product?.brandID ??
-                  product?.brand?.id ??
-                  ""
-                )
-                  .trim()
-                  .toLowerCase();
-
-
-              const brandName =
-                String(
-                  product?.brandName ??
-                  product?.brand?.name ??
-                  ""
-                )
-                  .trim()
-                  .toLowerCase();
-
-
-              /* DIRECT PRODUCT */
-
-              if (
-                selectedProductIds.includes(
-                  productId
-                )
-              ) {
-                return true;
-              }
-
-
-              /* BRAND ID */
-
-              if (
-                brandId &&
-                selectedBrandIds.includes(
-                  brandId
-                )
-              ) {
-                return true;
-              }
-
-
-              /* BRAND NAME */
-
-              if (
-                brandName &&
-                selectedBrandIds.includes(
-                  brandName
-                )
-              ) {
-                return true;
-              }
-
-
-              return false;
-            }
-          );
-
-
         setProducts(
-          matchedProducts as Product[]
-        );
-
-
-        console.log(
-          "OFFER:",
-          selectedOffer
-        );
-
-        console.log(
-          "OFFER PRODUCTS:",
-          matchedProducts
+          relatedProducts
         );
 
       } catch (err) {
-
         console.error(
-          "OFFER PAGE ERROR:",
+          "Offer detail loading error:",
           err
         );
 
         if (!cancelled) {
-          setOffer(null);
-          setProducts([]);
           setError(
-            "Offer load nahi ho paaya."
+            "Offer load nahi ho pa raha."
           );
         }
 
       } finally {
-
         if (!cancelled) {
           setLoading(false);
         }
-
       }
+    };
+
+    if (offerId) {
+      void loadOffer();
     }
-
-
-    loadOffer();
-
 
     return () => {
       cancelled = true;
     };
-
   }, [offerId]);
 
 
-  /* =====================================================
-     OFFER LABEL
-  ===================================================== */
+  // =====================================================
+  // OFFER LABEL
+  // =====================================================
 
   const offerLabel =
     useMemo(() => {
 
       if (!offer) {
-        return "";
+        return "SPECIAL OFFER";
       }
 
       if (
@@ -341,7 +217,11 @@ export default function OfferDetailsPage() {
         offer.type ===
         "BUY_X_GET_Y"
       ) {
-        return `BUY ${offer.buyQuantity} GET ${offer.freeQuantity}`;
+        return `BUY ${
+          offer.buyQuantity || 1
+        } GET ${
+          offer.freeQuantity || 1
+        }`;
       }
 
       return "SPECIAL OFFER";
@@ -349,144 +229,107 @@ export default function OfferDetailsPage() {
     }, [offer]);
 
 
-  /* =====================================================
-     IMAGE
-  ===================================================== */
+  // =====================================================
+  // ADD
+  // =====================================================
 
-  const getImage = (
-    product: Product
+  const handleAdd = (
+    product: any
   ) => {
-
-    const item =
-      product as any;
-
-
-    if (
-      typeof item.image ===
-        "string" &&
-      item.image.trim()
-    ) {
-      return item.image;
-    }
-
-
-    if (
-      Array.isArray(
-        item.images
-      ) &&
-      item.images.length > 0
-    ) {
-      return item.images[0];
-    }
-
-
-    return "";
-  };
-
-
-  /* =====================================================
-     QUANTITY
-  ===================================================== */
-
-  const getQty = (
-    product: Product
-  ) => {
-
-    return getItemQuantity(
-      product.id,
-      (product as any)?.variantId
-    );
-
-  };
-
-
-  /* =====================================================
-     ADD
-  ===================================================== */
-
-  const increase = (
-    product: Product
-  ) => {
-
-    const item =
-      product as any;
-
 
     const stock =
       Number(
-        item.stock ?? 0
+        product?.stock || 0
       );
 
-
-    const qty =
-      getQty(product);
-
-
-    if (
-      stock > 0 &&
-      qty >= stock
-    ) {
+    if (stock <= 0) {
       return;
     }
-
 
     addToCart({
       ...product,
+
       quantity: 1,
+
+      variantId:
+        product.variantId ||
+        "default",
+
+      offerId:
+        String(
+          offer?.id ||
+            offerId
+        ),
+
+      offerType:
+        offer?.type ||
+        "NONE",
+
+      offerLabel,
+
+      offerBuyQuantity:
+        Number(
+          offer?.buyQuantity || 1
+        ),
+
+      offerFreeQuantity:
+        Number(
+          offer?.freeQuantity || 0
+        ),
+
+      offerDescription:
+        offer?.description ||
+        "",
     } as any);
 
+    setShowCartBar(true);
   };
 
 
-  /* =====================================================
-     REMOVE
-  ===================================================== */
+  // =====================================================
+  // REMOVE
+  // =====================================================
 
-  const decrease = (
-    product: Product
+  const handleRemove = (
+    product: any
   ) => {
 
-    const qty =
-      getQty(product);
-
-
-    if (qty <= 0) {
-      return;
-    }
-
-
     removeFromCart(
-      product.id,
-      (product as any)?.variantId
+      String(product.id),
+      product.variantId ||
+        "default"
     );
 
+    setShowCartBar(
+      true
+    );
   };
 
 
-  /* =====================================================
-     LOADING
-  ===================================================== */
+  // =====================================================
+  // LOADING
+  // =====================================================
 
   if (loading) {
 
     return (
-      <main className="min-h-screen bg-gradient-to-b from-[#fdf4ff] via-white to-[#f3e8ff] px-3 py-5">
+      <main className="min-h-screen bg-gradient-to-br from-[#fff8e7] via-[#f7f7ff] to-[#f4edff] px-4 py-10">
 
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-5xl">
 
-          <div className="h-9 w-32 animate-pulse rounded-xl bg-purple-100" />
+          <div className="h-7 w-32 animate-pulse rounded-lg bg-zinc-200" />
 
-          <div className="mt-4 h-36 animate-pulse rounded-3xl bg-purple-100" />
+          <div className="mt-5 h-32 animate-pulse rounded-2xl bg-zinc-200" />
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-6 h-6 w-60 animate-pulse rounded-lg bg-zinc-200" />
 
-            {Array.from({
-              length: 6,
-            }).map(
-              (_, index) => (
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+
+            {[1, 2, 3, 4].map(
+              (item) => (
                 <div
-                  key={index}
-                  className="h-64 animate-pulse rounded-3xl bg-purple-100"
+                  key={item}
+                  className="h-60 animate-pulse rounded-2xl bg-zinc-200"
                 />
               )
             )}
@@ -500,36 +343,34 @@ export default function OfferDetailsPage() {
   }
 
 
-  /* =====================================================
-     NOT FOUND
-  ===================================================== */
+  // =====================================================
+  // ERROR
+  // =====================================================
 
-  if (!offer) {
+  if (
+    error ||
+    !offer
+  ) {
 
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#fdf4ff] via-white to-[#f3e8ff] px-5">
+      <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#fff8e7] via-[#f7f7ff] to-[#f4edff] px-4">
 
-        <div className="text-center">
+        <div className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-xl">
 
           <div className="text-5xl">
             🎁
           </div>
 
-          <h1 className="mt-4 text-xl font-black">
+          <h1 className="mt-5 text-xl font-black">
             {error ||
-              "Offer nahi mila"}
+              "Offer not found"}
           </h1>
 
-          <p className="mt-2 text-xs text-zinc-500">
-            Offer ID:{" "}
-            {offerId || "missing"}
-          </p>
-
           <Link
-            href="/"
-            className="mt-5 inline-block rounded-xl bg-yellow-400 px-5 py-3 text-sm font-black text-black"
+            href="/offers"
+            className="mt-6 inline-flex rounded-xl bg-black px-6 py-3 text-xs font-black text-white"
           >
-            ← Home
+            ← Back to Offers
           </Link>
 
         </div>
@@ -539,316 +380,372 @@ export default function OfferDetailsPage() {
   }
 
 
-  /* =====================================================
-     PAGE
-  ===================================================== */
+  // =====================================================
+  // MAIN
+  // =====================================================
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#fdf4ff] via-[#fff8fc] to-[#f3e8ff] pb-24">
-
+    <main className="min-h-screen bg-gradient-to-br from-[#fff8e7] via-[#f7f7ff] to-[#f4edff] text-zinc-900">
 
       {/* HEADER */}
 
-      <div className="sticky top-0 z-50 border-b border-purple-100 bg-[#fffaff]/95 px-3 py-3 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 shadow-sm backdrop-blur">
 
-        <div className="mx-auto flex max-w-3xl items-center gap-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
 
           <Link
-            href="/"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-lg font-black text-purple-800"
+            href="/offers"
+            className="flex items-center gap-2"
           >
-            ←
+
+            <span className="text-2xl">
+              🌙
+            </span>
+
+            <div>
+
+              <div className="text-xl font-black leading-none">
+                Night
+                <span className="text-yellow-500">
+                  Now
+                </span>
+              </div>
+
+              <div className="mt-1 text-[8px] font-bold tracking-[0.18em] text-zinc-400">
+                15 MIN DELIVERY
+              </div>
+
+            </div>
+
           </Link>
 
 
-          <div className="min-w-0 flex-1">
+          {/* BACK */}
 
-            <p className="text-[9px] font-black text-purple-600">
-              {offerLabel}
-            </p>
-
-            <h1 className="truncate text-base font-black text-zinc-900">
-              {offer.title}
-            </h1>
-
-          </div>
-
-
-          <span className="animate-pulse rounded-full bg-black px-2.5 py-1 text-[8px] font-black text-white">
-            LIVE
-          </span>
+          <Link
+            href="/offers"
+            className="rounded-xl bg-black px-4 py-2 text-xs font-black text-white"
+          >
+            ← Back
+          </Link>
 
         </div>
 
-      </div>
+      </header>
 
 
-      {/* HERO */}
+      {/* PAGE */}
 
-      <section className="mx-auto max-w-3xl px-3 pt-3">
-
-        <div className="relative overflow-hidden rounded-[22px] border border-purple-200 bg-gradient-to-br from-[#eadcff] via-[#f7e9ff] to-[#ffeaf5] p-4 shadow-lg">
-
-          <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-white/60 blur-2xl" />
-
-          <div className="absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-pink-200/50 blur-2xl" />
-
-          <p className="relative text-[9px] font-black text-purple-700">
-            SPECIAL OFFER
-          </p>
-
-          <h2 className="relative mt-1 text-2xl font-black text-zinc-900">
-            {offer.title}
-          </h2>
-
-          {offer.description && (
-            <p className="relative mt-1 text-xs font-bold text-zinc-600">
-              {offer.description}
-            </p>
-          )}
-
-          <div className="relative mt-3 inline-block rounded-full bg-yellow-400 px-3 py-1.5 text-[9px] font-black text-black">
-            {offerLabel}
-          </div>
-
-        </div>
-
-      </section>
+      <section className="mx-auto max-w-5xl px-4 pb-32 pt-5">
 
 
-      {/* PRODUCTS */}
+        {/* SMALL OFFER HERO */}
 
-      <section className="mx-auto max-w-3xl px-3 pt-5">
+        <div className="overflow-hidden rounded-2xl border border-yellow-200 bg-gradient-to-br from-yellow-300 via-yellow-400 to-orange-400 px-4 py-4 shadow-md">
 
-        <div className="flex items-end justify-between">
+          <div className="flex items-center justify-between gap-4">
 
-          <div>
+            <div className="min-w-0">
 
-            <h2 className="text-lg font-black">
-              Offer Products
-            </h2>
+              <span className="inline-flex rounded-full bg-black px-2.5 py-1 text-[9px] font-black text-white">
+                {offerLabel}
+              </span>
 
-            <p className="mt-0.5 text-[10px] text-zinc-500">
-              {products.length} products
-            </p>
+              <h1 className="mt-2 line-clamp-2 text-xl font-black md:text-2xl">
+                {offer.title}
+              </h1>
 
-          </div>
+              {offer.description && (
 
-        </div>
+                <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-5 text-black/70">
+                  {offer.description}
+                </p>
 
+              )}
 
-        {products.length === 0 ? (
-
-          <div className="mt-4 rounded-3xl border border-purple-100 bg-white p-8 text-center shadow-sm">
-
-            <div className="text-4xl">
-              📦
             </div>
 
-            <p className="mt-3 text-sm font-black">
-              Is offer ke products
-              nahi mile.
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-2xl shadow-sm">
+              🎁
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* PRODUCT GROUP */}
+
+        <div className="mt-7">
+
+          <div className="mb-4">
+
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-red-500">
+              Offer Collection
             </p>
 
-            <p className="mt-1 text-[10px] text-zinc-500">
-              Admin me selected
-              products check karein.
+            <h2 className="mt-1 text-xl font-black">
+              Products in this offer
+            </h2>
+
+            <p className="mt-1 text-xs text-zinc-500">
+              Select any product to add it to your cart.
             </p>
 
           </div>
 
-        ) : (
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          {products.length === 0 ? (
 
-            {products.map(
-              (product) => {
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center">
 
-                const item =
-                  product as any;
+              <div className="text-4xl">
+                🛍️
+              </div>
+
+              <p className="mt-3 text-sm font-black">
+                No products found
+              </p>
+
+            </div>
+
+          ) : (
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+
+              {products.map(
+                (product: any) => {
+
+                  const variantId =
+                    product.variantId ||
+                    "default";
+
+                  const quantity =
+                    getItemQuantity(
+                      String(
+                        product.id
+                      ),
+                      variantId
+                    );
+
+                  const image =
+                    product.image ||
+                    product.images?.[0] ||
+                    "";
+
+                  const name =
+                    product.name ||
+                    product.title ||
+                    product.productName ||
+                    "Product";
+
+                  const price =
+                    Number(
+                      product.price || 0
+                    );
+
+                  const mrp =
+                    Number(
+                      product.mrp || 0
+                    );
+
+                  const stock =
+                    Math.max(
+                      0,
+                      Number(
+                        product.stock || 0
+                      )
+                    );
 
 
-                const image =
-                  getImage(product);
+                  return (
 
-
-                const price =
-                  Number(
-                    item.price ?? 0
-                  );
-
-
-                const mrp =
-                  Number(
-                    item.mrp ?? 0
-                  );
-
-
-                const stock =
-                  Number(
-                    item.stock ?? 0
-                  );
-
-
-                const qty =
-                  getQty(product);
-
-
-                return (
-                  <article
-                    key={String(
-                      product.id
-                    )}
-                    className="group overflow-hidden rounded-[22px] border border-purple-100 bg-white shadow-[0_8px_22px_rgba(0,0,0,0.08)] transition-all duration-200 active:scale-[0.98]"
-                  >
-
-                    {/* IMAGE */}
-
-                    <div className="relative m-2 flex h-36 items-center justify-center overflow-hidden rounded-[18px] bg-gradient-to-br from-purple-50 via-white to-pink-50 shadow-inner">
-
-                      <div className="absolute inset-3 rounded-2xl bg-white/60" />
-
-                      {image ? (
-
-                        <img
-                          src={image}
-                          alt={
-                            product.name ||
-                            "Product"
-                          }
-                          loading="lazy"
-                          className="relative z-10 h-[82%] w-[82%] object-contain drop-shadow-[0_10px_8px_rgba(0,0,0,0.18)] transition-transform duration-300 group-hover:scale-105"
-                        />
-
-                      ) : (
-
-                        <span className="relative z-10 text-4xl">
-                          📦
-                        </span>
-
+                    <article
+                      key={String(
+                        product.id
                       )}
+                      className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
+                    >
 
-                    </div>
+                      {/* IMAGE */}
 
+                      <Link
+                        href={`/product/${product.id}`}
+                      >
 
-                    {/* DETAILS */}
+                        <div className="flex h-36 items-center justify-center bg-zinc-50 p-3">
 
-                    <div className="px-3 pb-3">
+                          {image ? (
 
-                      <h3 className="truncate text-xs font-black text-zinc-900">
-                        {product.name}
-                      </h3>
+                            <img
+                              src={image}
+                              alt={name}
+                              className="h-full w-full object-contain"
+                              loading="lazy"
+                            />
 
+                          ) : (
 
-                      {item.brandName && (
-                        <p className="mt-0.5 truncate text-[8px] text-zinc-400">
-                          {item.brandName}
-                        </p>
-                      )}
-
-
-                      <div className="mt-2 flex items-center gap-2">
-
-                        <span className="text-sm font-black text-green-600">
-                          ₹{price}
-                        </span>
-
-
-                        {mrp > price &&
-                          mrp > 0 && (
-                            <span className="text-[9px] text-zinc-400 line-through">
-                              ₹{mrp}
+                            <span className="text-4xl">
+                              📦
                             </span>
+
                           )}
 
-                      </div>
+                        </div>
+
+                      </Link>
 
 
-                      {/* CART */}
+                      {/* CONTENT */}
 
-                      {qty <= 0 ? (
+                      <div className="p-3">
 
-                        <button
-                          type="button"
-                          disabled={
-                            stock <= 0
-                          }
-                          onClick={() =>
-                            increase(
-                              product
-                            )
-                          }
-                          className="mt-2 w-full rounded-xl bg-yellow-400 py-2.5 text-[10px] font-black text-black disabled:opacity-40"
+                        <Link
+                          href={`/product/${product.id}`}
                         >
-                          {stock > 0
-                            ? "Add to Cart"
-                            : "Out of Stock"}
-                        </button>
 
-                      ) : (
+                          <h3 className="line-clamp-2 min-h-[36px] text-xs font-black leading-4">
+                            {name}
+                          </h3>
 
-                        <div className="mt-2 flex h-10 overflow-hidden rounded-xl bg-black">
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              decrease(
-                                product
-                              )
-                            }
-                            className="w-10 text-lg font-black text-white"
-                          >
-                            −
-                          </button>
+                        </Link>
 
 
-                          <div className="flex flex-1 items-center justify-center bg-yellow-400 text-sm font-black text-black">
-                            {qty}
+                        <div className="mt-2 flex items-center gap-2">
+
+                          <span className="text-base font-black">
+                            ₹{price}
+                          </span>
+
+                          {mrp > price && (
+
+                            <span className="text-[10px] text-zinc-400 line-through">
+                              ₹{mrp}
+                            </span>
+
+                          )}
+
+                        </div>
+
+
+                        {/* QUANTITY */}
+
+                        {quantity > 0 ? (
+
+                          <div className="mt-3 flex h-9 items-center justify-between overflow-hidden rounded-lg border border-green-500 bg-green-50">
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleRemove(
+                                  product
+                                )
+                              }
+                              className="flex h-full w-10 items-center justify-center bg-green-600 text-lg font-black text-white active:scale-95"
+                            >
+                              −
+                            </button>
+
+                            <span className="text-sm font-black text-green-700">
+                              {quantity}
+                            </span>
+
+                            <button
+                              type="button"
+                              disabled={
+                                stock > 0 &&
+                                quantity >=
+                                  stock
+                              }
+                              onClick={() =>
+                                handleAdd(
+                                  product
+                                )
+                              }
+                              className="flex h-full w-10 items-center justify-center bg-green-600 text-lg font-black text-white active:scale-95 disabled:bg-zinc-300"
+                            >
+                              +
+                            </button>
+
                           </div>
 
+                        ) : (
 
                           <button
                             type="button"
                             disabled={
-                              stock > 0 &&
-                              qty >= stock
+                              stock <= 0
                             }
                             onClick={() =>
-                              increase(
+                              handleAdd(
                                 product
                               )
                             }
-                            className="w-10 text-lg font-black text-white disabled:opacity-40"
+                            className="mt-3 w-full rounded-lg bg-yellow-400 py-2.5 text-[10px] font-black text-black active:scale-[0.98] disabled:bg-zinc-200 disabled:text-zinc-400"
                           >
-                            +
+                            {stock <= 0
+                              ? "OUT OF STOCK"
+                              : "ADD"}
                           </button>
 
-                        </div>
+                        )}
 
-                      )}
+                      </div>
 
-                    </div>
+                    </article>
 
-                  </article>
-                );
-              }
-            )}
+                  );
+                }
+              )}
 
-          </div>
+            </div>
 
-        )}
+          )}
+
+        </div>
 
       </section>
 
 
       {/* VIEW CART */}
 
-      <Link
-        href="/cart"
-        className="fixed bottom-5 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-2 rounded-full bg-black px-6 py-3 text-xs font-black text-white shadow-2xl"
-      >
-        🛒 View Cart
-      </Link>
+      {showCartBar &&
+        cartCount > 0 && (
+
+          <div className="fixed inset-x-0 bottom-0 z-[10000] px-3 pb-3 md:pb-5">
+
+            <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 rounded-2xl bg-black px-4 py-3 text-white shadow-2xl">
+
+              <div>
+
+                <p className="text-xs font-bold text-zinc-300">
+                  {cartCount}{" "}
+                  {cartCount === 1
+                    ? "item"
+                    : "items"}{" "}
+                  in cart
+                </p>
+
+                <p className="mt-0.5 text-base font-black">
+                  ₹{cartTotal}
+                </p>
+
+              </div>
+
+
+              <Link
+                href="/cart"
+                className="rounded-xl bg-yellow-400 px-5 py-3 text-xs font-black text-black active:scale-95"
+              >
+                🛒 View Cart
+              </Link>
+
+            </div>
+
+          </div>
+
+        )}
 
     </main>
   );

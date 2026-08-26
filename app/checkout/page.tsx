@@ -11,25 +11,15 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 
-import {
-  auth,
-} from "../lib/firebase";
+import { auth } from "../lib/firebase";
 
-import {
-  useCart,
-} from "../context/CartContext";
+import { useCart } from "../context/CartContext";
 
-import {
-  addOrder,
-} from "../services/orderService";
+import { addOrder } from "../services/orderService";
 
-import {
-  getCoupons,
-} from "../services/couponService";
+import { getCoupons } from "../services/couponService";
 
-import {
-  getAddresses,
-} from "../services/addressService";
+import { getAddresses } from "../services/addressService";
 
 declare global {
   interface Window {
@@ -47,17 +37,13 @@ type SavedAddress = {
   label?: string;
   isDefault?: boolean;
 };
+
 type Coupon = {
   id: string;
-
   code: string;
-
   discount: number;
-
   minOrder?: number;
-
   expiresAt?: string;
-
   active?: boolean;
 };
 
@@ -89,16 +75,12 @@ export default function CheckoutPage() {
   const [
     savedAddresses,
     setSavedAddresses,
-  ] =
-    useState<
-      SavedAddress[]
-    >([]);
+  ] = useState<SavedAddress[]>([]);
 
   const [
     showAddresses,
     setShowAddresses,
-  ] =
-    useState(false);
+  ] = useState(false);
 
   const [loading, setLoading] =
     useState(false);
@@ -115,10 +97,7 @@ export default function CheckoutPage() {
   const [
     appliedCoupon,
     setAppliedCoupon,
-  ] =
-    useState<Coupon | null>(
-      null
-    );
+  ] = useState<Coupon | null>(null);
 
   const [
     couponDiscount,
@@ -145,37 +124,27 @@ export default function CheckoutPage() {
   ===================================================== */
 
   const delivery =
-    cartTotal >= 299
-      ? 0
-      : 30;
+    cartTotal >= 299 ? 0 : 30;
 
   const subtotalAfterCoupon =
     Math.max(
       0,
-      cartTotal -
-        couponDiscount
+      cartTotal - couponDiscount
     );
 
   const grandTotal =
-    subtotalAfterCoupon +
-    delivery;
+    subtotalAfterCoupon + delivery;
 
   /* =====================================================
      AUTH + SAVED ADDRESS
-
-     Default address is selected first.
   ===================================================== */
 
   useEffect(() => {
     const unsubscribe =
       onAuthStateChanged(
         auth,
-        async (
-          currentUser
-        ) => {
-          setUser(
-            currentUser
-          );
+        async (currentUser) => {
+          setUser(currentUser);
 
           if (!currentUser) {
             setSavedAddresses([]);
@@ -186,54 +155,52 @@ export default function CheckoutPage() {
             const addresses =
               await getAddresses();
 
-        setSavedAddresses(
-  addresses.map((item) => ({
-    id: item.id,
-    name: item.name || "",
-    phone: item.phone || "",
-    address: item.address || "",
-    city: item.city || "",
-    pincode: item.pincode || "",
-    label: item.label || "",
-    isDefault: Boolean(
-      item.isDefault
-    ),
-  }))
-);
+            const normalized =
+              addresses.map((item: any) => ({
+                id: item.id,
+                name: item.name || "",
+                phone: item.phone || "",
+                address: item.address || "",
+                city: item.city || "",
+                pincode: item.pincode || "",
+                label: item.label || "",
+                isDefault: Boolean(
+                  item.isDefault
+                ),
+              }));
+
+            setSavedAddresses(
+              normalized
+            );
+
             if (
-              addresses.length >
-              0
+              normalized.length > 0
             ) {
               const selected =
-                addresses.find(
+                normalized.find(
                   (item) =>
                     item.isDefault
                 ) ||
-                addresses[0];
+                normalized[0];
 
               setName(
-                selected.name ||
-                  ""
+                selected.name || ""
               );
 
               setPhone(
-                selected.phone ||
-                  ""
+                selected.phone || ""
               );
 
               setAddress(
-                selected.address ||
-                  ""
+                selected.address || ""
               );
 
               setCity(
-                selected.city ||
-                  ""
+                selected.city || ""
               );
 
               setPincode(
-                selected.pincode ||
-                  ""
+                selected.pincode || ""
               );
             }
           } catch (error) {
@@ -245,8 +212,7 @@ export default function CheckoutPage() {
         }
       );
 
-    return () =>
-      unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   /* =====================================================
@@ -256,25 +222,11 @@ export default function CheckoutPage() {
   const selectAddress = (
     item: SavedAddress
   ) => {
-    setName(
-      item.name || ""
-    );
-
-    setPhone(
-      item.phone || ""
-    );
-
-    setAddress(
-      item.address || ""
-    );
-
-    setCity(
-      item.city || ""
-    );
-
-    setPincode(
-      item.pincode || ""
-    );
+    setName(item.name || "");
+    setPhone(item.phone || "");
+    setAddress(item.address || "");
+    setCity(item.city || "");
+    setPincode(item.pincode || "");
 
     try {
       localStorage.setItem(
@@ -282,256 +234,200 @@ export default function CheckoutPage() {
         JSON.stringify(item)
       );
     } catch {
-      // Ignore localStorage failures.
+      // Ignore localStorage errors.
     }
 
-    setShowAddresses(
-      false
-    );
+    setShowAddresses(false);
   };
 
   /* =====================================================
      APPLY COUPON
   ===================================================== */
 
-  const applyCoupon =
-    async () => {
-      const cleanCode =
-        couponCode
-          .trim()
-          .toUpperCase();
+  const applyCoupon = async () => {
+    const cleanCode =
+      couponCode
+        .trim()
+        .toUpperCase();
 
-      setCouponError("");
-      setCouponMessage("");
+    setCouponError("");
+    setCouponMessage("");
 
-      if (!cleanCode) {
-        setCouponError(
-          "Please enter coupon code."
+    if (!cleanCode) {
+      setCouponError(
+        "Please enter coupon code."
+      );
+      return;
+    }
+
+    if (cartTotal <= 0) {
+      setCouponError(
+        "Cart is empty."
+      );
+      return;
+    }
+
+    setCouponLoading(true);
+
+    try {
+      const coupons =
+        (await getCoupons()) as Coupon[];
+
+      const coupon =
+        coupons.find(
+          (item) =>
+            String(item.code || "")
+              .trim()
+              .toUpperCase() ===
+            cleanCode
         );
+
+      if (!coupon) {
+        setCouponError(
+          "Invalid coupon code."
+        );
+
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
 
         return;
       }
 
-      if (cartTotal <= 0) {
+      if (coupon.active === false) {
         setCouponError(
-          "Cart is empty."
+          "This coupon is inactive."
         );
+
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
 
         return;
       }
 
-      setCouponLoading(true);
-
-      try {
-        const coupons =
-          (await getCoupons()) as Coupon[];
-
-        const coupon =
-          coupons.find(
-            (item) =>
-              String(
-                item.code || ""
-              )
-                .trim()
-                .toUpperCase() ===
-              cleanCode
-          );
-
-        if (!coupon) {
-          setCouponError(
-            "Invalid coupon code."
-          );
-
-          setAppliedCoupon(
-            null
-          );
-
-          setCouponDiscount(
-            0
-          );
-
-          return;
-        }
-
-        if (
-          coupon.active ===
-          false
-        ) {
-          setCouponError(
-            "This coupon is inactive."
-          );
-
-          setAppliedCoupon(
-            null
-          );
-
-          setCouponDiscount(
-            0
-          );
-
-          return;
-        }
-
-        const minOrder =
-          Number(
-            coupon.minOrder ||
-              0
-          );
-
-        if (
-          minOrder > 0 &&
-          cartTotal <
-            minOrder
-        ) {
-          setCouponError(
-            `Minimum order value is ₹${minOrder}.`
-          );
-
-          setAppliedCoupon(
-            null
-          );
-
-          setCouponDiscount(
-            0
-          );
-
-          return;
-        }
-
-        if (
-          coupon.expiresAt
-        ) {
-          const expiryDate =
-            new Date(
-              coupon.expiresAt
-            );
-
-          if (
-            !Number.isNaN(
-              expiryDate.getTime()
-            ) &&
-            expiryDate <
-              new Date()
-          ) {
-            setCouponError(
-              "This coupon has expired."
-            );
-
-            setAppliedCoupon(
-              null
-            );
-
-            setCouponDiscount(
-              0
-            );
-
-            return;
-          }
-        }
-
-        const discountPercent =
-          Number(
-            coupon.discount ||
-              0
-          );
-
-        if (
-          discountPercent <=
-          0
-        ) {
-          setCouponError(
-            "Invalid coupon discount."
-          );
-
-          setAppliedCoupon(
-            null
-          );
-
-          setCouponDiscount(
-            0
-          );
-
-          return;
-        }
-
-        const discountAmount =
-          Math.round(
-            (cartTotal *
-              discountPercent) /
-              100
-          );
-
-        const finalDiscount =
-          Math.min(
-            discountAmount,
-            cartTotal
-          );
-
-        setAppliedCoupon(
-          coupon
+      const minOrder =
+        Number(
+          coupon.minOrder || 0
         );
 
-        setCouponDiscount(
-          finalDiscount
-        );
-
-        setCouponCode(
-          coupon.code
-        );
-
-        setCouponMessage(
-          `Coupon applied! You saved ₹${finalDiscount}.`
-        );
-      } catch (error) {
-        console.error(
-          "Coupon apply error:",
-          error
-        );
-
+      if (
+        minOrder > 0 &&
+        cartTotal < minOrder
+      ) {
         setCouponError(
-          "Unable to apply coupon. Please try again."
+          `Minimum order value is ₹${minOrder}.`
         );
 
-        setAppliedCoupon(
-          null
-        );
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
 
-        setCouponDiscount(
-          0
-        );
-      } finally {
-        setCouponLoading(
-          false
-        );
+        return;
       }
-    };
+
+      if (coupon.expiresAt) {
+        const expiryDate =
+          new Date(
+            coupon.expiresAt
+          );
+
+        if (
+          !Number.isNaN(
+            expiryDate.getTime()
+          ) &&
+          expiryDate < new Date()
+        ) {
+          setCouponError(
+            "This coupon has expired."
+          );
+
+          setAppliedCoupon(null);
+          setCouponDiscount(0);
+
+          return;
+        }
+      }
+
+      const discountPercent =
+        Number(
+          coupon.discount || 0
+        );
+
+      if (discountPercent <= 0) {
+        setCouponError(
+          "Invalid coupon discount."
+        );
+
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
+
+        return;
+      }
+
+      const discountAmount =
+        Math.round(
+          (cartTotal *
+            discountPercent) /
+            100
+        );
+
+      const finalDiscount =
+        Math.min(
+          discountAmount,
+          cartTotal
+        );
+
+      setAppliedCoupon(coupon);
+
+      setCouponDiscount(
+        finalDiscount
+      );
+
+      setCouponCode(coupon.code);
+
+      setCouponMessage(
+        `Coupon applied! You saved ₹${finalDiscount}.`
+      );
+    } catch (error) {
+      console.error(
+        "Coupon apply error:",
+        error
+      );
+
+      setCouponError(
+        "Unable to apply coupon. Please try again."
+      );
+
+      setAppliedCoupon(null);
+      setCouponDiscount(0);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
 
   /* =====================================================
      REMOVE COUPON
   ===================================================== */
 
-  const removeCoupon =
-    () => {
-      setAppliedCoupon(
-        null
-      );
-
-      setCouponDiscount(
-        0
-      );
-
-      setCouponCode("");
-
-      setCouponMessage("");
-
-      setCouponError("");
-    };
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponDiscount(0);
+    setCouponCode("");
+    setCouponMessage("");
+    setCouponError("");
+  };
 
   /* =====================================================
      VALIDATE
   ===================================================== */
 
   const validate = () => {
+    if (!user) {
+      alert(
+        "Please login before placing an order."
+      );
+
+      return false;
+    }
+
     if (!name.trim()) {
       alert(
         "Please enter your name"
@@ -540,9 +436,11 @@ export default function CheckoutPage() {
       return false;
     }
 
+    const cleanPhone =
+      phone.replace(/\D/g, "");
+
     if (
-      !phone ||
-      phone.length !== 10
+      cleanPhone.length !== 10
     ) {
       alert(
         "Enter valid 10 digit phone number"
@@ -567,9 +465,11 @@ export default function CheckoutPage() {
       return false;
     }
 
+    const cleanPincode =
+      pincode.replace(/\D/g, "");
+
     if (
-      !pincode ||
-      pincode.length !== 6
+      cleanPincode.length !== 6
     ) {
       alert(
         "Enter valid 6 digit pincode"
@@ -595,474 +495,569 @@ export default function CheckoutPage() {
   /* =====================================================
      OFFER SNAPSHOT
      
-     Old order future offer changes se affect nahi hoga.
+     Offer details are copied into the order.
+     Future offer edits will NOT change old orders.
   ===================================================== */
 
-  const buildOfferSnapshot =
-    () => {
-      return cart
-        .filter(
-          (item: any) =>
-            item.offerType &&
-            item.offerType !==
-              "NONE"
-        )
-        .map(
-          (item: any) => ({
-            productId:
-              item.id,
+  const buildOfferSnapshot = () => {
+    return cart
+      .filter(
+        (item: any) =>
+          item.offerType &&
+          item.offerType !== "NONE"
+      )
+      .map((item: any) => ({
+        productId:
+          String(item.id || ""),
 
-            productName:
-              item.name ||
-              "Product",
+        productName:
+          item.name || "Product",
 
-            offerId:
-              item.offerId ||
-              null,
+        offerId:
+          item.offerId || null,
 
-            offerType:
-              item.offerType,
+        offerType:
+          item.offerType || "NONE",
 
-            offerLabel:
-              item.offerLabel ||
-              "",
+        offerLabel:
+          item.offerLabel || "",
 
-            offerDescription:
-              item.offerDescription ||
-              "",
+        offerDescription:
+          item.offerDescription || "",
 
-            buyQuantity:
-              Number(
-                item.offerBuyQuantity ||
-                  1
-              ),
+        buyQuantity:
+          Number(
+            item.offerBuyQuantity || 1
+          ),
 
-            freePerSet:
-              Number(
-                item.offerFreeQuantity ||
-                  0
-              ),
+        freePerSet:
+          Number(
+            item.offerFreeQuantity || 0
+          ),
 
-            paidQuantity:
-              Number(
-                item.quantity ||
-                  1
-              ),
+        paidQuantity:
+          Number(
+            item.quantity || 1
+          ),
 
-            freeQuantity:
-              Number(
-                item.freeQuantity ||
-                  0
-              ),
+        freeQuantity:
+          Number(
+            item.freeQuantity || 0
+          ),
 
-            totalQuantity:
-              Number(
-                item.totalQuantity ||
-                  item.quantity ||
-                  1
-              ),
+        totalQuantity:
+          Number(
+            item.totalQuantity ||
+              item.quantity ||
+              1
+          ),
 
-            unitPrice:
-              Number(
-                item.price ||
-                  0
-              ),
+        unitPrice:
+          Number(
+            item.price || 0
+          ),
 
-            paidAmount:
-              Number(
-                item.price ||
-                  0
-              ) *
-              Number(
-                item.quantity ||
-                  1
-              ),
+        paidAmount:
+          Number(item.price || 0) *
+          Number(item.quantity || 1),
 
-            freeAmount:
-              Number(
-                item.price ||
-                  0
-              ) *
-              Number(
-                item.freeQuantity ||
-                  0
-              ),
-          })
-        );
-    };
+        freeAmount:
+          Number(item.price || 0) *
+          Number(item.freeQuantity || 0),
+      }));
+  };
+
+  /* =====================================================
+     GET MAIN OFFER
+     
+     If multiple products are under the same offer,
+     take the first offer as the order-level snapshot.
+  ===================================================== */
+
+  const getPrimaryOffer = (
+    offerSnapshot: any[]
+  ) => {
+    if (
+      !offerSnapshot.length
+    ) {
+      return null;
+    }
+
+    return offerSnapshot[0];
+  };
 
   /* =====================================================
      SAVE ORDER
   ===================================================== */
 
-  const saveOrder =
-    async (
-      paymentMethod: string,
-      paymentData: any = {}
-    ) => {
-      const offerSnapshot =
-        buildOfferSnapshot();
+  const saveOrder = async (
+    paymentMethod: string,
+    paymentData: any = {}
+  ) => {
+    const currentUser =
+      auth.currentUser;
 
-      const orderItems =
-        cart.map(
-          (item: any) => ({
-            ...item,
+    if (!currentUser) {
+      throw new Error(
+        "Please login before placing an order."
+      );
+    }
 
-            paidQuantity:
-              Number(
-                item.quantity ||
-                  1
-              ),
+    const offerSnapshot =
+      buildOfferSnapshot();
 
-            freeQuantity:
-              Number(
-                item.freeQuantity ||
-                  0
-              ),
+    const primaryOffer =
+      getPrimaryOffer(
+        offerSnapshot
+      );
 
-            totalQuantity:
-              Number(
-                item.totalQuantity ||
-                  item.quantity ||
-                  1
-              ),
+    /* =================================================
+       ORDER ITEMS
+    ================================================= */
 
-            offerSnapshot:
-              item.offerType &&
-              item.offerType !==
-                "NONE"
-                ? {
-                    offerId:
-                      item.offerId ||
-                      null,
+    const orderItems =
+      cart.map((item: any) => ({
+        ...item,
 
-                    offerType:
-                      item.offerType,
+        paidQuantity:
+          Number(
+            item.quantity || 1
+          ),
 
-                    offerLabel:
-                      item.offerLabel ||
-                      "",
+        freeQuantity:
+          Number(
+            item.freeQuantity || 0
+          ),
 
-                    offerBuyQuantity:
-                      Number(
-                        item.offerBuyQuantity ||
-                          1
-                      ),
+        totalQuantity:
+          Number(
+            item.totalQuantity ||
+              item.quantity ||
+              1
+          ),
 
-                    offerFreeQuantity:
-                      Number(
-                        item.offerFreeQuantity ||
-                          0
-                      ),
-                  }
-                : null,
-          })
-        );
-
-      const order = {
-        customer: {
-          name,
-          phone,
-          address,
-          city,
-          pincode,
-        },
-
-        /* ==========================
-           ITEMS
-        ========================== */
-
-        items:
-          orderItems,
-
-        /* ==========================
-           OFFER SNAPSHOT
-        ========================== */
-
-        offers:
-          offerSnapshot,
-
-        hasOffers:
-          offerSnapshot.length >
-          0,
-
-        /* ==========================
-           PRICE
-        ========================== */
-
-        subtotal:
-          cartTotal,
-
-        coupon:
-          appliedCoupon
+        offerSnapshot:
+          item.offerType &&
+          item.offerType !== "NONE"
             ? {
-                id:
-                  appliedCoupon.id,
+                offerId:
+                  item.offerId ||
+                  null,
 
-                code:
-                  appliedCoupon.code,
+                offerType:
+                  item.offerType,
 
-                discountPercent:
+                offerLabel:
+                  item.offerLabel ||
+                  "",
+
+                offerDescription:
+                  item.offerDescription ||
+                  "",
+
+                offerBuyQuantity:
                   Number(
-                    appliedCoupon.discount ||
+                    item.offerBuyQuantity ||
+                      1
+                  ),
+
+                offerFreeQuantity:
+                  Number(
+                    item.offerFreeQuantity ||
                       0
                   ),
 
-                discountAmount:
-                  couponDiscount,
+                paidQuantity:
+                  Number(
+                    item.quantity ||
+                      1
+                  ),
+
+                freeQuantity:
+                  Number(
+                    item.freeQuantity ||
+                      0
+                  ),
+
+                totalQuantity:
+                  Number(
+                    item.totalQuantity ||
+                      item.quantity ||
+                      1
+                  ),
               }
             : null,
+      }));
 
-        couponCode:
-          appliedCoupon?.code ||
-          null,
+    /* =================================================
+       ORDER DATA
+    ================================================= */
 
-        couponDiscount:
-          couponDiscount,
+    const order = {
+      /* CUSTOMER */
 
-        delivery,
-
-        total:
-          grandTotal,
-
-        /* ==========================
-           PAYMENT
-        ========================== */
-
-        paymentMethod,
-
-        payment:
-          paymentData,
-
-        /* ==========================
-           USER
-        ========================== */
+      customer: {
+        uid:
+          currentUser.uid,
 
         userId:
-          user?.uid ||
-          null,
+          currentUser.uid,
 
-        customerEmail:
-          user?.email ||
-          null,
+        name:
+          name.trim(),
 
-        status:
-          "Placed",
+        phone:
+          phone.replace(/\D/g, ""),
 
-        createdAt:
-          new Date(),
-      };
+        address:
+          address.trim(),
 
-      await addOrder(
-        order
-      );
+        city:
+          city.trim(),
 
-      clearCart();
+        pincode:
+          pincode.replace(
+            /\D/g,
+            ""
+          ),
+      },
 
-      window.location.href =
-        "/orders";
+      userId:
+        currentUser.uid,
+
+      customerEmail:
+        currentUser.email || null,
+
+      /* ITEMS */
+
+      items:
+        orderItems,
+
+      /* =================================================
+         OFFER INFORMATION
+      ================================================= */
+
+      isOfferOrder:
+        offerSnapshot.length > 0,
+
+      hasOffers:
+        offerSnapshot.length > 0,
+
+      offers:
+        offerSnapshot,
+
+      offerId:
+        primaryOffer?.offerId ||
+        null,
+
+      offerType:
+        primaryOffer?.offerType ||
+        null,
+
+      offerLabel:
+        primaryOffer?.offerLabel ||
+        null,
+
+      offerTitle:
+        primaryOffer?.offerLabel ||
+        null,
+
+      offerBuyQuantity:
+        primaryOffer
+          ? Number(
+              primaryOffer.buyQuantity ||
+                1
+            )
+          : 0,
+
+      offerFreeQuantity:
+        primaryOffer
+          ? Number(
+              primaryOffer.freePerSet ||
+                0
+            )
+          : 0,
+
+      offerDescription:
+        primaryOffer?.offerDescription ||
+        null,
+
+      /* PRICE */
+
+      subtotal:
+        cartTotal,
+
+      coupon:
+        appliedCoupon
+          ? {
+              id:
+                appliedCoupon.id,
+
+              code:
+                appliedCoupon.code,
+
+              discountPercent:
+                Number(
+                  appliedCoupon.discount ||
+                    0
+                ),
+
+              discountAmount:
+                couponDiscount,
+            }
+          : null,
+
+      couponCode:
+        appliedCoupon?.code ||
+        null,
+
+      couponDiscount:
+        couponDiscount,
+
+      delivery:
+        delivery,
+
+      total:
+        grandTotal,
+
+      /* PAYMENT */
+
+      paymentMethod:
+        paymentMethod,
+
+      payment:
+        paymentData,
+
+      /* STATUS */
+
+      status:
+        "Pending",
+
+      createdAt:
+        new Date(),
+
+      updatedAt:
+        new Date(),
     };
+
+    await addOrder(order);
+
+    clearCart();
+
+    window.location.href =
+      "/orders";
+  };
 
   /* =====================================================
      COD
   ===================================================== */
 
-  const placeCOD =
-    async () => {
-      if (!validate()) {
-        return;
-      }
+  const placeCOD = async () => {
+    if (!validate()) {
+      return;
+    }
 
-      setLoading(true);
+    setLoading(true);
 
-      try {
-        await saveOrder(
-          "COD"
-        );
-      } catch (error) {
-        console.error(
-          error
-        );
+    try {
+      await saveOrder("COD");
+    } catch (error: any) {
+      console.error(
+        "COD order error:",
+        error
+      );
 
-        alert(
+      alert(
+        error?.message ||
           "Order Failed"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /* =====================================================
      ONLINE PAYMENT
   ===================================================== */
 
-  const payOnline =
-    async () => {
-      if (!validate()) {
-        return;
+  const payOnline = async () => {
+    if (!validate()) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (!window.Razorpay) {
+        const script =
+          document.createElement(
+            "script"
+          );
+
+        script.src =
+          "https://checkout.razorpay.com/v1/checkout.js";
+
+        script.async = true;
+
+        document.body.appendChild(
+          script
+        );
+
+        await new Promise<void>(
+          (
+            resolve,
+            reject
+          ) => {
+            script.onload = () =>
+              resolve();
+
+            script.onerror = () =>
+              reject(
+                new Error(
+                  "Razorpay SDK failed to load."
+                )
+              );
+          }
+        );
       }
 
-      setLoading(true);
+      const response =
+        await fetch(
+          "/api/razorpay/create-order",
+          {
+            method: "POST",
 
-      try {
-        if (
-          !window.Razorpay
-        ) {
-          const script =
-            document.createElement(
-              "script"
-            );
-
-          script.src =
-            "https://checkout.razorpay.com/v1/checkout.js";
-
-          script.async = true;
-
-          document.body.appendChild(
-            script
-          );
-
-          await new Promise(
-            (
-              resolve,
-              reject
-            ) => {
-              script.onload =
-                resolve;
-
-              script.onerror =
-                reject;
-            }
-          );
-        }
-
-        const response =
-          await fetch(
-            "/api/razorpay/create-order",
-            {
-              method:
-                "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-
-              body:
-                JSON.stringify({
-                  amount:
-                    grandTotal,
-                }),
-            }
-          );
-
-        
-
-        const razorpayOrder =
-  await response.json();
-
-if (!response.ok) {
-  throw new Error(
-    razorpayOrder?.error ||
-      razorpayOrder?.message ||
-      "Razorpay order creation failed"
-  );
-}
-
-if (
-  !razorpayOrder?.id ||
-  !razorpayOrder?.amount
-) {
-  throw new Error(
-    "Razorpay order response is invalid."
-  );
-}
-
-        const options = {
-          key:
-            process.env
-              .NEXT_PUBLIC_RAZORPAY_KEY_ID,
-
-          amount:
-            razorpayOrder.amount,
-
-          currency:
-            "INR",
-
-          name:
-            "Night Now",
-
-          description:
-            "Night Now Order",
-
-          order_id:
-            razorpayOrder.id,
-
-          prefill: {
-            name,
-
-            contact:
-              `+91${phone}`,
-          },
-
-          notes: {
-            address,
-
-            city,
-
-            pincode,
-
-            coupon:
-              appliedCoupon?.code ||
-              "",
-          },
-
-          theme: {
-            color:
-              "#facc15",
-          },
-
-          handler:
-            async (
-              paymentResponse: any
-            ) => {
-              try {
-                await saveOrder(
-                  "Online",
-                  paymentResponse
-                );
-              } catch (error) {
-                console.error(
-                  error
-                );
-
-                alert(
-                  "Payment successful but order saving failed. Please contact support."
-                );
-              }
+            headers: {
+              "Content-Type":
+                "application/json",
             },
-        };
 
-        const razorpay =
-          new window.Razorpay(
-            options
-          );
+            body: JSON.stringify({
+              amount:
+                grandTotal,
+            }),
+          }
+        );
 
-        razorpay.open();
-      } catch (error: any) {
-  console.error(
-    "Online payment error:",
-    error
-  );
+      const razorpayOrder =
+        await response.json();
 
-  alert(
-    error?.message ||
-      "Online payment failed"
-  );
-} finally {
-        setLoading(false);
+      if (!response.ok) {
+        throw new Error(
+          razorpayOrder?.error ||
+            razorpayOrder?.message ||
+            "Razorpay order creation failed"
+        );
       }
-    };
+
+      if (
+        !razorpayOrder?.id ||
+        !razorpayOrder?.amount
+      ) {
+        throw new Error(
+          "Razorpay order response is invalid."
+        );
+      }
+
+      const razorpayKey =
+        process.env
+          .NEXT_PUBLIC_RAZORPAY_KEY_ID;
+
+      if (!razorpayKey) {
+        throw new Error(
+          "Razorpay key is missing."
+        );
+      }
+
+      const options = {
+        key:
+          razorpayKey,
+
+        amount:
+          razorpayOrder.amount,
+
+        currency:
+          "INR",
+
+        name:
+          "Night Now",
+
+        description:
+          "Night Now Order",
+
+        order_id:
+          razorpayOrder.id,
+
+        prefill: {
+          name:
+            name.trim(),
+
+          contact:
+            `+91${phone}`,
+        },
+
+        notes: {
+          address:
+            address.trim(),
+
+          city:
+            city.trim(),
+
+          pincode:
+            pincode.trim(),
+
+          coupon:
+            appliedCoupon?.code ||
+            "",
+        },
+
+        theme: {
+          color:
+            "#facc15",
+        },
+
+        handler:
+          async (
+            paymentResponse: any
+          ) => {
+            try {
+              await saveOrder(
+                "Online",
+                paymentResponse
+              );
+            } catch (error) {
+              console.error(
+                "Order save after payment failed:",
+                error
+              );
+
+              alert(
+                "Payment successful but order saving failed. Please contact support."
+              );
+            }
+          },
+      };
+
+      const razorpay =
+        new window.Razorpay(
+          options
+        );
+
+      razorpay.open();
+    } catch (error: any) {
+      console.error(
+        "Online payment error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+          "Online payment failed"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /* =====================================================
      UI
@@ -1108,11 +1103,13 @@ if (
 
         <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
 
-          {/* DELIVERY */}
+          {/* =================================================
+              DELIVERY
+          ================================================= */}
 
           <section className="rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
 
               <div>
 
@@ -1143,6 +1140,8 @@ if (
 
             </div>
 
+            {/* SAVED ADDRESSES */}
+
             {showAddresses && (
               <div className="mt-4 space-y-2">
 
@@ -1150,7 +1149,8 @@ if (
                   (item) => (
                     <button
                       key={
-                        item.id
+                        item.id ||
+                        `${item.address}-${item.pincode}`
                       }
                       type="button"
                       onClick={() =>
@@ -1158,7 +1158,7 @@ if (
                           item
                         )
                       }
-                      className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-left"
+                      className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-left transition hover:border-yellow-400"
                     >
 
                       <p className="text-xs font-black">
@@ -1167,9 +1167,7 @@ if (
                       </p>
 
                       <p className="mt-1 text-xs text-zinc-400">
-                        {
-                          item.address
-                        }
+                        {item.address}
 
                         {item.city
                           ? `, ${item.city}`
@@ -1186,6 +1184,8 @@ if (
 
               </div>
             )}
+
+            {/* ADDRESS FORM */}
 
             <div className="mt-5 space-y-3">
 
@@ -1216,6 +1216,7 @@ if (
                   )
                 }
                 placeholder="10 Digit Mobile Number"
+                inputMode="numeric"
                 className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
               />
 
@@ -1260,6 +1261,7 @@ if (
                     )
                   }
                   placeholder="Pincode"
+                  inputMode="numeric"
                   className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
                 />
 
@@ -1269,7 +1271,9 @@ if (
 
           </section>
 
-          {/* ORDER SUMMARY */}
+          {/* =================================================
+              ORDER SUMMARY
+          ================================================= */}
 
           <section className="h-fit rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
 
@@ -1280,85 +1284,107 @@ if (
             <div className="mt-4 space-y-3">
 
               {cart.map(
-                (item: any) => (
-                  <div
-                    key={
-                      item.id
-                    }
-                    className="rounded-2xl bg-zinc-900 p-3"
-                  >
+                (
+                  item: any,
+                  index: number
+                ) => {
 
-                    <div className="flex items-center justify-between gap-3">
+                  const paidQuantity =
+                    Number(
+                      item.quantity ||
+                        1
+                    );
 
-                      <div className="min-w-0">
-
-                        <p className="truncate text-xs font-black">
-                          {
-                            item.name
-                          }
-                        </p>
-
-                        <p className="mt-1 text-[10px] text-zinc-500">
-                          Paid Qty:{" "}
-                          {
-                            item.quantity ||
-                              1
-                          }
-                        </p>
-
-                      </div>
-
-                      <p className="shrink-0 text-xs font-black">
-                        ₹
-                        {Number(
-                          item.price ||
-                            0
-                        ) *
-                          Number(
-                            item.quantity ||
-                              1
-                          )}
-                      </p>
-
-                    </div>
-
-                    {Number(
+                  const freeQuantity =
+                    Number(
                       item.freeQuantity ||
                         0
-                    ) > 0 && (
-                      <div className="mt-2 rounded-xl border border-green-900/50 bg-green-950/30 p-2">
+                    );
 
-                        <p className="text-[10px] font-black text-green-400">
-                          🎁{" "}
-                          {item.offerLabel ||
-                            "FREE OFFER"}
-                        </p>
+                  const totalQuantity =
+                    Number(
+                      item.totalQuantity ||
+                        paidQuantity
+                    );
 
-                        <p className="mt-1 text-[9px] text-green-500">
-                          Paid:{" "}
-                          {
-                            item.quantity
-                          }{" "}
-                          • Free:{" "}
-                          {
-                            item.freeQuantity
-                          }{" "}
-                          • Total Qty:{" "}
-                          {
-                            item.totalQuantity
-                          }
+                  const price =
+                    Number(
+                      item.price ||
+                        0
+                    );
+
+                  const isOffer =
+                    Boolean(
+                      item.offerType &&
+                        item.offerType !==
+                          "NONE"
+                    );
+
+                  return (
+                    <div
+                      key={`${item.id}-${item.variantId || "default"}-${item.offerId || "normal"}-${index}`}
+                      className="rounded-2xl bg-zinc-900 p-3"
+                    >
+
+                      <div className="flex items-center justify-between gap-3">
+
+                        <div className="min-w-0">
+
+                          <p className="truncate text-xs font-black">
+                            {item.name ||
+                              "Product"}
+                          </p>
+
+                          <p className="mt-1 text-[10px] text-zinc-500">
+                            Paid Qty:{" "}
+                            {paidQuantity}
+                          </p>
+
+                        </div>
+
+                        <p className="shrink-0 text-xs font-black">
+                          ₹
+                          {price *
+                            paidQuantity}
                         </p>
 
                       </div>
-                    )}
 
-                  </div>
-                )
+                      {/* OFFER */}
+
+                      {isOffer && (
+                        <div className="mt-2 rounded-xl border border-yellow-800/50 bg-yellow-950/30 p-2">
+
+                          <p className="text-[10px] font-black text-yellow-400">
+                            🎁{" "}
+                            {item.offerLabel ||
+                              "SPECIAL OFFER"}
+                          </p>
+
+                          <p className="mt-1 text-[9px] text-yellow-500">
+                            Paid:{" "}
+                            {paidQuantity}
+                            {" • "}
+                            Free:{" "}
+                            {freeQuantity}
+                            {" • "}
+                            Total Qty:{" "}
+                            {totalQuantity}
+                          </p>
+
+                        </div>
+                      )}
+
+                    </div>
+                  );
+                }
               )}
 
             </div>
 
-            {/* COUPON */}
+            {/* =================================================
+                COUPON
+            ================================================= */}
 
             <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
 
@@ -1369,6 +1395,7 @@ if (
                 </span>
 
                 <div>
+
                   <p className="text-sm font-black">
                     Apply Coupon
                   </p>
@@ -1376,6 +1403,7 @@ if (
                   <p className="text-[10px] text-zinc-500">
                     Save more on your order
                   </p>
+
                 </div>
 
               </div>
@@ -1406,7 +1434,7 @@ if (
                           e.key ===
                           "Enter"
                         ) {
-                          applyCoupon();
+                          void applyCoupon();
                         }
                       }}
                       placeholder="Enter coupon code"
@@ -1418,8 +1446,8 @@ if (
                       disabled={
                         couponLoading
                       }
-                      onClick={
-                        applyCoupon
+                      onClick={() =>
+                        void applyCoupon()
                       }
                       className="rounded-xl bg-yellow-400 px-4 py-3 text-xs font-black text-black disabled:opacity-50"
                     >
@@ -1433,18 +1461,14 @@ if (
                   {couponError && (
                     <p className="mt-2 text-[10px] font-bold text-red-400">
                       ❌{" "}
-                      {
-                        couponError
-                      }
+                      {couponError}
                     </p>
                   )}
 
                   {couponMessage && (
                     <p className="mt-2 text-[10px] font-bold text-green-400">
                       ✅{" "}
-                      {
-                        couponMessage
-                      }
+                      {couponMessage}
                     </p>
                   )}
                 </>
@@ -1462,7 +1486,8 @@ if (
                     <p className="mt-1 text-[10px] text-green-500">
                       {
                         appliedCoupon.discount
-                      }% OFF • Saved ₹
+                      }
+                      % OFF • Saved ₹
                       {
                         couponDiscount
                       }
@@ -1503,8 +1528,7 @@ if (
 
               </div>
 
-              {couponDiscount >
-                0 && (
+              {couponDiscount > 0 && (
                 <div className="flex justify-between">
 
                   <span className="text-green-400">
@@ -1513,9 +1537,7 @@ if (
 
                   <span className="font-black text-green-400">
                     -₹
-                    {
-                      couponDiscount
-                    }
+                    {couponDiscount}
                   </span>
 
                 </div>
@@ -1528,8 +1550,7 @@ if (
                 </span>
 
                 <span className="font-bold text-green-400">
-                  {delivery ===
-                  0
+                  {delivery === 0
                     ? "FREE"
                     : `₹${delivery}`}
                 </span>
@@ -1559,27 +1580,29 @@ if (
               </p>
 
               <button
-                disabled={
-                  loading
-                }
-                onClick={
-                  payOnline
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  void payOnline()
                 }
                 className="w-full rounded-2xl bg-yellow-400 py-4 text-sm font-black text-black disabled:opacity-50"
               >
-                💳 Pay Online
+                {loading
+                  ? "Processing..."
+                  : "💳 Pay Online"}
               </button>
 
               <button
-                disabled={
-                  loading
-                }
-                onClick={
-                  placeCOD
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  void placeCOD()
                 }
                 className="mt-3 w-full rounded-2xl border border-zinc-700 bg-zinc-900 py-4 text-sm font-black disabled:opacity-50"
               >
-                💵 Cash on Delivery
+                {loading
+                  ? "Processing..."
+                  : "💵 Cash on Delivery"}
               </button>
 
             </div>

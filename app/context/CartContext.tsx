@@ -57,10 +57,17 @@ export type CartItem = {
 
   totalQuantity?: number;
 
+  offerSaving?: number;
+
   /* ========================= */
 
   [key: string]: any;
 };
+
+
+/* =====================================================
+   CART CONTEXT TYPE
+===================================================== */
 
 type CartContextType = {
   cart: CartItem[];
@@ -69,54 +76,90 @@ type CartContextType = {
 
   cartCount: number;
 
+  offerSavings: number;
+
   addToCart: (
     item: CartItem
   ) => void;
 
   removeFromCart: (
     id: string,
-    variantId?: string
+    variantId?: string,
+    offerId?: string
   ) => void;
 
   deleteFromCart: (
     id: string,
-    variantId?: string
+    variantId?: string,
+    offerId?: string
   ) => void;
 
   clearCart: () => void;
 
   isInCart: (
     id: string,
-    variantId?: string
+    variantId?: string,
+    offerId?: string
   ) => boolean;
 
   getItemQuantity: (
     id: string,
-    variantId?: string
+    variantId?: string,
+    offerId?: string
   ) => number;
 };
+
+
+/* =====================================================
+   CONTEXT
+===================================================== */
 
 const CartContext =
   createContext<
     CartContextType | undefined
   >(undefined);
 
+
+/* =====================================================
+   STORAGE
+===================================================== */
+
 const CART_STORAGE_KEY =
   "nightnow_cart";
+
+
+/* =====================================================
+   ITEM KEY
+=====================================================
+
+   Normal product:
+   product + variant + normal
+
+   Offer product:
+   product + variant + offer
+
+   This keeps normal and offer products separate.
+===================================================== */
 
 const getItemKey = (
   item: CartItem
 ) => {
-  return `${item.id}__${
+  const variant =
     item.variantId ||
     item.variantName ||
     item.size ||
     item.weight ||
     item.volume ||
     item.pack ||
-    "default"
-  }`;
+    "default";
+
+  const offer =
+    item.offerId ||
+    "normal";
+
+  return `${item.id}__${variant}__${offer}`;
 };
+
 
 /* =====================================================
    OFFER CALCULATOR
@@ -126,9 +169,18 @@ const calculateOffer = (
   item: CartItem,
   paidQuantity: number
 ) => {
+
   const type =
     item.offerType ||
     "NONE";
+
+  const safePaidQuantity =
+    Math.max(
+      1,
+      Number(
+        paidQuantity || 1
+      )
+    );
 
   const buyQuantity =
     Math.max(
@@ -148,34 +200,63 @@ const calculateOffer = (
       )
     );
 
+
+  /* ===================================================
+     BUY 1 GET 1
+  =================================================== */
+
   if (
-    type === "BUY_1_GET_1"
+    type ===
+    "BUY_1_GET_1"
   ) {
+
+    const freeQuantity =
+      safePaidQuantity;
+
     return {
-      freeQuantity:
-        paidQuantity,
+      freeQuantity,
+
       totalQuantity:
-        paidQuantity * 2,
+        safePaidQuantity +
+        freeQuantity,
     };
   }
 
+
+  /* ===================================================
+     BUY 1 GET 2
+  =================================================== */
+
   if (
-    type === "BUY_1_GET_2"
+    type ===
+    "BUY_1_GET_2"
   ) {
+
+    const freeQuantity =
+      safePaidQuantity * 2;
+
     return {
-      freeQuantity:
-        paidQuantity * 2,
+      freeQuantity,
+
       totalQuantity:
-        paidQuantity * 3,
+        safePaidQuantity +
+        freeQuantity,
     };
   }
 
+
+  /* ===================================================
+     BUY X GET Y
+  =================================================== */
+
   if (
-    type === "BUY_X_GET_Y"
+    type ===
+    "BUY_X_GET_Y"
   ) {
+
     const completedSets =
       Math.floor(
-        paidQuantity /
+        safePaidQuantity /
           buyQuantity
       );
 
@@ -185,32 +266,44 @@ const calculateOffer = (
 
     return {
       freeQuantity,
+
       totalQuantity:
-        paidQuantity +
+        safePaidQuantity +
         freeQuantity,
     };
   }
 
+
+  /* ===================================================
+     NORMAL PRODUCT
+  =================================================== */
+
   return {
     freeQuantity: 0,
+
     totalQuantity:
-      paidQuantity,
+      safePaidQuantity,
   };
 };
 
+
 /* =====================================================
-   NORMALIZE ITEM
+   NORMALIZE CART ITEM
 ===================================================== */
 
 const normalizeCartItem = (
   item: CartItem,
   quantity: number
 ): CartItem => {
+
   const paidQuantity =
     Math.max(
       1,
-      Number(quantity || 1)
+      Number(
+        quantity || 1
+      )
     );
+
 
   const offer =
     calculateOffer(
@@ -218,89 +311,148 @@ const normalizeCartItem = (
       paidQuantity
     );
 
+
+  const price =
+    Math.max(
+      0,
+      Number(
+        item.price || 0
+      )
+    );
+
+
+  const offerSaving =
+    price *
+    offer.freeQuantity;
+
+
+  let offerBuyQuantity =
+    0;
+
+  let offerFreeQuantity =
+    0;
+
+
+  /* ===================================================
+     NORMALIZE OFFER TYPE
+  =================================================== */
+
+  if (
+    item.offerType ===
+    "BUY_1_GET_1"
+  ) {
+
+    offerBuyQuantity = 1;
+
+    offerFreeQuantity = 1;
+  }
+
+
+  if (
+    item.offerType ===
+    "BUY_1_GET_2"
+  ) {
+
+    offerBuyQuantity = 1;
+
+    offerFreeQuantity = 2;
+  }
+
+
+  if (
+    item.offerType ===
+    "BUY_X_GET_Y"
+  ) {
+
+    offerBuyQuantity =
+      Math.max(
+        1,
+        Number(
+          item.offerBuyQuantity ||
+            1
+        )
+      );
+
+    offerFreeQuantity =
+      Math.max(
+        0,
+        Number(
+          item.offerFreeQuantity ||
+            0
+        )
+      );
+  }
+
+
   return {
     ...item,
 
     quantity:
       paidQuantity,
 
-    offerBuyQuantity:
-      item.offerType ===
-      "BUY_X_GET_Y"
-        ? Math.max(
-            1,
-            Number(
-              item.offerBuyQuantity ||
-                1
-            )
-          )
-        : item.offerType ===
-          "BUY_1_GET_1" ||
-          item.offerType ===
-          "BUY_1_GET_2"
-        ? 1
-        : 0,
+    offerBuyQuantity,
 
-    offerFreeQuantity:
-      item.offerType ===
-      "BUY_1_GET_1"
-        ? 1
-        : item.offerType ===
-          "BUY_1_GET_2"
-        ? 2
-        : item.offerType ===
-          "BUY_X_GET_Y"
-        ? Math.max(
-            0,
-            Number(
-              item.offerFreeQuantity ||
-                0
-            )
-          )
-        : 0,
+    offerFreeQuantity,
 
     freeQuantity:
       offer.freeQuantity,
 
     totalQuantity:
       offer.totalQuantity,
+
+    offerSaving,
   };
 };
+
+
+/* =====================================================
+   CART PROVIDER
+===================================================== */
 
 export function CartProvider({
   children,
 }: {
   children: ReactNode;
 }) {
+
   const [cart, setCart] =
     useState<CartItem[]>([]);
 
   const [loaded, setLoaded] =
     useState(false);
 
-  /* =====================================================
+
+  /* ===================================================
      LOAD CART
-  ===================================================== */
+  =================================================== */
 
   useEffect(() => {
+
     try {
+
       const saved =
         localStorage.getItem(
           CART_STORAGE_KEY
         );
 
+
       if (saved) {
+
         const parsed =
           JSON.parse(saved);
+
 
         if (
           Array.isArray(
             parsed
           )
         ) {
+
           setCart(
             parsed.map(
-              (item) =>
+              (
+                item: CartItem
+              ) =>
                 normalizeCartItem(
                   item,
                   Number(
@@ -310,79 +462,113 @@ export function CartProvider({
                 )
             )
           );
+
         }
+
       }
+
     } catch (error) {
+
       console.error(
         "Cart loading failed:",
         error
       );
+
     }
 
+
     setLoaded(true);
+
   }, []);
 
-  /* =====================================================
+
+  /* ===================================================
      SAVE CART
-  ===================================================== */
+  =================================================== */
 
   useEffect(() => {
-    if (!loaded) return;
+
+    if (!loaded) {
+      return;
+    }
+
 
     try {
+
       localStorage.setItem(
         CART_STORAGE_KEY,
-        JSON.stringify(cart)
+        JSON.stringify(
+          cart
+        )
       );
+
     } catch (error) {
+
       console.error(
         "Cart saving failed:",
         error
       );
+
     }
+
   }, [
     cart,
     loaded,
   ]);
 
-  /* =====================================================
+
+  /* ===================================================
      ADD TO CART
-  ===================================================== */
+  =================================================== */
 
   const addToCart = (
     item: CartItem
   ) => {
+
     if (!item?.id) {
+
       console.warn(
         "Product ID missing"
       );
+
       return;
     }
 
+
     setCart(
-      (currentCart) => {
+      (
+        currentCart
+      ) => {
+
         const itemKey =
           getItemKey(item);
 
+
         const existingIndex =
           currentCart.findIndex(
-            (cartItem) =>
+            (
+              cartItem
+            ) =>
               getItemKey(
                 cartItem
               ) === itemKey
           );
 
-        /* ==========================
+
+        /* ==========================================
            NEW ITEM
-        ========================== */
+        ========================================== */
 
         if (
-          existingIndex === -1
+          existingIndex ===
+          -1
         ) {
+
           const stock =
             Number(
               item.stock || 0
             );
+
 
           const quantity =
             Math.max(
@@ -393,6 +579,7 @@ export function CartProvider({
               )
             );
 
+
           const finalQuantity =
             stock > 0
               ? Math.min(
@@ -401,8 +588,10 @@ export function CartProvider({
                 )
               : quantity;
 
+
           return [
             ...currentCart,
+
             normalizeCartItem(
               item,
               finalQuantity
@@ -410,18 +599,21 @@ export function CartProvider({
           ];
         }
 
-        /* ==========================
+
+        /* ==========================================
            EXISTING ITEM
-        ========================== */
+        ========================================== */
 
         const updated = [
           ...currentCart,
         ];
 
+
         const existing =
           updated[
             existingIndex
           ];
+
 
         const currentQuantity =
           Number(
@@ -429,68 +621,107 @@ export function CartProvider({
               1
           );
 
+
         const stock =
           Number(
             existing.stock ||
               0
           );
 
+
         if (
           stock > 0 &&
           currentQuantity >=
             stock
         ) {
+
           return currentCart;
         }
+
 
         const newQuantity =
           currentQuantity +
           1;
 
+
         updated[
           existingIndex
-        ] = normalizeCartItem(
-          existing,
-          newQuantity
-        );
+        ] =
+          normalizeCartItem(
+            existing,
+            newQuantity
+          );
+
 
         return updated;
+
       }
     );
   };
 
-  /* =====================================================
+
+  /* ===================================================
      REMOVE ONE
-  ===================================================== */
+  =================================================== */
 
   const removeFromCart = (
     id: string,
-    variantId?: string
+    variantId?: string,
+    offerId?: string
   ) => {
+
     setCart(
-      (currentCart) => {
+      (
+        currentCart
+      ) => {
+
+        const targetOfferId =
+          offerId ||
+          "normal";
+
+
         const index =
           currentCart.findIndex(
-            (item) =>
-              item.id === id &&
+            (
+              item
+            ) =>
+              item.id ===
+                id &&
+
               (
                 variantId
-                  ? item.variantId ===
+                  ? (
+                      item.variantId ||
+                      "default"
+                    ) ===
                     variantId
                   : true
-              )
+              ) &&
+
+              (
+                item.offerId ||
+                "normal"
+              ) ===
+                targetOfferId
           );
 
-        if (index === -1) {
+
+        if (
+          index === -1
+        ) {
+
           return currentCart;
         }
+
 
         const updated = [
           ...currentCart,
         ];
 
+
         const item =
           updated[index];
+
 
         const quantity =
           Number(
@@ -498,174 +729,318 @@ export function CartProvider({
               1
           );
 
+
         if (
           quantity <= 1
         ) {
+
           updated.splice(
             index,
             1
           );
 
+
           return updated;
         }
 
+
         updated[
           index
-        ] = normalizeCartItem(
-          item,
-          quantity - 1
-        );
+        ] =
+          normalizeCartItem(
+            item,
+            quantity - 1
+          );
+
 
         return updated;
+
       }
     );
   };
 
-  /* =====================================================
+
+  /* ===================================================
      DELETE ITEM
-  ===================================================== */
+  =================================================== */
 
   const deleteFromCart = (
     id: string,
-    variantId?: string
+    variantId?: string,
+    offerId?: string
   ) => {
+
+    const targetOfferId =
+      offerId ||
+      "normal";
+
+
     setCart(
-      (currentCart) =>
+      (
+        currentCart
+      ) =>
         currentCart.filter(
-          (item) =>
+          (
+            item
+          ) =>
             !(
-              item.id === id &&
+              item.id ===
+                id &&
+
               (
                 variantId
-                  ? item.variantId ===
+                  ? (
+                      item.variantId ||
+                      "default"
+                    ) ===
                     variantId
                   : true
-              )
+              ) &&
+
+              (
+                item.offerId ||
+                "normal"
+              ) ===
+                targetOfferId
             )
         )
     );
   };
 
-  /* =====================================================
-     CLEAR
-  ===================================================== */
+
+  /* ===================================================
+     CLEAR CART
+  =================================================== */
 
   const clearCart = () => {
+
     setCart([]);
+
   };
 
-  /* =====================================================
-     CHECK
-  ===================================================== */
+
+  /* ===================================================
+     CHECK ITEM
+  =================================================== */
 
   const isInCart = (
     id: string,
-    variantId?: string
+    variantId?: string,
+    offerId?: string
   ) => {
+
+    const targetOfferId =
+      offerId ||
+      "normal";
+
+
     return cart.some(
-      (item) =>
-        item.id === id &&
+      (
+        item
+      ) =>
+        item.id ===
+          id &&
+
         (
           variantId
-            ? item.variantId ===
+            ? (
+                item.variantId ||
+                "default"
+              ) ===
               variantId
             : true
-        )
+        ) &&
+
+        (
+          item.offerId ||
+          "normal"
+        ) ===
+          targetOfferId
     );
   };
 
-  /* =====================================================
-     QUANTITY
-  ===================================================== */
+
+  /* ===================================================
+     GET ITEM QUANTITY
+  =================================================== */
 
   const getItemQuantity = (
     id: string,
-    variantId?: string
+    variantId?: string,
+    offerId?: string
   ) => {
+
+    const targetOfferId =
+      offerId ||
+      "normal";
+
+
     const item =
       cart.find(
-        (cartItem) =>
-          cartItem.id === id &&
+        (
+          cartItem
+        ) =>
+          cartItem.id ===
+            id &&
+
           (
             variantId
-              ? cartItem.variantId ===
+              ? (
+                  cartItem.variantId ||
+                  "default"
+                ) ===
                 variantId
               : true
-          )
+          ) &&
+
+          (
+            cartItem.offerId ||
+            "normal"
+          ) ===
+            targetOfferId
       );
 
+
     return Number(
-      item?.quantity || 0
+      item?.quantity ||
+        0
     );
   };
 
-  /* =====================================================
+
+  /* ===================================================
      CART TOTAL
      
      IMPORTANT:
-     quantity = paid quantity.
-     freeQuantity is never charged.
-  ===================================================== */
+     
+     quantity = PAID quantity
 
-  const cartTotal = useMemo(() => {
-    return cart.reduce(
-      (
-        total,
-        item
-      ) => {
-        const price =
-          Number(
-            item.price || 0
-          );
+     freeQuantity is NOT charged.
+  =================================================== */
 
-        const quantity =
-          Number(
-            item.quantity ||
-              1
-          );
+  const cartTotal =
+    useMemo(() => {
 
-        return (
-          total +
-          price *
-            quantity
-        );
-      },
-      0
-    );
-  }, [cart]);
+      return cart.reduce(
+        (
+          total,
+          item
+        ) => {
 
-  /* =====================================================
-     CART COUNT
+          const price =
+            Number(
+              item.price ||
+                0
+            );
 
-     Total physical quantity:
-     paid + free.
-  ===================================================== */
 
-  const cartCount = useMemo(() => {
-    return cart.reduce(
-      (
-        total,
-        item
-      ) => {
-        return (
-          total +
-          Number(
-            item.totalQuantity ||
+          const quantity =
+            Number(
               item.quantity ||
-              0
-          )
-        );
-      },
-      0
-    );
-  }, [cart]);
+                1
+            );
+
+
+          return (
+            total +
+            price *
+              quantity
+          );
+
+        },
+        0
+      );
+
+    }, [cart]);
+
+
+  /* ===================================================
+     OFFER SAVINGS
+     
+     Example:
+     
+     BUY 1 GET 1
+     ₹100 × 1 paid
+     ₹100 × 1 free
+     
+     Saving = ₹100
+  =================================================== */
+
+  const offerSavings =
+    useMemo(() => {
+
+      return cart.reduce(
+        (
+          total,
+          item
+        ) => {
+
+          const saving =
+            Number(
+              item.offerSaving ||
+                0
+            );
+
+
+          return (
+            total +
+            saving
+          );
+
+        },
+        0
+      );
+
+    }, [cart]);
+
+
+  /* ===================================================
+     CART COUNT
+     
+     Physical quantity:
+     
+     Paid + Free
+  =================================================== */
+
+  const cartCount =
+    useMemo(() => {
+
+      return cart.reduce(
+        (
+          total,
+          item
+        ) => {
+
+          return (
+            total +
+            Number(
+              item.totalQuantity ||
+                item.quantity ||
+                0
+            )
+          );
+
+        },
+        0
+      );
+
+    }, [cart]);
+
+
+  /* ===================================================
+     PROVIDER
+  =================================================== */
 
   return (
     <CartContext.Provider
       value={{
         cart,
+
         cartTotal,
+
         cartCount,
+
+        offerSavings,
 
         addToCart,
 
@@ -685,17 +1060,27 @@ export function CartProvider({
   );
 }
 
+
+/* =====================================================
+   USE CART
+===================================================== */
+
 export function useCart() {
+
   const context =
     useContext(
       CartContext
     );
 
+
   if (!context) {
+
     throw new Error(
       "useCart must be used inside CartProvider"
     );
+
   }
+
 
   return context;
 }

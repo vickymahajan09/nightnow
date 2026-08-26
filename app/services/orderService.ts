@@ -141,6 +141,7 @@ const createOrderNotification =
         console.warn(
           "No userId found for customer notification"
         );
+
         return;
       }
 
@@ -196,8 +197,6 @@ export const addOrder =
       );
     }
 
-    // IMPORTANT:
-    // Always use Firebase Auth UID.
     const userId =
       currentUser.uid;
 
@@ -227,7 +226,6 @@ export const addOrder =
     const orderData = {
       ...order,
 
-      // FORCE AUTHENTICATED USER ID
       userId,
 
       customer,
@@ -242,10 +240,6 @@ export const addOrder =
       updatedAt:
         new Date(),
     };
-
-    // ===================================================
-    // CREATE ORDER
-    // ===================================================
 
     const orderRef =
       await addDoc(
@@ -317,7 +311,7 @@ export const addOrder =
     }
 
     // ===================================================
-    // CUSTOMER ORDER CONFIRMATION
+    // CUSTOMER CONFIRMATION
     // ===================================================
 
     await createOrderNotification(
@@ -621,6 +615,7 @@ export const subscribeToOrders =
                 unsubscribeAuth
               ) {
                 unsubscribeAuth();
+
                 unsubscribeAuth =
                   null;
               }
@@ -638,6 +633,7 @@ export const subscribeToOrders =
         unsubscribeAuth
       ) {
         unsubscribeAuth();
+
         unsubscribeAuth =
           null;
       }
@@ -646,6 +642,7 @@ export const subscribeToOrders =
         unsubscribeSnapshot
       ) {
         unsubscribeSnapshot();
+
         unsubscribeSnapshot =
           null;
       }
@@ -875,7 +872,7 @@ export const cancelOrderByCustomer =
     );
 
     // =================================================
-    // ADMIN CANCELLATION NOTIFICATION
+    // ADMIN NOTIFICATION
     // =================================================
 
     try {
@@ -932,7 +929,7 @@ export const cancelOrderByCustomer =
     }
 
     // =================================================
-    // CUSTOMER CANCELLATION NOTIFICATION
+    // CUSTOMER NOTIFICATION
     // =================================================
 
     await createOrderNotification(
@@ -1092,6 +1089,511 @@ export const updateOrderStatus =
   };
 
 // =====================================================
+// RETURN PRODUCT
+// =====================================================
+
+export const requestProductReturn =
+  async (
+    orderId: string,
+    productId: string,
+    reason: string,
+    description = ""
+  ) => {
+    const currentUser =
+      await waitForAuthUser();
+
+    if (!currentUser) {
+      throw new Error(
+        "Please login before requesting a return."
+      );
+    }
+
+    if (!orderId) {
+      throw new Error(
+        "Order ID is required."
+      );
+    }
+
+    if (!productId) {
+      throw new Error(
+        "Product ID is required."
+      );
+    }
+
+    const cleanReason =
+      reason?.trim();
+
+    if (!cleanReason) {
+      throw new Error(
+        "Return reason is required."
+      );
+    }
+
+    const orderRef =
+      doc(
+        db,
+        "orders",
+        orderId
+      );
+
+    const orderSnapshot =
+      await getDoc(
+        orderRef
+      );
+
+    if (
+      !orderSnapshot.exists()
+    ) {
+      throw new Error(
+        "Order not found."
+      );
+    }
+
+    const order =
+      {
+        id:
+          orderSnapshot.id,
+
+        ...orderSnapshot.data(),
+      } as any;
+
+    const owner =
+      order?.userId ||
+      order?.customer?.uid ||
+      order?.customer?.userId ||
+      "";
+
+    if (
+      owner !==
+      currentUser.uid
+    ) {
+      throw new Error(
+        "You are not allowed to request a return for this order."
+      );
+    }
+
+    if (
+      order.status !==
+      "Delivered"
+    ) {
+      throw new Error(
+        "Product return is available only after delivery."
+      );
+    }
+
+    const items =
+      Array.isArray(
+        order.items
+      )
+        ? [...order.items]
+        : [];
+
+    const itemIndex =
+      items.findIndex(
+        (item: any) =>
+          String(
+            item?.id || ""
+          ) ===
+          String(
+            productId
+          )
+      );
+
+    if (
+      itemIndex === -1
+    ) {
+      throw new Error(
+        "Product not found in this order."
+      );
+    }
+
+    const selectedItem =
+      items[itemIndex] as any;
+
+    if (
+      selectedItem.returnStatus ===
+        "Requested" ||
+      selectedItem.returnStatus ===
+        "Approved" ||
+      selectedItem.returnStatus ===
+        "Completed"
+    ) {
+      throw new Error(
+        "Return request already exists for this product."
+      );
+    }
+
+    items[itemIndex] = {
+      ...selectedItem,
+
+      returnStatus:
+        "Requested",
+
+      returnReason:
+        cleanReason,
+
+      returnDescription:
+        description?.trim() ||
+        "",
+
+      returnRequestedAt:
+        new Date(),
+
+      refundStatus:
+        "Pending",
+    };
+
+    await updateDoc(
+      orderRef,
+      {
+        items,
+
+        returnRequested:
+          true,
+
+        returnRequestedAt:
+          new Date(),
+
+        updatedAt:
+          new Date(),
+      }
+    );
+
+    // =================================================
+    // ADMIN RETURN NOTIFICATION
+    // =================================================
+
+    try {
+      await addDoc(
+        collection(
+          db,
+          "notifications"
+        ),
+        {
+          audience:
+            "admin",
+
+          type:
+            "product-return",
+
+          title:
+            "Product Return Requested ↩️",
+
+          message:
+            `${order?.customer?.name || "Customer"} requested a return for "${selectedItem?.name || "Product"}" in order #${orderId.slice(
+              0,
+              8
+            )}. Reason: ${cleanReason}`,
+
+          orderId,
+
+          userId:
+            currentUser.uid,
+
+          productId,
+
+          productName:
+            selectedItem?.name ||
+            "Product",
+
+          returnReason:
+            cleanReason,
+
+          returnDescription:
+            description?.trim() ||
+            "",
+
+          read:
+            false,
+
+          createdAt:
+            new Date(),
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Admin return notification failed:",
+        error
+      );
+    }
+
+    // =================================================
+    // CUSTOMER RETURN NOTIFICATION
+    // =================================================
+
+    await createOrderNotification(
+      {
+        ...order,
+
+        id:
+          orderId,
+
+        userId:
+          currentUser.uid,
+      },
+
+      "Return Request Submitted ↩️",
+
+      `Your return request for "${selectedItem?.name || "Product"}" has been submitted successfully. Our team will review it.`,
+
+      "Return Requested"
+    );
+
+    return true;
+  };
+
+// =====================================================
+// EXCHANGE PRODUCT
+// =====================================================
+
+export const requestProductExchange =
+  async (
+    orderId: string,
+    productId: string,
+    reason: string,
+    description = ""
+  ) => {
+    const currentUser =
+      await waitForAuthUser();
+
+    if (!currentUser) {
+      throw new Error(
+        "Please login before requesting an exchange."
+      );
+    }
+
+    if (!orderId) {
+      throw new Error(
+        "Order ID is required."
+      );
+    }
+
+    if (!productId) {
+      throw new Error(
+        "Product ID is required."
+      );
+    }
+
+    const cleanReason =
+      reason?.trim();
+
+    if (!cleanReason) {
+      throw new Error(
+        "Exchange reason is required."
+      );
+    }
+
+    const orderRef =
+      doc(
+        db,
+        "orders",
+        orderId
+      );
+
+    const orderSnapshot =
+      await getDoc(
+        orderRef
+      );
+
+    if (
+      !orderSnapshot.exists()
+    ) {
+      throw new Error(
+        "Order not found."
+      );
+    }
+
+    const order =
+      {
+        id:
+          orderSnapshot.id,
+
+        ...orderSnapshot.data(),
+      } as any;
+
+    const owner =
+      order?.userId ||
+      order?.customer?.uid ||
+      order?.customer?.userId ||
+      "";
+
+    if (
+      owner !==
+      currentUser.uid
+    ) {
+      throw new Error(
+        "You are not allowed to request an exchange for this order."
+      );
+    }
+
+    if (
+      order.status !==
+      "Delivered"
+    ) {
+      throw new Error(
+        "Product exchange is available only after delivery."
+      );
+    }
+
+    const items =
+      Array.isArray(
+        order.items
+      )
+        ? [...order.items]
+        : [];
+
+    const itemIndex =
+      items.findIndex(
+        (item: any) =>
+          String(
+            item?.id || ""
+          ) ===
+          String(
+            productId
+          )
+      );
+
+    if (
+      itemIndex === -1
+    ) {
+      throw new Error(
+        "Product not found in this order."
+      );
+    }
+
+    const selectedItem =
+      items[itemIndex] as any;
+
+    if (
+      selectedItem.exchangeStatus ===
+        "Requested" ||
+      selectedItem.exchangeStatus ===
+        "Approved" ||
+      selectedItem.exchangeStatus ===
+        "Completed"
+    ) {
+      throw new Error(
+        "Exchange request already exists for this product."
+      );
+    }
+
+    items[itemIndex] = {
+      ...selectedItem,
+
+      exchangeStatus:
+        "Requested",
+
+      exchangeReason:
+        cleanReason,
+
+      exchangeDescription:
+        description?.trim() ||
+        "",
+
+      exchangeRequestedAt:
+        new Date(),
+    };
+
+    await updateDoc(
+      orderRef,
+      {
+        items,
+
+        exchangeRequested:
+          true,
+
+        exchangeRequestedAt:
+          new Date(),
+
+        updatedAt:
+          new Date(),
+      }
+    );
+
+    // =================================================
+    // ADMIN EXCHANGE NOTIFICATION
+    // =================================================
+
+    try {
+      await addDoc(
+        collection(
+          db,
+          "notifications"
+        ),
+        {
+          audience:
+            "admin",
+
+          type:
+            "product-exchange",
+
+          title:
+            "Product Exchange Requested 🔄",
+
+          message:
+            `${order?.customer?.name || "Customer"} requested an exchange for "${selectedItem?.name || "Product"}" in order #${orderId.slice(
+              0,
+              8
+            )}. Reason: ${cleanReason}`,
+
+          orderId,
+
+          userId:
+            currentUser.uid,
+
+          productId,
+
+          productName:
+            selectedItem?.name ||
+            "Product",
+
+          exchangeReason:
+            cleanReason,
+
+          exchangeDescription:
+            description?.trim() ||
+            "",
+
+          read:
+            false,
+
+          createdAt:
+            new Date(),
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Admin exchange notification failed:",
+        error
+      );
+    }
+
+    // =================================================
+    // CUSTOMER EXCHANGE NOTIFICATION
+    // =================================================
+
+    await createOrderNotification(
+      {
+        ...order,
+
+        id:
+          orderId,
+
+        userId:
+          currentUser.uid,
+      },
+
+      "Exchange Request Submitted 🔄",
+
+      `Your exchange request for "${selectedItem?.name || "Product"}" has been submitted successfully. Our team will review it.`,
+
+      "Exchange Requested"
+    );
+
+    return true;
+  };
+
+// =====================================================
 // DELETE ORDER
 // =====================================================
 
@@ -1099,6 +1601,12 @@ export const deleteOrder =
   async (
     id: string
   ) => {
+    if (!id) {
+      throw new Error(
+        "Order ID is required."
+      );
+    }
+
     await deleteDoc(
       doc(
         db,

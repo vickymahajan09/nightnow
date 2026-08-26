@@ -1,1293 +1,952 @@
 "use client";
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import {
-  onAuthStateChanged,
-  type User,
-} from "firebase/auth";
-
-import { auth } from "../../lib/firebase";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import {
-  addOffer,
-  deleteOffer,
   getOffers,
-  toggleOffer,
   updateOffer,
+  deleteOffer,
   type Offer,
   type OfferType,
 } from "../../services/offerService";
 
-import {
-  getBrands,
-  type Brand,
-} from "../../services/brandService";
-
-import {
-  getProducts,
-  type Product,
-} from "../../services/productService";
-
-export default function AdminOffersPage() {
+export default function OffersPage() {
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [authUser, setAuthUser] =
-  useState<User | null>(null);
-
-const [authLoading, setAuthLoading] =
-  useState(true);
-
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
-  const [editingId, setEditingId] =
-    useState<string | null>(null);
+  const [editingOffer, setEditingOffer] =
+    useState<Offer | null>(null);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] =
+  const [deletingOffer, setDeletingOffer] =
+    useState<Offer | null>(null);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [deleting, setDeleting] =
+    useState(false);
+
+  const [message, setMessage] =
     useState("");
 
-  const [type, setType] =
-    useState<OfferType>("BUY_1_GET_2");
+  const [error, setError] =
+    useState("");
 
-  const [buyQuantity, setBuyQuantity] =
-    useState("1");
-
-  const [freeQuantity, setFreeQuantity] =
-    useState("2");
-
-  const [brandIds, setBrandIds] =
-    useState<string[]>([]);
-
-  const [productIds, setProductIds] =
-    useState<string[]>([]);
-
-  const [active, setActive] =
-    useState(true);
-
-  // ==========================================
-  // LOAD ALL DATA
-  // ==========================================
-
-  const loadAll = async () => {
-    setLoading(true);
-
+  const loadOffers = async () => {
     try {
-      const [
-        offerResult,
-        brandResult,
-        productResult,
-      ] = await Promise.allSettled([
-        getOffers(),
-        getBrands(),
-        getProducts(),
-      ]);
+      setLoading(true);
+      setError("");
 
-      // ------------------------------
-      // OFFERS
-      // ------------------------------
+      const result = await getOffers();
 
-      if (
-        offerResult.status === "fulfilled"
-      ) {
-        setOffers(
-          Array.isArray(
-            offerResult.value
-          )
-            ? offerResult.value
-            : []
-        );
-      } else {
-        console.error(
-          "GET OFFERS ERROR:",
-          offerResult.reason
-        );
+      const activeOffers =
+        Array.isArray(result)
+          ? result.filter(
+              (offer) =>
+                offer.active !== false
+            )
+          : [];
 
-        setOffers([]);
-      }
-
-      // ------------------------------
-      // BRANDS
-      // ------------------------------
-
-      if (
-        brandResult.status === "fulfilled"
-      ) {
-        setBrands(
-          Array.isArray(
-            brandResult.value
-          )
-            ? brandResult.value.filter(
-                (item: any) =>
-                  item?.active !== false
-              )
-            : []
-        );
-      } else {
-        console.error(
-          "GET BRANDS ERROR:",
-          brandResult.reason
-        );
-
-        setBrands([]);
-      }
-
-      // ------------------------------
-      // PRODUCTS
-      // ------------------------------
-
-      if (
-        productResult.status === "fulfilled"
-      ) {
-        setProducts(
-          Array.isArray(
-            productResult.value
-          )
-            ? productResult.value.filter(
-                (item: any) =>
-                  item?.active !== false
-              )
-            : []
-        );
-      } else {
-        console.error(
-          "GET PRODUCTS ERROR:",
-          productResult.reason
-        );
-
-        setProducts([]);
-      }
-
-      // ------------------------------
-      // ERROR DETAILS
-      // ------------------------------
-
-      const failed: string[] = [];
-
-      if (
-        offerResult.status ===
-        "rejected"
-      ) {
-        failed.push("Offers");
-      }
-
-      if (
-        brandResult.status ===
-        "rejected"
-      ) {
-        failed.push("Brands");
-      }
-
-      if (
-        productResult.status ===
-        "rejected"
-      ) {
-        failed.push("Products");
-      }
-
-      if (failed.length > 0) {
-        console.error(
-          "FAILED SERVICES:",
-          failed
-        );
-
-        alert(
-          `${failed.join(
-            ", "
-          )} load nahi ho paaye. Console me exact error check karein.`
-        );
-      }
-    } catch (error) {
+      setOffers(activeOffers);
+    } catch (err) {
       console.error(
-        "Admin offers loading error:",
-        error
+        "Offers loading error:",
+        err
       );
 
-      alert(
-        "Admin data load nahi ho paya."
+      setOffers([]);
+
+      setError(
+        "Offers load nahi ho pa rahe."
       );
     } finally {
       setLoading(false);
     }
   };
 
- useEffect(() => {
-  const unsubscribe =
-    onAuthStateChanged(
-      auth,
-      (user) => {
-        console.log(
-          "🔥 FIREBASE AUTH EMAIL:",
-          user?.email
-        );
+  useEffect(() => {
+    void loadOffers();
+  }, []);
 
-        console.log(
-          "🔥 FIREBASE AUTH UID:",
-          user?.uid
-        );
-
-        setAuthUser(user);
-        setAuthLoading(false);
-      }
-    );
-
-  return () => {
-    unsubscribe();
-  };
-}, []);
-
-
-useEffect(() => {
-  if (authLoading) {
-    return;
-  }
-
-  loadAll();
-}, [authLoading]);
-
-  // ==========================================
-  // RESET
-  // ==========================================
-
-  const reset = () => {
-    setEditingId(null);
-
-    setTitle("");
-    setDescription("");
-
-    setType("BUY_1_GET_2");
-
-    setBuyQuantity("1");
-    setFreeQuantity("2");
-
-    setBrandIds([]);
-    setProductIds([]);
-
-    setActive(true);
-  };
-
-  // ==========================================
-  // TOGGLE ID
-  // ==========================================
-
-  const toggleId = (
-    id: string,
-    current: string[],
-    setter: (
-      value: string[]
-    ) => void
+  const getOfferLabel = (
+    offer: Offer
   ) => {
-    setter(
-      current.includes(id)
-        ? current.filter(
-            (item) =>
-              item !== id
-          )
-        : [...current, id]
-    );
+    if (
+      offer.type === "BUY_1_GET_1"
+    ) {
+      return "BUY 1 GET 1";
+    }
+
+    if (
+      offer.type === "BUY_1_GET_2"
+    ) {
+      return "BUY 1 GET 2";
+    }
+
+    if (
+      offer.type === "BUY_X_GET_Y"
+    ) {
+      return `BUY ${
+        offer.buyQuantity || 1
+      } GET ${
+        offer.freeQuantity || 1
+      }`;
+    }
+
+    return "SPECIAL OFFER";
   };
 
-  // ==========================================
-  // OFFER TYPE
-  // ==========================================
 
-  const handleTypeChange = (
-    nextType: OfferType
-  ) => {
-    setType(nextType);
+  // =====================================================
+  // SAVE EDIT
+  // =====================================================
 
-    if (
-      nextType ===
-      "BUY_1_GET_1"
-    ) {
-      setBuyQuantity("1");
-      setFreeQuantity("1");
-    }
-
-    if (
-      nextType ===
-      "BUY_1_GET_2"
-    ) {
-      setBuyQuantity("1");
-      setFreeQuantity("2");
-    }
-
-    if (
-      nextType ===
-      "NONE"
-    ) {
-      setBuyQuantity("1");
-      setFreeQuantity("0");
-    }
-
-    if (
-      nextType ===
-      "BUY_X_GET_Y"
-    ) {
-      setBuyQuantity("2");
-      setFreeQuantity("1");
-    }
-  };
-
-  // ==========================================
-  // SAVE
-  // ==========================================
-
-  const save = async () => {
-    if (!title.trim()) {
-      alert(
-        "Offer title enter karein."
-      );
+  const handleSaveEdit = async () => {
+    if (!editingOffer) {
       return;
     }
-
-    if (
-      type !== "NONE" &&
-      brandIds.length === 0 &&
-      productIds.length === 0
-    ) {
-      alert(
-        "Kam se kam 1 brand ya product select karein."
-      );
-      return;
-    }
-
-    if (
-      type ===
-      "BUY_X_GET_Y"
-    ) {
-      if (
-        Number(buyQuantity) <=
-        0
-      ) {
-        alert(
-          "Buy quantity invalid hai."
-        );
-        return;
-      }
-
-      if (
-        Number(freeQuantity) <=
-        0
-      ) {
-        alert(
-          "Free quantity invalid hai."
-        );
-        return;
-      }
-    }
-
-    setSaving(true);
 
     try {
-      const payload = {
-        title: title.trim(),
-        description:
-          description.trim(),
-        type,
+      setSaving(true);
+      setError("");
+      setMessage("");
 
-        buyQuantity:
-          Number(
-            buyQuantity
-          ),
+      await updateOffer(
+        String(editingOffer.id),
+        {
+          title:
+            editingOffer.title,
 
-        freeQuantity:
-          Number(
-            freeQuantity
-          ),
+          description:
+            editingOffer.description || "",
 
-        brandIds,
-        productIds,
+          type:
+            editingOffer.type,
 
-        active,
-      };
+          buyQuantity:
+            Number(
+              editingOffer.buyQuantity || 1
+            ),
 
-      if (editingId) {
-        await updateOffer(
-          editingId,
-          payload
-        );
+          freeQuantity:
+            Number(
+              editingOffer.freeQuantity || 0
+            ),
 
-        alert(
-          "Offer updated."
-        );
-      } else {
-        await addOffer(
-          payload
-        );
+          brandIds:
+            editingOffer.brandIds || [],
 
-        alert(
-          "Offer created."
-        );
-      }
+          productIds:
+            editingOffer.productIds || [],
 
-      reset();
-
-      await loadAll();
-    } catch (error: any) {
-      console.error(
-        "Offer save error:",
-        error
+          active:
+            editingOffer.active !== false,
+        }
       );
 
-      alert(
-        error?.message ||
-          "Offer save nahi hua."
+      setEditingOffer(null);
+
+      setMessage(
+        "Offer successfully updated."
+      );
+
+      await loadOffers();
+
+    } catch (err: any) {
+      console.error(
+        "Offer update error:",
+        err
+      );
+
+      setError(
+        err?.message ||
+          "Offer update nahi ho pa raha."
       );
     } finally {
       setSaving(false);
     }
   };
 
-  // ==========================================
-  // EDIT
-  // ==========================================
 
-  const edit = (
-    offer: Offer
-  ) => {
-    setEditingId(
-      offer.id
-    );
-
-    setTitle(
-      offer.title || ""
-    );
-
-    setDescription(
-      offer.description ||
-        ""
-    );
-
-    setType(
-      offer.type
-    );
-
-    setBuyQuantity(
-      String(
-        offer.buyQuantity ||
-          1
-      )
-    );
-
-    setFreeQuantity(
-      String(
-        offer.freeQuantity ||
-          0
-      )
-    );
-
-    setBrandIds(
-      Array.isArray(
-        offer.brandIds
-      )
-        ? offer.brandIds.map(
-            String
-          )
-        : []
-    );
-
-    setProductIds(
-      Array.isArray(
-        offer.productIds
-      )
-        ? offer.productIds.map(
-            String
-          )
-        : []
-    );
-
-    setActive(
-      offer.active !== false
-    );
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
-
-  // ==========================================
+  // =====================================================
   // DELETE
-  // ==========================================
+  // =====================================================
 
-  const remove = async (
-    id: string
-  ) => {
-    if (
-      !confirm(
-        "Delete this offer?"
-      )
-    ) {
+  const handleDelete = async () => {
+    if (!deletingOffer) {
       return;
     }
 
     try {
-      await deleteOffer(id);
+      setDeleting(true);
+      setError("");
+      setMessage("");
 
-      setOffers(
-        (items) =>
-          items.filter(
-            (item) =>
-              item.id !== id
-          )
+      await deleteOffer(
+        String(deletingOffer.id)
       );
-    } catch (error) {
+
+      setDeletingOffer(null);
+
+      setMessage(
+        "Offer successfully deleted."
+      );
+
+      await loadOffers();
+
+    } catch (err: any) {
       console.error(
         "Offer delete error:",
-        error
+        err
       );
 
-      alert(
-        "Offer delete nahi hua."
+      setError(
+        err?.message ||
+          "Offer delete nahi ho pa raha."
       );
+    } finally {
+      setDeleting(false);
     }
   };
 
-  // ==========================================
-  // ACTIVE / HIDDEN
-  // ==========================================
 
-  const changeActive = async (
-    offer: Offer
+  // =====================================================
+  // CHANGE OFFER TYPE
+  // =====================================================
+
+  const handleTypeChange = (
+    type: OfferType
   ) => {
-    try {
-      await toggleOffer(
-        offer.id,
-        !offer.active
-      );
-
-      setOffers(
-        (items) =>
-          items.map(
-            (item) =>
-              item.id ===
-              offer.id
-                ? {
-                    ...item,
-                    active:
-                      !item.active,
-                  }
-                : item
-          )
-      );
-    } catch (error) {
-      console.error(
-        "Offer status error:",
-        error
-      );
-
-      alert(
-        "Offer status update nahi hua."
-      );
+    if (!editingOffer) {
+      return;
     }
-  };
 
-  // ==========================================
-  // BRAND NAME
-  // ==========================================
+    let buyQuantity =
+      editingOffer.buyQuantity || 1;
 
-  const brandName = (
-    id: string
-  ) => {
-    return (
-      brands.find(
-        (brand) =>
-          String(
-            brand.id
-          ) === String(id)
-      )?.name ||
-      id
-    );
-  };
+    let freeQuantity =
+      editingOffer.freeQuantity || 0;
 
-  // ==========================================
-  // PRODUCT NAME
-  // ==========================================
-
-  const productName = (
-    id: string
-  ) => {
-    return (
-      products.find(
-        (product) =>
-          String(
-            product.id
-          ) === String(id)
-      )?.name ||
-      id
-    );
-  };
-
-  // ==========================================
-  // OFFER LABEL
-  // ==========================================
-
-  const offerLabel = (
-    offer: Offer
-  ) => {
     if (
-      offer.type ===
-      "BUY_1_GET_1"
+      type === "BUY_1_GET_1"
     ) {
-      return "BUY 1 GET 1";
+      buyQuantity = 1;
+      freeQuantity = 1;
     }
 
     if (
-      offer.type ===
-      "BUY_1_GET_2"
+      type === "BUY_1_GET_2"
     ) {
-      return "BUY 1 GET 2";
+      buyQuantity = 1;
+      freeQuantity = 2;
     }
 
     if (
-      offer.type ===
-      "BUY_X_GET_Y"
+      type === "BUY_X_GET_Y"
     ) {
-      return `BUY ${offer.buyQuantity} GET ${offer.freeQuantity}`;
+      buyQuantity =
+        Math.max(
+          1,
+          buyQuantity
+        );
+
+      freeQuantity =
+        Math.max(
+          1,
+          freeQuantity
+        );
     }
 
-    return "NO OFFER";
+    if (
+      type === "NONE"
+    ) {
+      buyQuantity = 1;
+      freeQuantity = 0;
+    }
+
+    setEditingOffer({
+      ...editingOffer,
+      type,
+      buyQuantity,
+      freeQuantity,
+    });
   };
 
-  // ==========================================
-  // SELECTED SUMMARY
-  // ==========================================
-
-  const selectedSummary =
-    useMemo(
-      () => ({
-        brands:
-          brandIds.map(
-            brandName
-          ),
-
-        products:
-          productIds.map(
-            productName
-          ),
-      }),
-      [
-        brandIds,
-        productIds,
-        brands,
-        products,
-      ]
-    );
-
-  // ==========================================
-  // UI
-  // ==========================================
 
   return (
-    <main className="min-h-screen bg-black px-4 py-8 pb-24 text-white">
-      <div className="mx-auto max-w-7xl">
+    <main className="min-h-screen bg-gradient-to-br from-[#fff8e7] via-[#f7f7ff] to-[#f4edff] text-zinc-900">
 
-        {/* HEADER */}
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
-        <div>
-          <p className="text-xs font-black uppercase tracking-widest text-yellow-400">
-            NIGHT NOW ADMIN
-          </p>
+      <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 shadow-sm backdrop-blur">
 
-          <h1 className="mt-1 text-3xl font-black">
-            Offers
-          </h1>
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
 
-          <p className="mt-2 text-sm text-zinc-500">
-            Product/brand specific offers manage karein.
-          </p>
+          <Link
+            href="/"
+            className="flex items-center gap-2"
+          >
+            <span className="text-3xl">
+              🌙
+            </span>
+
+            <div>
+              <div className="text-xl font-black leading-none">
+                Night
+                <span className="text-yellow-500">
+                  Now
+                </span>
+              </div>
+
+              <div className="mt-1 text-[8px] font-bold tracking-[0.18em] text-zinc-400">
+                15 MIN DELIVERY
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin"
+            className="rounded-xl bg-black px-4 py-2 text-xs font-black text-white"
+          >
+            ← Admin
+          </Link>
+
         </div>
 
-        {/* FORM */}
+      </header>
 
-        <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
 
-          <div className="flex items-center justify-between gap-3">
+      {/* =================================================
+          PAGE
+      ================================================= */}
 
-            <h2 className="text-xl font-black">
-              {editingId
-                ? "Edit Offer"
-                : "Create Offer"}
-            </h2>
+      <section className="mx-auto max-w-7xl px-4 pb-12 pt-7">
 
-            {editingId && (
-              <button
-                type="button"
-                onClick={reset}
-                className="rounded-xl bg-zinc-800 px-4 py-2 text-xs font-black"
-              >
-                Cancel Edit
-              </button>
+        {/* TITLE */}
+
+        <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">
+              NightNow Deals
+            </p>
+
+            <h1 className="mt-1 text-3xl font-black">
+              All Offers
+            </h1>
+
+            <p className="mt-1 text-sm text-zinc-500">
+              Create, edit and manage all offers.
+            </p>
+          </div>
+
+          <Link
+            href="/admin/offers/create"
+            className="inline-flex items-center justify-center rounded-xl bg-yellow-400 px-5 py-3 text-xs font-black text-black shadow-sm hover:bg-yellow-300"
+          >
+            + Create New Offer
+          </Link>
+
+        </div>
+
+
+        {/* SUCCESS */}
+
+        {message && (
+          <div className="mb-5 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-700">
+            ✅ {message}
+          </div>
+        )}
+
+
+        {/* ERROR */}
+
+        {error && (
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            ⚠️ {error}
+          </div>
+        )}
+
+
+        {/* LOADING */}
+
+        {loading && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+            {[1, 2, 3].map(
+              (item) => (
+                <div
+                  key={item}
+                  className="h-72 animate-pulse rounded-3xl bg-white"
+                />
+              )
             )}
 
           </div>
+        )}
 
-          {/* TITLE + DESCRIPTION */}
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+        {/* EMPTY */}
 
-            <input
-              value={title}
-              onChange={(e) =>
-                setTitle(
-                  e.target.value
-                )
-              }
-              placeholder="Offer title"
-              className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm outline-none focus:border-yellow-400"
-            />
-
-            <input
-              value={description}
-              onChange={(e) =>
-                setDescription(
-                  e.target.value
-                )
-              }
-              placeholder="Description"
-              className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm outline-none focus:border-yellow-400"
-            />
-
-          </div>
-
-          {/* OFFER TYPE */}
-
-          <div className="mt-5">
-
-            <p className="mb-2 text-xs font-black text-zinc-500">
-              OFFER TYPE
-            </p>
-
-            <div className="grid gap-2 sm:grid-cols-4">
-
-              {[
-                [
-                  "NONE",
-                  "No Offer",
-                ],
-                [
-                  "BUY_1_GET_1",
-                  "Buy 1 Get 1",
-                ],
-                [
-                  "BUY_1_GET_2",
-                  "Buy 1 Get 2",
-                ],
-                [
-                  "BUY_X_GET_Y",
-                  "Buy X Get Y",
-                ],
-              ].map(
-                ([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() =>
-                      handleTypeChange(
-                        value as OfferType
-                      )
-                    }
-                    className={`rounded-2xl border p-4 text-left text-xs font-black ${
-                      type === value
-                        ? "border-yellow-400 bg-yellow-400 text-black"
-                        : "border-zinc-800 bg-zinc-900 text-white"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                )
-              )}
-
-            </div>
-
-          </div>
-
-          {/* CUSTOM X/Y */}
-
-          {type ===
-            "BUY_X_GET_Y" && (
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-
-              <div>
-
-                <label className="mb-2 block text-xs font-black text-zinc-500">
-                  BUY QUANTITY
-                </label>
-
-                <input
-                  type="number"
-                  min="1"
-                  value={
-                    buyQuantity
-                  }
-                  onChange={(e) =>
-                    setBuyQuantity(
-                      e.target.value
-                    )
-                  }
-                  className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm outline-none focus:border-yellow-400"
-                />
-
-              </div>
-
-              <div>
-
-                <label className="mb-2 block text-xs font-black text-zinc-500">
-                  FREE QUANTITY
-                </label>
-
-                <input
-                  type="number"
-                  min="1"
-                  value={
-                    freeQuantity
-                  }
-                  onChange={(e) =>
-                    setFreeQuantity(
-                      e.target.value
-                    )
-                  }
-                  className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm outline-none focus:border-yellow-400"
-                />
-
-              </div>
-
-            </div>
-          )}
-
-          {/* BRANDS */}
-
-          <div className="mt-6">
-
-            <div className="flex items-center justify-between">
-
-              <p className="text-xs font-black text-zinc-500">
-                SELECT BRANDS
-              </p>
-
-              <span className="text-[10px] text-zinc-600">
-                {brands.length} available
-              </span>
-
-            </div>
-
-            <div className="mt-3 grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
-
-              {brands.length === 0 ? (
-                <div className="col-span-full rounded-xl bg-zinc-900 p-5 text-center text-xs text-zinc-500">
-                  Koi active brand nahi mila.
-                </div>
-              ) : (
-                brands.map(
-                  (brand) => {
-
-                    const id =
-                      String(
-                        brand.id
-                      );
-
-                    const selected =
-                      brandIds.includes(
-                        id
-                      );
-
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() =>
-                          toggleId(
-                            id,
-                            brandIds,
-                            setBrandIds
-                          )
-                        }
-                        className={`rounded-xl border p-3 text-left text-xs font-bold ${
-                          selected
-                            ? "border-yellow-400 bg-yellow-400 text-black"
-                            : "border-zinc-800 bg-zinc-900"
-                        }`}
-                      >
-                        {selected
-                          ? "✓ "
-                          : ""}
-                        {brand.name}
-                      </button>
-                    );
-                  }
-                )
-              )}
-
-            </div>
-
-          </div>
-
-          {/* PRODUCTS */}
-
-          <div className="mt-6">
-
-            <div className="flex items-center justify-between">
-
-              <p className="text-xs font-black text-zinc-500">
-                SELECT PRODUCTS
-              </p>
-
-              <span className="text-[10px] text-zinc-600">
-                {products.length} available
-              </span>
-
-            </div>
-
-            <div className="mt-3 grid max-h-80 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
-
-              {products.length === 0 ? (
-                <div className="col-span-full rounded-xl bg-zinc-900 p-5 text-center text-xs text-zinc-500">
-                  Koi active product nahi mila.
-                </div>
-              ) : (
-                products.map(
-                  (product) => {
-
-                    const id =
-                      String(
-                        product.id
-                      );
-
-                    const selected =
-                      productIds.includes(
-                        id
-                      );
-
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() =>
-                          toggleId(
-                            id,
-                            productIds,
-                            setProductIds
-                          )
-                        }
-                        className={`rounded-xl border p-3 text-left ${
-                          selected
-                            ? "border-yellow-400 bg-yellow-400 text-black"
-                            : "border-zinc-800 bg-zinc-900"
-                        }`}
-                      >
-
-                        <p className="truncate text-xs font-black">
-                          {selected
-                            ? "✓ "
-                            : ""}
-                          {product.name}
-                        </p>
-
-                        {(
-                          product as any
-                        ).brandName && (
-                          <p className="mt-1 truncate text-[9px] opacity-60">
-                            {
-                              (
-                                product as any
-                              ).brandName
-                            }
-                          </p>
-                        )}
-
-                      </button>
-                    );
-                  }
-                )
-              )}
-
-            </div>
-
-          </div>
-
-          {/* ACTIVE */}
-
-          <label className="mt-6 flex cursor-pointer items-center gap-3 rounded-2xl bg-zinc-900 p-4">
-
-            <input
-              type="checkbox"
-              checked={active}
-              onChange={(e) =>
-                setActive(
-                  e.target.checked
-                )
-              }
-              className="h-5 w-5 accent-yellow-400"
-            />
-
-            <div>
-
-              <p className="text-sm font-black">
-                Offer Active
-              </p>
-
-              <p className="text-[10px] text-zinc-500">
-                Customer ko active offer dikhega.
-              </p>
-
-            </div>
-
-          </label>
-
-          {/* TARGET SUMMARY */}
-
-          {(selectedSummary.brands
-            .length > 0 ||
-            selectedSummary.products
-              .length > 0) && (
-
-            <div className="mt-5 rounded-2xl border border-yellow-900/50 bg-yellow-950/20 p-4">
-
-              <p className="text-xs font-black text-yellow-400">
-                TARGET
-              </p>
-
-              {selectedSummary.brands
-                .length > 0 && (
-                <p className="mt-2 text-xs text-zinc-300">
-                  Brands:{" "}
-                  {selectedSummary.brands.join(
-                    ", "
-                  )}
-                </p>
-              )}
-
-              {selectedSummary.products
-                .length > 0 && (
-                <p className="mt-2 text-xs text-zinc-300">
-                  Products:{" "}
-                  {selectedSummary.products.join(
-                    ", "
-                  )}
-                </p>
-              )}
-
-            </div>
-          )}
-
-          {/* SAVE */}
-
-          <button
-            type="button"
-            disabled={saving}
-            onClick={save}
-            className="mt-6 w-full rounded-2xl bg-yellow-400 py-4 text-sm font-black text-black disabled:opacity-50"
-          >
-            {saving
-              ? "Saving..."
-              : editingId
-              ? "Update Offer"
-              : "Create Offer"}
-          </button>
-
-        </section>
-
-        {/* EXISTING OFFERS */}
-
-        <section className="mt-8">
-
-          <div className="flex items-end justify-between">
-
-            <div>
-
-              <h2 className="text-xl font-black">
-                Existing Offers
-              </h2>
-
-              <p className="mt-1 text-xs text-zinc-500">
-                {offers.length} offer
-                {offers.length === 1
-                  ? ""
-                  : "s"}
-              </p>
-
-            </div>
-
-          </div>
-
-          {loading ? (
-
-            <div className="py-16 text-center text-zinc-500">
-              Loading offers...
-            </div>
-
-          ) : offers.length === 0 ? (
-
-            <div className="mt-5 rounded-3xl border border-zinc-800 bg-zinc-950 p-10 text-center">
+        {!loading &&
+          offers.length === 0 && (
+            <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center">
 
               <div className="text-5xl">
                 🎁
               </div>
 
-              <p className="mt-4 font-black">
-                No offers created.
+              <h2 className="mt-4 text-xl font-black">
+                No active offers
+              </h2>
+
+              <p className="mt-2 text-sm text-zinc-500">
+                Create your first offer.
               </p>
 
+              <Link
+                href="/admin/offers/create"
+                className="mt-5 inline-flex rounded-xl bg-yellow-400 px-5 py-3 text-xs font-black"
+              >
+                + Create Offer
+              </Link>
+
             </div>
+          )}
 
-          ) : (
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* =================================================
+            OFFERS
+        ================================================= */}
 
-              {offers.map(
-                (offer) => (
+        {!loading &&
+          offers.length > 0 && (
 
-                  <article
-                    key={
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+            {offers.map(
+              (offer) => {
+
+                const offerLabel =
+                  getOfferLabel(
+                    offer
+                  );
+
+                return (
+
+                  <div
+                    key={String(
                       offer.id
-                    }
-                    className="rounded-3xl border border-zinc-800 bg-zinc-950 p-5"
+                    )}
+                    className="overflow-hidden rounded-3xl border border-yellow-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
                   >
 
-                    <div className="flex items-start justify-between gap-3">
+                    {/* CARD TOP */}
 
-                      <div>
+                    <div className="bg-gradient-to-br from-yellow-300 via-yellow-400 to-orange-400 p-5">
 
-                        <p className="text-lg font-black">
-                          {offer.title}
+                      <div className="flex items-start justify-between gap-3">
+
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/90 text-3xl shadow-sm">
+                          🎁
+                        </div>
+
+                        <span className="rounded-full bg-black px-3 py-1.5 text-[9px] font-black text-white">
+                          {offerLabel}
+                        </span>
+
+                      </div>
+
+                    </div>
+
+
+                    {/* CARD CONTENT */}
+
+                    <div className="p-5">
+
+                      <h2 className="line-clamp-2 text-lg font-black">
+                        {offer.title}
+                      </h2>
+
+
+                      {offer.description && (
+                        <p className="mt-2 line-clamp-2 text-sm leading-5 text-zinc-500">
+                          {offer.description}
                         </p>
+                      )}
 
-                        {offer.description && (
-                          <p className="mt-1 text-xs text-zinc-500">
-                            {
-                              offer.description
-                            }
-                          </p>
+
+                      {/* PRODUCT / BRAND COUNT */}
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+
+                        {offer.productIds?.length >
+                          0 && (
+
+                          <span className="rounded-lg bg-blue-50 px-2.5 py-1 text-[9px] font-black text-blue-600">
+                            {offer.productIds.length} Products
+                          </span>
+
+                        )}
+
+                        {offer.brandIds?.length >
+                          0 && (
+
+                          <span className="rounded-lg bg-purple-50 px-2.5 py-1 text-[9px] font-black text-purple-600">
+                            {offer.brandIds.length} Brands
+                          </span>
+
                         )}
 
                       </div>
 
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black ${
-                          offer.active
-                            ? "bg-green-400 text-black"
-                            : "bg-zinc-800 text-zinc-500"
-                        }`}
-                      >
-                        {offer.active
-                          ? "ACTIVE"
-                          : "OFF"}
-                      </span>
+
+                      {/* =================================================
+                          EDIT / DELETE
+                      ================================================= */}
+
+                      <div className="mt-5 grid grid-cols-2 gap-2">
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingOffer({
+                              ...offer,
+                            })
+                          }
+                          className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-black text-blue-700 transition hover:bg-blue-100 active:scale-95"
+                        >
+                          ✏️ Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDeletingOffer(
+                              offer
+                            )
+                          }
+                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-black text-red-600 transition hover:bg-red-100 active:scale-95"
+                        >
+                          🗑️ Delete
+                        </button>
+
+                      </div>
+
+
+                      {/* VIEW */}
+
+                      <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-4">
+
+                        <span className="text-[10px] font-bold text-zinc-400">
+                          View offer details
+                        </span>
+
+                        <Link
+                          href={`/offers/${encodeURIComponent(
+                            String(
+                              offer.id
+                            )
+                          )}`}
+                          className="rounded-xl bg-black px-4 py-2 text-[10px] font-black text-white transition hover:bg-zinc-800"
+                        >
+                          View Offer →
+                        </Link>
+
+                      </div>
 
                     </div>
 
-                    <div className="mt-4 rounded-2xl bg-yellow-400 p-3 text-center text-sm font-black text-black">
-                      {offerLabel(
-                        offer
-                      )}
-                    </div>
+                  </div>
 
-                    {offer.brandIds &&
-                      offer.brandIds.length >
-                        0 && (
+                );
+              }
+            )}
 
-                        <div className="mt-4">
+          </div>
 
-                          <p className="text-[9px] font-black text-zinc-600">
-                            BRANDS
-                          </p>
+        )}
 
-                          <p className="mt-1 text-xs text-zinc-300">
-                            {offer.brandIds
-                              .map(
-                                brandName
-                              )
-                              .join(
-                                ", "
-                              )}
-                          </p>
+      </section>
 
-                        </div>
-                      )}
 
-                    {offer.productIds &&
-                      offer.productIds.length >
-                        0 && (
+      {/* =====================================================
+          EDIT MODAL
+      ===================================================== */}
 
-                        <div className="mt-4">
+      {editingOffer && (
 
-                          <p className="text-[9px] font-black text-zinc-600">
-                            PRODUCTS
-                          </p>
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
 
-                          <p className="mt-1 line-clamp-3 text-xs text-zinc-300">
-                            {offer.productIds
-                              .map(
-                                productName
-                              )
-                              .join(
-                                ", "
-                              )}
-                          </p>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white shadow-2xl">
 
-                        </div>
-                      )}
+            {/* MODAL HEADER */}
 
-                    <div className="mt-5 grid grid-cols-3 gap-2">
+            <div className="sticky top-0 flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-4">
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          edit(
-                            offer
-                          )
-                        }
-                        className="rounded-xl bg-zinc-800 py-2 text-[10px] font-black"
-                      >
-                        Edit
-                      </button>
+              <div>
+                <h2 className="text-xl font-black">
+                  Edit Offer
+                </h2>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          changeActive(
-                            offer
-                          )
-                        }
-                        className="rounded-xl bg-blue-600 py-2 text-[10px] font-black"
-                      >
-                        {offer.active
-                          ? "Hide"
-                          : "Show"}
-                      </button>
+                <p className="text-xs text-zinc-500">
+                  Update your offer details
+                </p>
+              </div>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          remove(
-                            offer.id
-                          )
-                        }
-                        className="rounded-xl bg-red-600 py-2 text-[10px] font-black"
-                      >
-                        Delete
-                      </button>
-
-                    </div>
-
-                  </article>
-
-                )
-              )}
+              <button
+                type="button"
+                onClick={() =>
+                  setEditingOffer(
+                    null
+                  )
+                }
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-lg font-black"
+              >
+                ×
+              </button>
 
             </div>
 
-          )}
 
-        </section>
+            {/* MODAL BODY */}
 
-      </div>
+            <div className="space-y-5 p-5">
+
+              {/* TITLE */}
+
+              <div>
+                <label className="text-xs font-black text-zinc-700">
+                  Offer Title
+                </label>
+
+                <input
+                  value={
+                    editingOffer.title
+                  }
+                  onChange={(e) =>
+                    setEditingOffer({
+                      ...editingOffer,
+                      title:
+                        e.target.value,
+                    })
+                  }
+                  className="mt-2 w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm font-bold outline-none focus:border-yellow-400"
+                  placeholder="Offer title"
+                />
+              </div>
+
+
+              {/* DESCRIPTION */}
+
+              <div>
+                <label className="text-xs font-black text-zinc-700">
+                  Description
+                </label>
+
+                <textarea
+                  value={
+                    editingOffer.description ||
+                    ""
+                  }
+                  onChange={(e) =>
+                    setEditingOffer({
+                      ...editingOffer,
+                      description:
+                        e.target.value,
+                    })
+                  }
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-xl border border-zinc-200 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                  placeholder="Offer description"
+                />
+              </div>
+
+
+              {/* TYPE */}
+
+              <div>
+                <label className="text-xs font-black text-zinc-700">
+                  Offer Type
+                </label>
+
+                <select
+                  value={
+                    editingOffer.type
+                  }
+                  onChange={(e) =>
+                    handleTypeChange(
+                      e.target
+                        .value as OfferType
+                    )
+                  }
+                  className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-yellow-400"
+                >
+                  <option value="NONE">
+                    Special Offer
+                  </option>
+
+                  <option value="BUY_1_GET_1">
+                    BUY 1 GET 1
+                  </option>
+
+                  <option value="BUY_1_GET_2">
+                    BUY 1 GET 2
+                  </option>
+
+                  <option value="BUY_X_GET_Y">
+                    BUY X GET Y
+                  </option>
+                </select>
+              </div>
+
+
+              {/* QUANTITIES */}
+
+              {editingOffer.type ===
+                "BUY_X_GET_Y" && (
+
+                <div className="grid grid-cols-2 gap-3">
+
+                  <div>
+                    <label className="text-xs font-black text-zinc-700">
+                      Buy Quantity
+                    </label>
+
+                    <input
+                      type="number"
+                      min={1}
+                      value={
+                        editingOffer.buyQuantity
+                      }
+                      onChange={(e) =>
+                        setEditingOffer({
+                          ...editingOffer,
+                          buyQuantity:
+                            Math.max(
+                              1,
+                              Number(
+                                e.target
+                                  .value
+                              )
+                            ),
+                        })
+                      }
+                      className="mt-2 w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm font-bold"
+                    />
+                  </div>
+
+
+                  <div>
+                    <label className="text-xs font-black text-zinc-700">
+                      Free Quantity
+                    </label>
+
+                    <input
+                      type="number"
+                      min={1}
+                      value={
+                        editingOffer.freeQuantity
+                      }
+                      onChange={(e) =>
+                        setEditingOffer({
+                          ...editingOffer,
+                          freeQuantity:
+                            Math.max(
+                              1,
+                              Number(
+                                e.target
+                                  .value
+                              )
+                            ),
+                        })
+                      }
+                      className="mt-2 w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm font-bold"
+                    />
+                  </div>
+
+                </div>
+
+              )}
+
+
+              {/* ACTIVE */}
+
+              <div className="flex items-center justify-between rounded-2xl bg-zinc-50 p-4">
+
+                <div>
+                  <p className="text-sm font-black">
+                    Offer Active
+                  </p>
+
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Active offers appear to customers.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingOffer({
+                      ...editingOffer,
+                      active:
+                        !editingOffer.active,
+                    })
+                  }
+                  className={`relative h-7 w-12 rounded-full transition ${
+                    editingOffer.active
+                      ? "bg-green-500"
+                      : "bg-zinc-300"
+                  }`}
+                >
+
+                  <span
+                    className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${
+                      editingOffer.active
+                        ? "left-6"
+                        : "left-1"
+                    }`}
+                  />
+
+                </button>
+
+              </div>
+
+
+              {/* NOTE */}
+
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+
+                <strong>
+                  Products / Brands:
+                </strong>{" "}
+                Existing selected products
+                and brands will remain unchanged.
+                Edit modal is only changing the
+                offer information.
+
+              </div>
+
+            </div>
+
+
+            {/* MODAL FOOTER */}
+
+            <div className="sticky bottom-0 flex gap-3 border-t border-zinc-200 bg-white p-5">
+
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() =>
+                  setEditingOffer(
+                    null
+                  )
+                }
+                className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 text-sm font-black text-zinc-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  saving ||
+                  !editingOffer.title.trim()
+                }
+                onClick={
+                  handleSaveEdit
+                }
+                className="flex-1 rounded-xl bg-yellow-400 px-4 py-3 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving
+                  ? "Saving..."
+                  : "Save Changes"}
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* =====================================================
+          DELETE CONFIRMATION
+      ===================================================== */}
+
+      {deletingOffer && (
+
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+
+            <div className="text-center">
+
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-3xl">
+                🗑️
+              </div>
+
+              <h2 className="mt-4 text-xl font-black">
+                Delete Offer?
+              </h2>
+
+              <p className="mt-2 text-sm text-zinc-500">
+                Are you sure you want to delete
+                <strong className="text-zinc-900">
+                  {" "}
+                  "{deletingOffer.title}"
+                </strong>
+                ?
+              </p>
+
+              <p className="mt-2 text-xs text-red-500">
+                This action cannot be undone.
+              </p>
+
+            </div>
+
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() =>
+                  setDeletingOffer(
+                    null
+                  )
+                }
+                className="rounded-xl bg-zinc-100 px-4 py-3 text-sm font-black text-zinc-700"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={
+                  handleDelete
+                }
+                className="rounded-xl bg-red-500 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+              >
+                {deleting
+                  ? "Deleting..."
+                  : "Yes, Delete"}
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+
     </main>
   );
 }

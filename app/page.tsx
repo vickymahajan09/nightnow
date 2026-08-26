@@ -1751,6 +1751,33 @@ useEffect(() => {
     );
   };
 
+
+  // ============================================================
+  // HOME OFFERS
+  // ============================================================
+  const getOfferProductsForHome = (offer: Offer) => {
+    const productIds = new Set(Array.isArray(offer.productIds) ? offer.productIds.map(String) : []);
+    const brandIds = new Set(Array.isArray(offer.brandIds) ? offer.brandIds.map(String) : []);
+
+    return products.filter((product: any) => {
+      if (product?.active === false) return false;
+      const productId = String(product?.id || "");
+      const brandId = String(product?.brandId || product?.brand || product?.brandID || product?.brandName || "");
+      return productIds.has(productId) || (brandId && brandIds.has(brandId));
+    });
+  };
+
+  const getHomeOfferLabel = (offer: Offer) => {
+    if (offer.type === "BUY_1_GET_1") return "BUY 1 GET 1";
+    if (offer.type === "BUY_1_GET_2") return "BUY 1 GET 2";
+    if (offer.type === "BUY_X_GET_Y") return `BUY ${offer.buyQuantity || 1} GET ${offer.freeQuantity || 1}`;
+    return "SPECIAL OFFER";
+  };
+  
+  const homeVisibleOffers = offers.filter(
+    (offer) => offer.active !== false
+  );
+
   return (
    <main className="min-h-screen bg-gradient-to-br from-[#fff7ed] via-[#f5f7ff] to-[#f3efff] text-zinc-900">
 
@@ -2417,6 +2444,65 @@ Smart Picks</p>
             )}
           </div>
         </section>
+
+
+        {/* =================================================
+            TODAY'S OFFERS
+        ================================================= */}
+        {homeVisibleOffers.length > 0 && (
+          <section className="mx-2 rounded-3xl border border-yellow-100 bg-gradient-to-br from-[#fff9df] via-white to-[#fff3e8] px-3 pb-5 pt-4 shadow-[0_10px_30px_rgba(245,158,11,0.08)] md:mx-auto md:max-w-7xl md:px-4 md:pb-7 md:pt-6">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-red-500">NightNow Deals</p>
+                <h2 className="mt-1 text-[18px] font-black leading-5 md:text-xl">🔥 Today's Offers</h2>
+                <p className="mt-1 text-[9px] text-zinc-400">Save more with our latest offers</p>
+              </div>
+              <Link href="/offers" className="shrink-0 text-[10px] font-black text-yellow-700">View All →</Link>
+            </div>
+
+            <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 lg:grid-cols-4">
+              {homeVisibleOffers.slice(0, 8).map((offer) => {
+                const offerProducts = getOfferProductsForHome(offer);
+                const previewProducts = offerProducts.slice(0, 4);
+                const remaining = Math.max(0, offerProducts.length - previewProducts.length);
+
+                return (
+                  <Link key={`home-offer-${String(offer.id)}`} href={`/offers/${encodeURIComponent(String(offer.id))}`} className="group w-[220px] shrink-0 overflow-hidden rounded-2xl border border-yellow-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg md:w-auto">
+                    <div className="bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-300 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="line-clamp-1 text-xs font-black text-black">{offer.title || "Special Offer"}</h3>
+                        <span className="shrink-0 rounded-full bg-black px-2 py-1 text-[7px] font-black text-white">{getHomeOfferLabel(offer)}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3">
+                      {previewProducts.length > 0 ? (
+                        <div className="flex items-center justify-center py-1">
+                          {previewProducts.map((product: any, index: number) => {
+                            const image = getProductImage(product);
+                            return (
+                              <div key={`home-offer-product-${String(product.id)}-${index}`} className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-white bg-zinc-50 shadow-sm ${index > 0 ? "-ml-2" : ""}`}>
+                                {image ? <img src={image} alt={product.name || "Product"} className="h-full w-full object-contain p-1" loading="lazy" /> : <span className="text-lg">📦</span>}
+                              </div>
+                            );
+                          })}
+                          {remaining > 0 && <div className="-ml-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 border-white bg-black text-[9px] font-black text-white shadow-sm">+{remaining}</div>}
+                        </div>
+                      ) : (
+                        <div className="flex h-12 items-center justify-center rounded-xl bg-zinc-50 text-[9px] font-bold text-zinc-400">View offer products</div>
+                      )}
+
+                      <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-2.5">
+                        <span className="text-[8px] font-bold text-zinc-400">{offerProducts.length > 0 ? `${offerProducts.length} products` : "Special deal"}</span>
+                        <span className="text-[9px] font-black text-yellow-700 transition group-hover:translate-x-0.5">Shop Offer →</span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* =================================================
             BUDGET ZONE
