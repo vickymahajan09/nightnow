@@ -466,166 +466,283 @@ export const subscribeToOrders =
 
     let active = true;
 
-    const start = () => {
-      const currentUser =
-        auth.currentUser;
+    let started = false;
 
-      if (!active) {
+    const start = async () => {
+      if (!active || started) {
         return;
       }
 
-      if (!currentUser) {
-        callback([]);
-        return;
-      }
+      try {
+        /*
+         * Firebase authentication ko completely ready
+         * hone do.
+         */
+        await auth.authStateReady();
 
-      let ordersQuery;
+        if (!active) {
+          return;
+        }
 
-      if (
-        isAdminUser()
-      ) {
-        ordersQuery =
-          query(
-            collection(
-              db,
-              "orders"
-            ),
-            orderBy(
-              "createdAt",
-              "desc"
-            )
-          );
-      } else {
-        ordersQuery =
-          query(
-            collection(
-              db,
-              "orders"
-            ),
-            where(
-              "userId",
-              "==",
-              currentUser.uid
-            )
-          );
-      }
+        const currentUser =
+          auth.currentUser;
 
-      unsubscribeSnapshot =
-        onSnapshot(
-          ordersQuery,
+        /*
+         * User login nahi hai.
+         */
+        if (!currentUser) {
+          callback([]);
+          return;
+        }
 
-          (snapshot) => {
-            const orders =
-              snapshot.docs.map(
-                (item) => {
-                  const data =
-                    item.data();
+        started = true;
 
-                  return {
-                    id:
-                      item.id,
+        console.log(
+          "🟢 Orders subscription started:",
+          currentUser.uid
+        );
 
-                    ...data,
+        let ordersQuery;
 
-                    status:
-                      data.status ||
-                      "Pending",
-                  };
+        /*
+         * ADMIN
+         */
+        if (isAdminUser()) {
+          ordersQuery =
+            query(
+              collection(
+                db,
+                "orders"
+              ),
+              orderBy(
+                "createdAt",
+                "desc"
+              )
+            );
+        }
+
+        /*
+         * CUSTOMER
+         */
+        else {
+          ordersQuery =
+            query(
+              collection(
+                db,
+                "orders"
+              ),
+              where(
+                "userId",
+                "==",
+                currentUser.uid
+              )
+            );
+        }
+
+        /*
+         * FIRESTORE REALTIME LISTENER
+         */
+        unsubscribeSnapshot =
+          onSnapshot(
+            ordersQuery,
+
+            (snapshot) => {
+              if (!active) {
+                return;
+              }
+
+              const orders =
+                snapshot.docs.map(
+                  (item) => {
+                    const data =
+                      item.data();
+
+                    return {
+                      id:
+                        item.id,
+
+                      ...data,
+
+                      status:
+                        data.status ||
+                        "Pending",
+                    };
+                  }
+                );
+
+              /*
+               * Newest first.
+               */
+              orders.sort(
+                (
+                  a: any,
+                  b: any
+                ) => {
+                  const getTime =
+                    (
+                      value: any
+                    ) => {
+                      if (
+                        typeof value?.toMillis ===
+                        "function"
+                      ) {
+                        return value.toMillis();
+                      }
+
+                      if (
+                        typeof value?.seconds ===
+                        "number"
+                      ) {
+                        return (
+                          value.seconds *
+                          1000
+                        );
+                      }
+
+                      const time =
+                        new Date(
+                          value || 0
+                        ).getTime();
+
+                      return Number.isNaN(
+                        time
+                      )
+                        ? 0
+                        : time;
+                    };
+
+                  return (
+                    getTime(
+                      b.createdAt
+                    ) -
+                    getTime(
+                      a.createdAt
+                    )
+                  );
                 }
               );
 
-            orders.sort(
-              (
-                a: any,
-                b: any
-              ) => {
-                const getTime =
-                  (
-                    value: any
-                  ) => {
-                    if (
-                      typeof value?.toMillis ===
-                      "function"
-                    ) {
-                      return value.toMillis();
-                    }
+              console.log(
+                "📦 Orders received:",
+                orders.length
+              );
 
-                    if (
-                      typeof value?.seconds ===
-                      "number"
-                    ) {
-                      return (
-                        value.seconds *
-                        1000
-                      );
-                    }
+              /*
+               * VERY IMPORTANT:
+               * Empty array bhi valid Firestore
+               * response hai.
+               */
+              callback(
+                orders
+              );
+            },
 
-                    const time =
-                      new Date(
-                        value || 0
-                      ).getTime();
+            (error) => {
+              console.error(
+                "❌ Orders Firestore subscription error:",
+                error
+              );
 
-                    return Number.isNaN(
-                      time
-                    )
-                      ? 0
-                      : time;
-                  };
-
-                return (
-                  getTime(
-                    b.createdAt
-                  ) -
-                  getTime(
-                    a.createdAt
-                  )
-                );
+              if (!active) {
+                return;
               }
-            );
 
-            callback(
-              orders
-            );
+              /*
+               * Error par bhi page ko loading mein
+               * permanently mat rakho.
+               */
+              callback([]);
+
+              /*
+               * Listener fail ho gaya to cleanup.
+               */
+              if (
+                unsubscribeSnapshot
+              ) {
+                unsubscribeSnapshot();
+
+                unsubscribeSnapshot =
+                  null;
+              }
+
+              started = false;
+            }
+          );
+
+      } catch (error) {
+        console.error(
+          "❌ Orders subscription start failed:",
+          error
+        );
+
+        if (!active) {
+          return;
+        }
+
+        started = false;
+
+        /*
+         * Error ke case mein bhi Orders page ko
+         * infinite loading mein nahi rehne dena.
+         */
+        callback([]);
+      }
+    };
+
+    /*
+     * Firebase auth already ready hai to directly
+     * start karo.
+     */
+    if (auth.currentUser) {
+      start();
+    }
+
+    /*
+     * Agar auth abhi initialize ho raha hai,
+     * login state ka wait karo.
+     */
+    else {
+      unsubscribeAuth =
+        onAuthStateChanged(
+          auth,
+          (user) => {
+            if (
+              !active ||
+              !user
+            ) {
+              return;
+            }
+
+            if (
+              unsubscribeAuth
+            ) {
+              unsubscribeAuth();
+
+              unsubscribeAuth =
+                null;
+            }
+
+            start();
           },
 
           (error) => {
             console.error(
-              "Orders subscription error:",
+              "❌ Auth listener error:",
               error
             );
+
+            if (!active) {
+              return;
+            }
 
             callback([]);
           }
         );
-    };
-
-    if (
-      auth.currentUser
-    ) {
-      start();
-    } else {
-      unsubscribeAuth =
-        onAuthStateChanged(
-          auth,
-          () => {
-            if (
-              auth.currentUser
-            ) {
-              if (
-                unsubscribeAuth
-              ) {
-                unsubscribeAuth();
-
-                unsubscribeAuth =
-                  null;
-              }
-
-              start();
-            }
-          }
-        );
     }
 
+    /*
+     * CLEANUP
+     */
     return () => {
       active = false;
 
@@ -646,9 +763,10 @@ export const subscribeToOrders =
         unsubscribeSnapshot =
           null;
       }
+
+      started = false;
     };
   };
-
 // =====================================================
 // REAL-TIME SINGLE ORDER
 // =====================================================

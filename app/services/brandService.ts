@@ -18,26 +18,18 @@ import { db } from "../lib/firebase";
 
 export interface Brand {
   id: string;
-
   name: string;
   nameLower?: string;
-
   slug?: string;
-
   logo?: string;
   banner?: string;
-
   description?: string;
-
   active: boolean;
   topBrand: boolean;
   featured?: boolean;
-
   sortOrder?: number;
-
   createdAt?: any;
   updatedAt?: any;
-
   [key: string]: any;
 }
 
@@ -47,29 +39,57 @@ export interface BrandPage {
   lastDoc: QueryDocumentSnapshot<DocumentData> | null;
 }
 
-const COLLECTION =
-  "brands";
+const COLLECTION = "brands";
 
-const clean =
-  (value: unknown) =>
-    String(
-      value ?? ""
-    ).trim();
+/* ======================================================
+   BRAND CACHE
+====================================================== */
 
-const normalize =
-  (value: unknown) =>
-    clean(value).toLowerCase();
+const BRAND_CACHE_TTL = 15_000;
 
-const slugify =
-  (value: string) =>
-    normalize(value)
-      .replace(
-        /[^a-z0-9]+/g,
-        "-"
-      )
-      .replace(
-        /^-+|-+$/g,
-        "" );
+let brandsCache:
+  | {
+      data: Brand[];
+      expiresAt: number;
+    }
+  | null = null;
+
+let brandsRequest:
+  | Promise<Brand[]>
+  | null = null;
+
+const clearBrandsCache = () => {
+  brandsCache = null;
+};
+
+/* ======================================================
+   HELPERS
+====================================================== */
+
+const clean = (
+  value: unknown
+) =>
+  String(
+    value ?? ""
+  ).trim();
+
+const normalize = (
+  value: unknown
+) =>
+  clean(value).toLowerCase();
+
+const slugify = (
+  value: string
+) =>
+  normalize(value)
+    .replace(
+      /[^a-z0-9]+/g,
+      "-"
+    )
+    .replace(
+      /^-+|-+$/g,
+      ""
+    );
 
 const mapBrand = (
   id: string,
@@ -83,7 +103,9 @@ const mapBrand = (
     clean(data?.name),
 
   nameLower:
-    normalize(data?.name),
+    normalize(
+      data?.name
+    ),
 
   slug:
     clean(data?.slug) ||
@@ -105,47 +127,101 @@ const mapBrand = (
 
   sortOrder:
     Number(
-      data?.sortOrder ??
-      0
+      data?.sortOrder ?? 0
     ),
 });
 
-// ======================================================
-// GET ALL BRANDS
-// ======================================================
+/* ======================================================
+   GET ALL BRANDS
+   Cached + request deduplication
+====================================================== */
 
 export const getBrands =
-  async (): Promise<Brand[]> => {
-    const snapshot =
-      await getDocs(
-        query(
-          collection(
-            db,
-            COLLECTION
-          ),
-          orderBy(
-            "nameLower"
-          )
-        )
-      );
+  async (
+    options: {
+      forceRefresh?: boolean;
+    } = {}
+  ): Promise<Brand[]> => {
+    const forceRefresh =
+      options?.forceRefresh === true;
 
-    return snapshot.docs
-      .map(
-        (item) =>
-          mapBrand(
-            item.id,
-            item.data()
-          )
-      )
-      .filter(
-        (brand) =>
-          brand.name
-      );
+    const now =
+      Date.now();
+
+    if (
+      !forceRefresh &&
+      brandsCache &&
+      brandsCache.expiresAt > now
+    ) {
+      return brandsCache.data;
+    }
+
+    if (
+      !forceRefresh &&
+      brandsRequest
+    ) {
+      return brandsRequest;
+    }
+
+    const request =
+      (async () => {
+        const snapshot =
+          await getDocs(
+            query(
+              collection(
+                db,
+                COLLECTION
+              ),
+              orderBy(
+                "nameLower"
+              )
+            )
+          );
+
+        const result =
+          snapshot.docs
+            .map(
+              (item) =>
+                mapBrand(
+                  item.id,
+                  item.data()
+                )
+            )
+            .filter(
+              (brand) =>
+                Boolean(
+                  brand.name
+                )
+            );
+
+        brandsCache = {
+          data: result,
+          expiresAt:
+            Date.now() +
+            BRAND_CACHE_TTL,
+        };
+
+        return result;
+      })();
+
+    brandsRequest =
+      request;
+
+    try {
+      return await request;
+    } finally {
+      if (
+        brandsRequest ===
+        request
+      ) {
+        brandsRequest = null;
+      }
+    }
   };
 
-// ======================================================
-// PAGINATED BRANDS
-// ======================================================
+/* ======================================================
+   PAGINATED BRANDS
+====================================================== */
 
 export const getBrandsPage =
   async ({
@@ -246,9 +322,9 @@ export const getBrandsPage =
     };
   };
 
-// ======================================================
-// ADD BRAND
-// ======================================================
+/* ======================================================
+   ADD BRAND
+====================================================== */
 
 export const addBrand =
   async (
@@ -296,49 +372,54 @@ export const addBrand =
       );
     }
 
-    return await addDoc(
-      collection(
-        db,
-        COLLECTION
-      ),
-      {
-        name:
-          cleanName,
+    const result =
+      await addDoc(
+        collection(
+          db,
+          COLLECTION
+        ),
+        {
+          name:
+            cleanName,
 
-        nameLower,
+          nameLower,
 
-        slug:
-          slugify(
-            cleanName
-          ),
+          slug:
+            slugify(
+              cleanName
+            ),
 
-        logo:
-          cleanLogo,
+          logo:
+            cleanLogo,
 
-        active:
-          active !== false,
+          active:
+            active !== false,
 
-        topBrand:
-          topBrand === true,
+          topBrand:
+            topBrand === true,
 
-        featured:
-          false,
+          featured:
+            false,
 
-        sortOrder:
-          0,
+          sortOrder:
+            0,
 
-        createdAt:
-          new Date(),
+          createdAt:
+            new Date(),
 
-        updatedAt:
-          new Date(),
-      }
-    );
+          updatedAt:
+            new Date(),
+        }
+      );
+
+    clearBrandsCache();
+
+    return result;
   };
 
-// ======================================================
-// UPDATE BRAND
-// ======================================================
+/* ======================================================
+   UPDATE BRAND
+====================================================== */
 
 export const updateBrand =
   async (
@@ -473,11 +554,13 @@ export const updateBrand =
           new Date(),
       }
     );
+
+    clearBrandsCache();
   };
 
-// ======================================================
-// TOGGLE BRAND ACTIVE
-// ======================================================
+/* ======================================================
+   TOGGLE BRAND ACTIVE
+====================================================== */
 
 export const toggleBrand =
   async (
@@ -498,11 +581,13 @@ export const toggleBrand =
           new Date(),
       }
     );
+
+    clearBrandsCache();
   };
 
-// ======================================================
-// TOGGLE TOP BRAND
-// ======================================================
+/* ======================================================
+   TOGGLE TOP BRAND
+====================================================== */
 
 export const toggleTopBrand =
   async (
@@ -523,11 +608,13 @@ export const toggleTopBrand =
           new Date(),
       }
     );
+
+    clearBrandsCache();
   };
 
-// ======================================================
-// DELETE BRAND
-// ======================================================
+/* ======================================================
+   DELETE BRAND
+====================================================== */
 
 export const deleteBrand =
   async (
@@ -540,4 +627,6 @@ export const deleteBrand =
         id
       )
     );
+
+    clearBrandsCache();
   };

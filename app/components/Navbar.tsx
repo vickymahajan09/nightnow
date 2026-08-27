@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 
 import { auth } from "../lib/firebase";
@@ -15,9 +15,10 @@ interface LocationData {
 }
 
 export default function Navbar() {
-  const { cart } = useCart();
+  const { cartCount } = useCart();
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] =
+    useState<any>(null);
 
   const [showLocation, setShowLocation] =
     useState(false);
@@ -25,7 +26,9 @@ export default function Navbar() {
   const [location, setLocation] =
     useState<LocationData | null>(null);
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] =
+    useState("");
+
   const [suggestions, setSuggestions] =
     useState<any[]>([]);
 
@@ -38,6 +41,18 @@ export default function Navbar() {
   const [locationError, setLocationError] =
     useState("");
 
+  const searchTimer =
+    useRef<ReturnType<
+      typeof setTimeout
+    > | null>(null);
+
+  const searchController =
+    useRef<AbortController | null>(null);
+
+  /* =====================================================
+     AUTH
+  ===================================================== */
+
   useEffect(() => {
     return onAuthStateChanged(
       auth,
@@ -47,6 +62,10 @@ export default function Navbar() {
     );
   }, []);
 
+  /* =====================================================
+     LOAD SAVED LOCATION
+  ===================================================== */
+
   useEffect(() => {
     try {
       const saved =
@@ -54,31 +73,54 @@ export default function Navbar() {
           "nightnow-location"
         );
 
-      if (saved) {
-        const parsed = JSON.parse(saved);
-
-        if (parsed?.address) {
-          setLocation(parsed);
-        }
+      if (!saved) {
+        return;
       }
-    } catch {}
+
+      const parsed =
+        JSON.parse(saved);
+
+      if (parsed?.address) {
+        setLocation(parsed);
+      }
+    } catch {
+      // Ignore invalid local storage data
+    }
   }, []);
 
-  const cartCount = cart.reduce(
-    (total: number, item: any) =>
-      total + Number(item.quantity || 1),
-    0
-  );
+  /* =====================================================
+     CLEANUP SEARCH REQUESTS
+  ===================================================== */
+
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) {
+        clearTimeout(
+          searchTimer.current
+        );
+      }
+
+      searchController.current?.abort();
+    };
+  }, []);
+
+  /* =====================================================
+     SAVE LOCATION
+  ===================================================== */
 
   const saveLocation = (
     data: LocationData
   ) => {
     setLocation(data);
 
-    localStorage.setItem(
-      "nightnow-location",
-      JSON.stringify(data)
-    );
+    try {
+      localStorage.setItem(
+        "nightnow-location",
+        JSON.stringify(data)
+      );
+    } catch {
+      // Ignore storage errors
+    }
 
     setSearch("");
     setSuggestions([]);
@@ -86,15 +128,24 @@ export default function Navbar() {
     setShowLocation(false);
 
     window.dispatchEvent(
-      new Event("nightnow-location-change")
+      new Event(
+        "nightnow-location-change"
+      )
     );
   };
 
+  /* =====================================================
+     CURRENT LOCATION
+  ===================================================== */
+
   const useCurrentLocation = () => {
-    if (!navigator.geolocation) {
+    if (
+      !navigator.geolocation
+    ) {
       setLocationError(
         "Location is not supported."
       );
+
       return;
     }
 
@@ -121,6 +172,12 @@ export default function Navbar() {
               }
             );
 
+          if (!response.ok) {
+            throw new Error(
+              "Location lookup failed"
+            );
+          }
+
           const data =
             await response.json();
 
@@ -145,8 +202,12 @@ export default function Navbar() {
           });
         } catch {
           saveLocation({
-            name: "Current Location",
-            address: `${lat}, ${lon}`,
+            name:
+              "Current Location",
+
+            address:
+              `${lat}, ${lon}`,
+
             lat,
             lon,
           });
@@ -172,62 +233,129 @@ export default function Navbar() {
       },
       {
         enableHighAccuracy: true,
+
         timeout: 15000,
-        maximumAge: 0,
+
+        maximumAge: 30000,
       }
     );
   };
 
-  const searchLocation = async (
+  /* =====================================================
+     LOCATION SEARCH
+     Debounced to avoid API request on every keystroke
+  ===================================================== */
+
+  const searchLocation = (
     value: string
   ) => {
     setSearch(value);
     setLocationError("");
 
-    if (value.trim().length < 3) {
+    if (searchTimer.current) {
+      clearTimeout(
+        searchTimer.current
+      );
+    }
+
+    searchController.current?.abort();
+
+    const trimmed =
+      value.trim();
+
+    if (
+      trimmed.length < 3
+    ) {
       setSuggestions([]);
+      setSearching(false);
       return;
     }
 
     setSearching(true);
 
-    try {
-      const query =
-        `${value.trim()}, India`;
+    searchTimer.current =
+      setTimeout(
+        async () => {
+          const controller =
+            new AbortController();
 
-      const response =
-        await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=in&q=${encodeURIComponent(
-            query
-          )}`,
-          {
-            headers: {
-              Accept:
-                "application/json",
-            },
+          searchController.current =
+            controller;
+
+          try {
+            const queryText =
+              `${trimmed}, India`;
+
+            const response =
+              await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=in&q=${encodeURIComponent(
+                  queryText
+                )}`,
+                {
+                  headers: {
+                    Accept:
+                      "application/json",
+                  },
+
+                  signal:
+                    controller.signal,
+                }
+              );
+
+            if (
+              !response.ok
+            ) {
+              throw new Error(
+                "Location search failed"
+              );
+            }
+
+            const data =
+              await response.json();
+
+            if (
+              controller.signal
+                .aborted
+            ) {
+              return;
+            }
+
+            setSuggestions(
+              Array.isArray(data)
+                ? data
+                : []
+            );
+          } catch (error: any) {
+            if (
+              error?.name ===
+              "AbortError"
+            ) {
+              return;
+            }
+
+            setSuggestions([]);
+          } finally {
+            if (
+              !controller.signal
+                .aborted
+            ) {
+              setSearching(false);
+            }
           }
-        );
-
-      const data =
-        await response.json();
-
-      setSuggestions(
-        Array.isArray(data)
-          ? data
-          : []
+        },
+        450
       );
-    } catch {
-      setSuggestions([]);
-    } finally {
-      setSearching(false);
-    }
   };
+
+  /* =====================================================
+     SELECT LOCATION
+  ===================================================== */
 
   const selectLocation = (
     item: any
   ) => {
     const address =
-      item.address || {};
+      item?.address || {};
 
     const name =
       address.suburb ||
@@ -235,17 +363,31 @@ export default function Navbar() {
       address.village ||
       address.town ||
       address.city ||
-      item.display_name?.split(",")[0] ||
+      item?.display_name?.split(
+        ","
+      )[0] ||
       "Selected Location";
 
     saveLocation({
       name,
+
       address:
-        item.display_name || name,
-      lat: Number(item.lat),
-      lon: Number(item.lon),
+        item?.display_name ||
+        name,
+
+      lat: Number(
+        item?.lat
+      ),
+
+      lon: Number(
+        item?.lon
+      ),
     });
   };
+
+  /* =====================================================
+     RENDER
+  ===================================================== */
 
   return (
     <>
@@ -253,6 +395,7 @@ export default function Navbar() {
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5">
 
           {/* LOGO */}
+
           <Link
             href="/"
             className="shrink-0"
@@ -270,6 +413,7 @@ export default function Navbar() {
           </Link>
 
           {/* LOCATION */}
+
           <button
             type="button"
             onClick={() =>
@@ -290,6 +434,7 @@ export default function Navbar() {
           </button>
 
           {/* CART */}
+
           <Link
             href="/cart"
             className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-lg text-white"
@@ -306,6 +451,7 @@ export default function Navbar() {
           </Link>
 
           {/* PROFILE */}
+
           <Link
             href={
               user
@@ -319,10 +465,15 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* LOCATION MODAL */}
+      {/* =================================================
+          LOCATION MODAL
+      ================================================= */}
+
       {showLocation && (
         <div className="fixed inset-0 z-[9999] bg-black/60 px-3 pt-16 backdrop-blur-sm">
           <div className="mx-auto max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+
+            {/* HEADER */}
 
             <div className="flex items-center justify-between border-b p-4">
               <div>
@@ -331,11 +482,13 @@ export default function Navbar() {
                 </h2>
 
                 <p className="text-xs text-zinc-500">
-                  Choose where we should deliver
+                  Choose where we should
+                  deliver
                 </p>
               </div>
 
               <button
+                type="button"
                 onClick={() =>
                   setShowLocation(false)
                 }
@@ -345,15 +498,21 @@ export default function Navbar() {
               </button>
             </div>
 
+            {/* BODY */}
+
             <div className="p-4">
+
+              {/* CURRENT LOCATION */}
 
               <button
                 type="button"
                 onClick={
                   useCurrentLocation
                 }
-                disabled={loadingLocation}
-                className="flex w-full items-center gap-3 rounded-2xl border border-yellow-300 bg-yellow-50 p-4 text-left"
+                disabled={
+                  loadingLocation
+                }
+                className="flex w-full items-center gap-3 rounded-2xl border border-yellow-300 bg-yellow-50 p-4 text-left disabled:opacity-60"
               >
                 <span className="text-2xl">
                   📍
@@ -367,20 +526,29 @@ export default function Navbar() {
                   </span>
 
                   <span className="block text-xs text-zinc-500">
-                    Automatically detect your current address
+                    Automatically detect
+                    your current address
                   </span>
                 </span>
 
-                <span>→</span>
+                <span>
+                  →
+                </span>
               </button>
+
+              {/* DIVIDER */}
 
               <div className="my-4 flex items-center gap-3">
                 <div className="h-px flex-1 bg-zinc-200" />
+
                 <span className="text-xs text-zinc-400">
                   OR SEARCH
                 </span>
+
                 <div className="h-px flex-1 bg-zinc-200" />
               </div>
+
+              {/* SEARCH */}
 
               <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-3">
                 <input
@@ -395,11 +563,15 @@ export default function Navbar() {
                 />
               </div>
 
+              {/* SEARCH LOADING */}
+
               {searching && (
                 <p className="mt-3 text-center text-xs text-zinc-500">
                   Searching address...
                 </p>
               )}
+
+              {/* ERROR */}
 
               {locationError && (
                 <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-600">
@@ -407,34 +579,49 @@ export default function Navbar() {
                 </p>
               )}
 
+              {/* RESULTS */}
+
               <div className="mt-3 max-h-72 overflow-y-auto">
                 {suggestions.map(
-                  (item: any, index) => (
+                  (
+                    item: any,
+                    index
+                  ) => (
                     <button
-                      key={`${item.place_id}-${index}`}
+                      key={`${item.place_id || "location"}-${index}`}
                       type="button"
                       onClick={() =>
-                        selectLocation(item)
+                        selectLocation(
+                          item
+                        )
                       }
                       className="mb-2 w-full rounded-xl border border-zinc-100 bg-white p-3 text-left hover:bg-yellow-50"
                     >
                       <p className="text-sm font-black text-black">
                         📍{" "}
-                        {item.address?.suburb ||
-                          item.address?.neighbourhood ||
-                          item.address?.city ||
+                        {item.address
+                          ?.suburb ||
+                          item.address
+                            ?.neighbourhood ||
+                          item.address
+                            ?.city ||
                           item.display_name?.split(
                             ","
-                          )[0]}
+                          )[0] ||
+                          "Location"}
                       </p>
 
                       <p className="mt-1 text-xs leading-5 text-zinc-500">
-                        {item.display_name}
+                        {
+                          item.display_name
+                        }
                       </p>
                     </button>
                   )
                 )}
               </div>
+
+              {/* SAVED LOCATION */}
 
               {location && (
                 <div className="mt-4 rounded-xl bg-zinc-100 p-3">
@@ -443,7 +630,9 @@ export default function Navbar() {
                   </p>
 
                   <p className="mt-1 text-sm font-black">
-                    {location.address}
+                    {
+                      location.address
+                    }
                   </p>
                 </div>
               )}

@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { CartProvider } from "./context/CartContext";
 import MobileNav from "./components/MobileNav";
+import CartAddedPopup from "./components/CartAddedPopup";
 
 export const metadata: Metadata = {
   title: "Night Now",
@@ -23,9 +24,13 @@ export default function RootLayout({
       <body className="min-h-screen bg-white">
 
         <CartProvider>
+
           {children}
 
           <MobileNav />
+
+          <CartAddedPopup />
+
         </CartProvider>
 
       </body>

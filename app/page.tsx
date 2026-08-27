@@ -4,7 +4,7 @@ import {
   type Offer,
 } from "./services/offerService";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import {
@@ -61,6 +61,158 @@ const DEFAULT_HOME_CATEGORIES = [
   { id: "snacks-drinks", name: "Drinks & Juices", section: "Snacks & Drinks", heading: "Snacks & Drinks", subtitle: "Tasty picks for every time", image: "", order: 11, active: true, showOnHome: true },
   { id: "snacks-tea", name: "Tea, Coffee & More", section: "Snacks & Drinks", heading: "Snacks & Drinks", subtitle: "Tasty picks for every time", image: "", order: 12, active: true, showOnHome: true },
 ];
+
+
+
+const MemoCompactProductCard = memo(function MemoCompactProductCard({
+  product,
+  keyPrefix,
+}: {
+  product: Product;
+  keyPrefix: string;
+}) {
+  const { addToCart, removeFromCart, getItemQuantity } = useCart();
+
+  const imageUrl =
+    typeof (product as any).image === "string" && (product as any).image
+      ? (product as any).image
+      : Array.isArray((product as any).images) && (product as any).images.length > 0
+        ? (product as any).images[0]
+        : "";
+
+  const price = Number(product.price || 0);
+  const mrp = Number(product.mrp || 0);
+  const stock = Number(product.stock || 0);
+  const discount =
+    mrp > price && mrp > 0
+      ? Math.round(((mrp - price) / mrp) * 100)
+      : 0;
+
+  const variantId = (product as any).variantId || undefined;
+  const quantity = getItemQuantity(product.id, variantId);
+
+  const recordRecentlyViewed = () => {
+    try {
+      const key = "nightnow_recently_viewed";
+      const saved = localStorage.getItem(key);
+      const current = saved ? JSON.parse(saved) : [];
+      const ids = Array.isArray(current) ? current.map(String) : [];
+      const updated = [
+        String(product.id),
+        ...ids.filter((id) => id !== String(product.id)),
+      ].slice(0, 12);
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch {
+      // Recently viewed must never block navigation.
+    }
+  };
+
+  const add = () => {
+    if (stock <= 0) return;
+    addToCart({
+      ...product,
+      quantity: 1,
+      ...(variantId ? { variantId } : {}),
+    } as any);
+    window.dispatchEvent(
+      new CustomEvent("nightnow:cart-added", {
+        detail: { product: { ...product } },
+      })
+    );
+  };
+
+  const decrease = () => {
+    if (quantity <= 0) return;
+    removeFromCart(product.id, variantId);
+  };
+
+  const increase = () => {
+    if (stock <= 0 || quantity >= stock) return;
+    addToCart({
+      ...product,
+      quantity: 1,
+      ...(variantId ? { variantId } : {}),
+    } as any);
+  };
+
+  return (
+    <div
+      className="w-[98px] shrink-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
+    >
+      <Link
+        href={`/product/${product.id}`}
+        className="block"
+        onClick={recordRecentlyViewed}
+      >
+        <div className="relative flex aspect-square items-center justify-center bg-white p-1.5">
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={product.name || "Product"}
+              className="h-full w-full object-contain"
+              loading="lazy"
+            />
+          ) : (
+            <span className="text-2xl">📦</span>
+          )}
+
+          {discount > 0 && (
+            <span className="absolute left-0 top-2 rounded-r-full bg-green-500 px-1.5 py-0.5 text-[7px] font-black text-white">
+              {discount}% OFF
+            </span>
+          )}
+        </div>
+
+        <div className="px-1.5 pb-1">
+          <p className="line-clamp-2 min-h-[24px] text-[8px] font-black leading-3 text-zinc-900">
+            {product.name || product.title || product.productName || "Product"}
+          </p>
+          <div className="mt-0.5 flex items-center gap-1">
+            <span className="text-[11px] font-black text-green-600">
+              ₹{price}
+            </span>
+            {mrp > price && (
+              <span className="truncate text-[7px] text-zinc-400 line-through">
+                ₹{mrp}
+              </span>
+            )}
+          </div>
+        </div>
+      </Link>
+
+      <div className="px-1.5 pb-1.5">
+        {quantity > 0 ? (
+          <div className="flex h-7 items-center justify-between rounded-lg bg-yellow-400 px-1">
+            <button
+              type="button"
+              onClick={decrease}
+              className="h-5 w-5 rounded-md bg-black text-[12px] font-black text-white"
+            >−</button>
+            <span className="text-[9px] font-black text-black">
+              {quantity}
+            </span>
+            <button
+              type="button"
+              onClick={increase}
+              disabled={stock <= 0 || quantity >= stock}
+              className="h-5 w-5 rounded-md bg-black text-[12px] font-black text-white disabled:opacity-30"
+            >+</button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={add}
+            disabled={stock <= 0}
+            aria-label={`Add ${product.name || "product"} to cart`}
+            className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500 text-lg font-black leading-none text-white shadow-sm disabled:opacity-30"
+          >+</button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+MemoCompactProductCard.displayName = "MemoCompactProductCard";
 
 export default function HomePage() {
   const {
@@ -1464,24 +1616,39 @@ useEffect(() => {
   // ==========================================
 
   const handleAddToCart = (
-    product: Product
-  ) => {
-    if (
-      Number(
-        product.stock || 0
-      ) <= 0
-    ) {
-      return;
-    }
+  product: Product
+) => {
+  if (
+    Number(product.stock || 0) <= 0
+  ) {
+    return;
+  }
 
-    addToCart({
-      ...product,
-      quantity: 1,
-      ...(product as any).variantId
-        ? { variantId: (product as any).variantId }
-        : {},
-    } as any);
-  };
+  addToCart({
+    ...product,
+    quantity: 1,
+    ...(product as any).variantId
+      ? {
+          variantId:
+            (product as any).variantId,
+        }
+      : {},
+  } as any);
+
+  // Open the existing cart popup
+  window.dispatchEvent(
+    new CustomEvent(
+      "nightnow:cart-added",
+      {
+        detail: {
+          product: {
+            ...product,
+          },
+        },
+      }
+    )
+  );
+};
 
   const getMobileCartQuantity = (
     product: Product
@@ -1547,100 +1714,13 @@ useEffect(() => {
   const getCompactProductCard = (
     product: Product,
     keyPrefix: string
-  ) => {
-    const imageUrl = getProductImage(product);
-    const price = Number(product.price || 0);
-    const mrp = Number(product.mrp || 0);
-    const stock = Number(product.stock || 0);
-    const discount = mrp > price && mrp > 0
-      ? Math.round(((mrp - price) / mrp) * 100)
-      : 0;
-    const quantity = getMobileCartQuantity(product);
-
-    return (
-      <div
-        key={`${keyPrefix}-${product.id}`}
-        className="w-[98px] shrink-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
-      >
-        <Link
-          href={`/product/${product.id}`}
-          className="block"
-          onClick={() => recordRecentlyViewed(product.id)}
-        >
-          <div className="relative flex aspect-square items-center justify-center bg-white p-1.5">
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={product.name || "Product"}
-                className="h-full w-full object-contain"
-                loading="lazy"
-              />
-            ) : (
-              <span className="text-2xl">📦</span>
-            )}
-
-            {discount > 0 && (
-              <span className="absolute left-0 top-2 rounded-r-full bg-green-500 px-1.5 py-0.5 text-[7px] font-black text-white">
-                {discount}% OFF
-              </span>
-            )}
-          </div>
-
-          <div className="px-1.5 pb-1">
-            <p className="line-clamp-2 min-h-[24px] text-[8px] font-black leading-3 text-zinc-900">
-              {product.name || product.title || product.productName || "Product"}
-            </p>
-
-            <div className="mt-0.5 flex items-center gap-1">
-              <span className="text-[11px] font-black text-green-600">
-                ₹{price}
-              </span>
-              {mrp > price && (
-                <span className="truncate text-[7px] text-zinc-400 line-through">
-                  ₹{mrp}
-                </span>
-              )}
-            </div>
-          </div>
-        </Link>
-
-        <div className="px-1.5 pb-1.5">
-          {quantity > 0 ? (
-            <div className="flex h-7 items-center justify-between rounded-lg bg-yellow-400 px-1">
-              <button
-                type="button"
-                onClick={() => handleMobileDecrease(product)}
-                className="h-5 w-5 rounded-md bg-black text-[12px] font-black text-white"
-              >
-                −
-              </button>
-              <span className="text-[9px] font-black text-black">
-                {quantity}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleMobileIncrease(product)}
-                disabled={stock <= 0 || quantity >= stock}
-                className="h-5 w-5 rounded-md bg-black text-[12px] font-black text-white disabled:opacity-30"
-              >
-                +
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleAddToCart(product)}
-              disabled={stock <= 0}
-              aria-label={`Add ${product.name || "product"} to cart`}
-              className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500 text-lg font-black leading-none text-white shadow-sm disabled:opacity-30"
-            >
-              +
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
+  ) => (
+    <MemoCompactProductCard
+      key={`${keyPrefix}-${product.id}`}
+      product={product}
+      keyPrefix={keyPrefix}
+    />
+  );
 
   const getSmartPickProducts = () => {
     const active = products.filter((product) => product.active !== false && Number(product.stock || 0) > 0);
@@ -2439,7 +2519,7 @@ Smart Picks</p>
             {getSmartPickProducts().map((product) => getCompactProductCard(product, `smart-${smartPickMode}`))}
             {getSmartPickProducts().length === 0 && (
               <div className="w-full rounded-2xl border border-dashed border-zinc-300 bg-white p-3 text-center text-xs text-zinc-400">
-                Is category me abhi products available nahi hain.
+                NOT FOUND.
               </div>
             )}
           </div>

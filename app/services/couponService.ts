@@ -9,176 +9,315 @@ import {
 
 import { db } from "../lib/firebase";
 
+const COLLECTION =
+  "coupons";
 
-// ==============================
-// GET COUPONS
-// ==============================
+/* ======================================================
+   CACHE
+====================================================== */
 
-export const getCoupons = async () => {
-  const snapshot = await getDocs(
-    collection(db, "coupons")
-  );
+const COUPONS_CACHE_TTL =
+  15_000;
 
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  }));
+let couponsCache:
+  | {
+      data: any[];
+      expiresAt: number;
+    }
+  | null = null;
+
+let couponsRequest:
+  | Promise<any[]>
+  | null = null;
+
+const clearCouponsCache = () => {
+  couponsCache = null;
 };
 
+/* ======================================================
+   GET COUPONS
+   Cached + request deduplication
+====================================================== */
 
-// ==============================
-// ADD COUPON
-// ==============================
+export const getCoupons =
+  async (
+    options: {
+      forceRefresh?: boolean;
+    } = {}
+  ) => {
+    const forceRefresh =
+      options?.forceRefresh === true;
 
-export const addCoupon = async (
-  coupon: any
-) => {
-  const code =
-    String(coupon.code || "")
-      .trim()
-      .toUpperCase();
+    const now =
+      Date.now();
 
-  if (!code) {
-    throw new Error(
-      "Coupon code is required"
-    );
-  }
+    if (
+      !forceRefresh &&
+      couponsCache &&
+      couponsCache.expiresAt >
+        now
+    ) {
+      return couponsCache.data;
+    }
 
-  const discount = Number(
-    coupon.discount || 0
-  );
+    if (
+      !forceRefresh &&
+      couponsRequest
+    ) {
+      return couponsRequest;
+    }
 
-  if (
-    discount <= 0 ||
-    discount > 100
-  ) {
-    throw new Error(
-      "Discount must be between 1 and 100"
-    );
-  }
+    const request =
+      (async () => {
+        const snapshot =
+          await getDocs(
+            collection(
+              db,
+              COLLECTION
+            )
+          );
 
-  const existing =
-    await getCoupons();
+        const result =
+          snapshot.docs.map(
+            (item) => ({
+              id: item.id,
+              ...item.data(),
+            })
+          );
 
-  const duplicate =
-    existing.find(
-      (item: any) =>
-        String(item.code || "")
-          .toUpperCase() === code
-    );
+        couponsCache = {
+          data: result,
+          expiresAt:
+            Date.now() +
+            COUPONS_CACHE_TTL,
+        };
 
-  if (duplicate) {
-    throw new Error(
-      "Coupon code already exists"
-    );
-  }
+        return result;
+      })();
 
-  return await addDoc(
-    collection(db, "coupons"),
-    {
-      code,
+    couponsRequest =
+      request;
 
-      discount,
+    try {
+      return await request;
+    } finally {
+      if (
+        couponsRequest ===
+        request
+      ) {
+        couponsRequest = null;
+      }
+    }
+  };
 
-      minOrder: Number(
-        coupon.minOrder || 0
+/* ======================================================
+   ADD COUPON
+====================================================== */
+
+export const addCoupon =
+  async (
+    coupon: any
+  ) => {
+    const code =
+      String(
+        coupon.code || ""
+      )
+        .trim()
+        .toUpperCase();
+
+    if (!code) {
+      throw new Error(
+        "Coupon code is required"
+      );
+    }
+
+    const discount =
+      Number(
+        coupon.discount || 0
+      );
+
+    if (
+      discount <= 0 ||
+      discount > 100
+    ) {
+      throw new Error(
+        "Discount must be between 1 and 100"
+      );
+    }
+
+    /*
+     * Use the cached coupon list when available.
+     * This avoids an unnecessary second Firebase
+     * read in normal cases.
+     */
+    const existing =
+      await getCoupons();
+
+    const duplicate =
+      existing.find(
+        (item: any) =>
+          String(
+            item.code || ""
+          )
+            .trim()
+            .toUpperCase() ===
+          code
+      );
+
+    if (duplicate) {
+      throw new Error(
+        "Coupon code already exists"
+      );
+    }
+
+    const result =
+      await addDoc(
+        collection(
+          db,
+          COLLECTION
+        ),
+        {
+          code,
+
+          discount,
+
+          minOrder:
+            Number(
+              coupon.minOrder ||
+                0
+            ),
+
+          expiresAt:
+            coupon.expiresAt ||
+            "",
+
+          active:
+            coupon.active !==
+            false,
+
+          createdAt:
+            new Date(),
+
+          updatedAt:
+            new Date(),
+        }
+      );
+
+    clearCouponsCache();
+
+    return result;
+  };
+
+/* ======================================================
+   UPDATE COUPON
+====================================================== */
+
+export const updateCoupon =
+  async (
+    id: string,
+    coupon: any
+  ) => {
+    const code =
+      String(
+        coupon.code || ""
+      )
+        .trim()
+        .toUpperCase();
+
+    const discount =
+      Number(
+        coupon.discount || 0
+      );
+
+    if (!code) {
+      throw new Error(
+        "Coupon code is required"
+      );
+    }
+
+    if (
+      discount <= 0 ||
+      discount > 100
+    ) {
+      throw new Error(
+        "Discount must be between 1 and 100"
+      );
+    }
+
+    await updateDoc(
+      doc(
+        db,
+        COLLECTION,
+        id
       ),
+      {
+        code,
 
-      expiresAt:
-        coupon.expiresAt || "",
+        discount,
 
-      active:
-        coupon.active !== false,
+        minOrder:
+          Number(
+            coupon.minOrder ||
+              0
+          ),
 
-      createdAt: new Date(),
+        expiresAt:
+          coupon.expiresAt ||
+          "",
 
-      updatedAt: new Date(),
-    }
-  );
-};
+        active:
+          coupon.active !==
+          false,
 
-
-// ==============================
-// UPDATE COUPON
-// ==============================
-
-export const updateCoupon = async (
-  id: string,
-  coupon: any
-) => {
-  const code =
-    String(coupon.code || "")
-      .trim()
-      .toUpperCase();
-
-  const discount = Number(
-    coupon.discount || 0
-  );
-
-  if (!code) {
-    throw new Error(
-      "Coupon code is required"
+        updatedAt:
+          new Date(),
+      }
     );
-  }
 
-  if (
-    discount <= 0 ||
-    discount > 100
-  ) {
-    throw new Error(
-      "Discount must be between 1 and 100"
-    );
-  }
+    clearCouponsCache();
+  };
 
-  await updateDoc(
-    doc(db, "coupons", id),
-    {
-      code,
+/* ======================================================
+   TOGGLE COUPON
+====================================================== */
 
-      discount,
-
-      minOrder: Number(
-        coupon.minOrder || 0
+export const toggleCoupon =
+  async (
+    id: string,
+    active: boolean
+  ) => {
+    await updateDoc(
+      doc(
+        db,
+        COLLECTION,
+        id
       ),
+      {
+        active,
 
-      expiresAt:
-        coupon.expiresAt || "",
+        updatedAt:
+          new Date(),
+      }
+    );
 
-      active:
-        coupon.active !== false,
+    clearCouponsCache();
+  };
 
-      updatedAt: new Date(),
-    }
-  );
-};
+/* ======================================================
+   DELETE COUPON
+====================================================== */
 
+export const deleteCoupon =
+  async (
+    id: string
+  ) => {
+    await deleteDoc(
+      doc(
+        db,
+        COLLECTION,
+        id
+      )
+    );
 
-// ==============================
-// TOGGLE COUPON
-// ==============================
-
-export const toggleCoupon = async (
-  id: string,
-  active: boolean
-) => {
-  await updateDoc(
-    doc(db, "coupons", id),
-    {
-      active,
-      updatedAt: new Date(),
-    }
-  );
-};
-
-
-// ==============================
-// DELETE COUPON
-// ==============================
-
-export const deleteCoupon = async (
-  id: string
-) => {
-  await deleteDoc(
-    doc(db, "coupons", id)
-  );
-};
+    clearCouponsCache();
+  };

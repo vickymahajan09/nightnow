@@ -19,103 +19,268 @@ import type {
 const COLLECTION =
   "homeSections";
 
-export const getHomeSections =
-  async (): Promise<
-    HomeSection[]
-  > => {
-    const snapshot =
-      await getDocs(
-        query(
-          collection(
-            db,
-            COLLECTION
-          ),
-          orderBy(
-            "order",
-            "asc"
-          )
-        )
-      );
+/* ======================================================
+   CACHE
+====================================================== */
 
-    return snapshot.docs.map(
-      (item) =>
-        ({
-          id: item.id,
-          ...item.data(),
-        }) as HomeSection
-    );
+const HOME_SECTIONS_CACHE_TTL =
+  15_000;
+
+let homeSectionsCache:
+  | {
+      data: HomeSection[];
+      expiresAt: number;
+    }
+  | null = null;
+
+let activeHomeSectionsCache:
+  | {
+      data: HomeSection[];
+      expiresAt: number;
+    }
+  | null = null;
+
+let homeSectionsRequest:
+  | Promise<HomeSection[]>
+  | null = null;
+
+let activeHomeSectionsRequest:
+  | Promise<HomeSection[]>
+  | null = null;
+
+const clearHomeSectionsCache =
+  () => {
+    homeSectionsCache = null;
+    activeHomeSectionsCache = null;
   };
 
-export const getActiveHomeSections =
-  async (): Promise<
-    HomeSection[]
-  > => {
-    const snapshot =
-      await getDocs(
-        query(
-          collection(
-            db,
-            COLLECTION
-          ),
-          where(
-            "active",
-            "==",
-            true
-          ),
-          orderBy(
-            "order",
-            "asc"
-          )
-        )
-      );
+/* ======================================================
+   NORMALIZE
+====================================================== */
+
+const mapHomeSection = (
+  id: string,
+  data: any
+): HomeSection => ({
+  id,
+  ...data,
+});
+
+/* ======================================================
+   GET ALL HOME SECTIONS
+   Cached + request deduplication
+====================================================== */
+
+export const getHomeSections =
+  async (
+    options: {
+      forceRefresh?: boolean;
+    } = {}
+  ): Promise<HomeSection[]> => {
+    const forceRefresh =
+      options?.forceRefresh === true;
 
     const now =
-      new Date();
+      Date.now();
 
-    return snapshot.docs
-      .map(
-        (item) =>
-          ({
-            id: item.id,
-            ...item.data(),
-          }) as HomeSection
-      )
-      .filter(
-        (section) => {
-          if (
-            section.startDate
-          ) {
-            const start =
-              new Date(
-                section.startDate
-              );
+    if (
+      !forceRefresh &&
+      homeSectionsCache &&
+      homeSectionsCache.expiresAt >
+        now
+    ) {
+      return homeSectionsCache.data;
+    }
 
-            if (
-              now < start
-            ) {
-              return false;
-            }
-          }
+    if (
+      !forceRefresh &&
+      homeSectionsRequest
+    ) {
+      return homeSectionsRequest;
+    }
 
-          if (
-            section.endDate
-          ) {
-            const end =
-              new Date(
-                section.endDate
-              );
+    const request =
+      (async () => {
+        const snapshot =
+          await getDocs(
+            query(
+              collection(
+                db,
+                COLLECTION
+              ),
+              orderBy(
+                "order",
+                "asc"
+              )
+            )
+          );
 
-            if (
-              now > end
-            ) {
-              return false;
-            }
-          }
+        const result =
+          snapshot.docs.map(
+            (item) =>
+              mapHomeSection(
+                item.id,
+                item.data()
+              )
+          );
 
-          return true;
-        }
-      );
+        homeSectionsCache = {
+          data: result,
+          expiresAt:
+            Date.now() +
+            HOME_SECTIONS_CACHE_TTL,
+        };
+
+        return result;
+      })();
+
+    homeSectionsRequest =
+      request;
+
+    try {
+      return await request;
+    } finally {
+      if (
+        homeSectionsRequest ===
+        request
+      ) {
+        homeSectionsRequest =
+          null;
+      }
+    }
   };
+
+/* ======================================================
+   GET ACTIVE HOME SECTIONS
+   Cached + request deduplication
+====================================================== */
+
+export const getActiveHomeSections =
+  async (
+    options: {
+      forceRefresh?: boolean;
+    } = {}
+  ): Promise<HomeSection[]> => {
+    const forceRefresh =
+      options?.forceRefresh === true;
+
+    const now =
+      Date.now();
+
+    if (
+      !forceRefresh &&
+      activeHomeSectionsCache &&
+      activeHomeSectionsCache.expiresAt >
+        now
+    ) {
+      return activeHomeSectionsCache.data;
+    }
+
+    if (
+      !forceRefresh &&
+      activeHomeSectionsRequest
+    ) {
+      return activeHomeSectionsRequest;
+    }
+
+    const request =
+      (async () => {
+        const snapshot =
+          await getDocs(
+            query(
+              collection(
+                db,
+                COLLECTION
+              ),
+              where(
+                "active",
+                "==",
+                true
+              ),
+              orderBy(
+                "order",
+                "asc"
+              )
+            )
+          );
+
+        const now =
+          new Date();
+
+        const result =
+          snapshot.docs
+            .map(
+              (item) =>
+                mapHomeSection(
+                  item.id,
+                  item.data()
+                )
+            )
+            .filter(
+              (section) => {
+                if (
+                  section.startDate
+                ) {
+                  const start =
+                    new Date(
+                      section.startDate
+                    );
+
+                  if (
+                    now < start
+                  ) {
+                    return false;
+                  }
+                }
+
+                if (
+                  section.endDate
+                ) {
+                  const end =
+                    new Date(
+                      section.endDate
+                    );
+
+                  if (
+                    now > end
+                  ) {
+                    return false;
+                  }
+                }
+
+                return true;
+              }
+            );
+
+        activeHomeSectionsCache = {
+          data: result,
+          expiresAt:
+            Date.now() +
+            HOME_SECTIONS_CACHE_TTL,
+        };
+
+        return result;
+      })();
+
+    activeHomeSectionsRequest =
+      request;
+
+    try {
+      return await request;
+    } finally {
+      if (
+        activeHomeSectionsRequest ===
+        request
+      ) {
+        activeHomeSectionsRequest =
+          null;
+      }
+    }
+  };
+
+/* ======================================================
+   CREATE HOME SECTION
+====================================================== */
 
 export const createHomeSection =
   async (
@@ -141,8 +306,14 @@ export const createHomeSection =
         }
       );
 
+    clearHomeSectionsCache();
+
     return ref.id;
   };
+
+/* ======================================================
+   UPDATE HOME SECTION
+====================================================== */
 
 export const updateHomeSection =
   async (
@@ -157,11 +328,18 @@ export const updateHomeSection =
       ),
       {
         ...section,
+
         updatedAt:
           new Date(),
       }
     );
+
+    clearHomeSectionsCache();
   };
+
+/* ======================================================
+   DELETE HOME SECTION
+====================================================== */
 
 export const deleteHomeSection =
   async (
@@ -174,4 +352,6 @@ export const deleteHomeSection =
         id
       )
     );
+
+    clearHomeSectionsCache();
   };

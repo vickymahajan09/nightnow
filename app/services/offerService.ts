@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   updateDoc,
 } from "firebase/firestore";
@@ -36,10 +37,34 @@ export type Offer = {
   updatedAt?: any;
 };
 
-const offersRef = collection(
-  db,
-  "offers"
-);
+const offersRef =
+  collection(db, "offers");
+
+/* =====================================================
+   CACHE
+===================================================== */
+
+const OFFERS_CACHE_TTL =
+  15_000;
+
+let offersCache:
+  | {
+      data: Offer[];
+      expiresAt: number;
+    }
+  | null = null;
+
+let offersRequest:
+  | Promise<Offer[]>
+  | null = null;
+
+const clearOffersCache = () => {
+  offersCache = null;
+};
+
+/* =====================================================
+   ADMIN AUTH
+===================================================== */
 
 const requireAdmin = async () => {
   const user =
@@ -52,10 +77,17 @@ const requireAdmin = async () => {
           return;
         }
 
+        let finished = false;
+
         const unsubscribe =
           onAuthStateChanged(
             auth,
             (currentUser) => {
+              if (finished) {
+                return;
+              }
+
+              finished = true;
               unsubscribe();
 
               if (currentUser) {
@@ -73,6 +105,11 @@ const requireAdmin = async () => {
           );
 
         setTimeout(() => {
+          if (finished) {
+            return;
+          }
+
+          finished = true;
           unsubscribe();
 
           reject(
@@ -80,7 +117,7 @@ const requireAdmin = async () => {
               "Login session not found. Please login again."
             )
           );
-        }, 10000);
+        }, 10_000);
       }
     );
 
@@ -100,7 +137,6 @@ const requireAdmin = async () => {
 
   return user;
 };
-
 
 /* =====================================================
    NORMALIZE OFFER
@@ -172,7 +208,8 @@ const normalizeOffer = (
   }
 
   if (
-    type === "NONE"
+    type ===
+    "NONE"
   ) {
     buyQuantity = 1;
     freeQuantity = 0;
@@ -186,10 +223,11 @@ const normalizeOffer = (
         "Special Offer"
     ),
 
-    description: String(
-      data.description ||
-        ""
-    ),
+    description:
+      String(
+        data.description ||
+          ""
+      ),
 
     type,
 
@@ -228,31 +266,85 @@ const normalizeOffer = (
   };
 };
 
-
 /* =====================================================
    GET OFFERS
+   Cached + request deduplication
 ===================================================== */
 
 export const getOffers =
-  async (): Promise<
-    Offer[]
-  > => {
-    const snapshot =
-      await getDocs(
-        offersRef
-      );
+  async (
+    options: {
+      forceRefresh?: boolean;
+    } = {}
+  ): Promise<Offer[]> => {
+    const forceRefresh =
+      options?.forceRefresh ===
+      true;
 
-    return snapshot.docs.map(
-      (item) =>
-        normalizeOffer(
-          item.data(),
-          item.id
-        )
-    );
+    const now =
+      Date.now();
+
+    if (
+      !forceRefresh &&
+      offersCache &&
+      offersCache.expiresAt >
+        now
+    ) {
+      return offersCache.data;
+    }
+
+    if (
+      !forceRefresh &&
+      offersRequest
+    ) {
+      return offersRequest;
+    }
+
+    const request =
+      (async () => {
+        const snapshot =
+          await getDocs(
+            offersRef
+          );
+
+        const result =
+          snapshot.docs.map(
+            (item) =>
+              normalizeOffer(
+                item.data(),
+                item.id
+              )
+          );
+
+        offersCache = {
+          data: result,
+          expiresAt:
+            Date.now() +
+            OFFERS_CACHE_TTL,
+        };
+
+        return result;
+      })();
+
+    offersRequest =
+      request;
+
+    try {
+      return await request;
+    } finally {
+      if (
+        offersRequest ===
+        request
+      ) {
+        offersRequest =
+          null;
+      }
+    }
   };
 
 /* =====================================================
    GET OFFER BY ID
+   Direct document read
 ===================================================== */
 
 export const getOfferById =
@@ -260,26 +352,32 @@ export const getOfferById =
     id: string
   ): Promise<Offer | null> => {
     try {
+      if (!id) {
+        return null;
+      }
+
+      const offerRef =
+        doc(
+          db,
+          "offers",
+          id
+        );
+
       const snapshot =
-        await getDocs(
-          offersRef
+        await getDoc(
+          offerRef
         );
 
-      const found =
-        snapshot.docs.find(
-          (item) =>
-            item.id === id
-        );
-
-      if (!found) {
+      if (
+        !snapshot.exists()
+      ) {
         return null;
       }
 
       return normalizeOffer(
-        found.data(),
-        found.id
+        snapshot.data(),
+        snapshot.id
       );
-
     } catch (error) {
       console.error(
         "getOfferById error:",
@@ -289,6 +387,7 @@ export const getOfferById =
       return null;
     }
   };
+
 /* =====================================================
    ADD OFFER
 ===================================================== */
@@ -304,7 +403,6 @@ export const addOffer =
     productIds?: string[];
     active?: boolean;
   }) => {
-
     await requireAdmin();
 
     const title =
@@ -384,51 +482,55 @@ export const addOffer =
       );
     }
 
-    return addDoc(
-      offersRef,
-      {
-        title,
+    const result =
+      await addDoc(
+        offersRef,
+        {
+          title,
 
-        description:
-          String(
-            data.description ||
-              ""
-          ).trim(),
+          description:
+            String(
+              data.description ||
+                ""
+            ).trim(),
 
-        type: data.type,
+          type: data.type,
 
-        buyQuantity,
+          buyQuantity,
 
-        freeQuantity,
+          freeQuantity,
 
-        brandIds:
-          Array.from(
-            new Set(
-              data.brandIds ||
-                []
-            )
-          ),
+          brandIds:
+            Array.from(
+              new Set(
+                data.brandIds ||
+                  []
+              )
+            ),
 
-        productIds:
-          Array.from(
-            new Set(
-              data.productIds ||
-                []
-            )
-          ),
+          productIds:
+            Array.from(
+              new Set(
+                data.productIds ||
+                  []
+              )
+            ),
 
-        active:
-          data.active !== false,
+          active:
+            data.active !== false,
 
-        createdAt:
-          new Date(),
+          createdAt:
+            new Date(),
 
-        updatedAt:
-          new Date(),
-      }
-    );
+          updatedAt:
+            new Date(),
+        }
+      );
+
+    clearOffersCache();
+
+    return result;
   };
-
 
 /* =====================================================
    UPDATE OFFER
@@ -448,7 +550,6 @@ export const updateOffer =
       active?: boolean;
     }
   ) => {
-
     await requireAdmin();
 
     const title =
@@ -572,8 +673,9 @@ export const updateOffer =
           new Date(),
       }
     );
-  };
 
+    clearOffersCache();
+  };
 
 /* =====================================================
    TOGGLE OFFER
@@ -584,7 +686,6 @@ export const toggleOffer =
     id: string,
     active: boolean
   ) => {
-
     await requireAdmin();
 
     await updateDoc(
@@ -594,14 +695,16 @@ export const toggleOffer =
         id
       ),
       {
-        active,
+        active:
+          active === true,
 
         updatedAt:
           new Date(),
       }
     );
-  };
 
+    clearOffersCache();
+  };
 
 /* =====================================================
    DELETE OFFER
@@ -611,7 +714,6 @@ export const deleteOffer =
   async (
     id: string
   ) => {
-
     await requireAdmin();
 
     await deleteDoc(
@@ -621,4 +723,6 @@ export const deleteOffer =
         id
       )
     );
+
+    clearOffersCache();
   };

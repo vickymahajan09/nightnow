@@ -25,6 +25,26 @@ export type CustomerProfile = {
   updatedAt?: any;
 };
 
+const PROFILE_CACHE_TTL =
+  15_000;
+
+let profileCache:
+  | {
+      uid: string;
+      data: CustomerProfile;
+      expiresAt: number;
+    }
+  | null = null;
+
+let profileRequest:
+  | Promise<CustomerProfile | null>
+  | null = null;
+
+const clearCustomerProfileCache =
+  () => {
+    profileCache = null;
+  };
+
 const requireUserId = () => {
   const uid =
     auth.currentUser?.uid;
@@ -39,31 +59,87 @@ const requireUserId = () => {
 };
 
 export const getCustomerProfile =
-  async (): Promise<
+  async (
+    options: {
+      forceRefresh?: boolean;
+    } = {}
+  ): Promise<
     CustomerProfile | null
   > => {
     const uid =
       requireUserId();
 
-    const snapshot =
-      await getDoc(
-        doc(
-          db,
-          "users",
-          uid
-        )
-      );
+    const forceRefresh =
+      options?.forceRefresh ===
+      true;
+
+    const now =
+      Date.now();
 
     if (
-      !snapshot.exists()
+      !forceRefresh &&
+      profileCache &&
+      profileCache.uid === uid &&
+      profileCache.expiresAt >
+        now
     ) {
-      return null;
+      return profileCache.data;
     }
 
-    return {
-      uid,
-      ...snapshot.data(),
-    } as CustomerProfile;
+    if (
+      !forceRefresh &&
+      profileRequest
+    ) {
+      return profileRequest;
+    }
+
+    const request =
+      (async () => {
+        const snapshot =
+          await getDoc(
+            doc(
+              db,
+              "users",
+              uid
+            )
+          );
+
+        if (
+          !snapshot.exists()
+        ) {
+          return null;
+        }
+
+        const profile =
+          {
+            uid,
+            ...snapshot.data(),
+          } as CustomerProfile;
+
+        profileCache = {
+          uid,
+          data: profile,
+          expiresAt:
+            Date.now() +
+            PROFILE_CACHE_TTL,
+        };
+
+        return profile;
+      })();
+
+    profileRequest =
+      request;
+
+    try {
+      return await request;
+    } finally {
+      if (
+        profileRequest ===
+        request
+      ) {
+        profileRequest = null;
+      }
+    }
   };
 
 export const updateCustomerProfile =
@@ -81,7 +157,9 @@ export const updateCustomerProfile =
       ),
       {
         ...data,
+
         uid,
+
         updatedAt:
           new Date(),
       },
@@ -89,6 +167,8 @@ export const updateCustomerProfile =
         merge: true,
       }
     );
+
+    clearCustomerProfileCache();
   };
 
 export const updateCustomerName =
@@ -96,7 +176,8 @@ export const updateCustomerName =
     name: string
   ) => {
     await updateCustomerProfile({
-      name: name.trim(),
+      name:
+        name.trim(),
     });
   };
 
@@ -105,7 +186,8 @@ export const updateCustomerPhone =
     phone: string
   ) => {
     await updateCustomerProfile({
-      phone: phone.trim(),
+      phone:
+        phone.trim(),
     });
   };
 
@@ -129,6 +211,7 @@ export const clearGSTDetails =
   async () => {
     await updateCustomerProfile({
       gstNumber: "",
+
       companyName: "",
     });
   };

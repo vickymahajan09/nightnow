@@ -6,6 +6,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
   ReactNode,
 } from "react";
 
@@ -14,6 +15,7 @@ export type CartItem = {
 
   name?: string;
   image?: string;
+  images?: string[];
 
   price?: number;
   mrp?: number;
@@ -59,11 +61,8 @@ export type CartItem = {
 
   offerSaving?: number;
 
-  /* ========================= */
-
   [key: string]: any;
 };
-
 
 /* =====================================================
    CART CONTEXT TYPE
@@ -107,8 +106,15 @@ type CartContextType = {
     variantId?: string,
     offerId?: string
   ) => number;
-};
 
+  /* CART POPUP */
+
+  cartPopupVisible: boolean;
+
+  cartPopupItem: CartItem | null;
+
+  hideCartPopup: () => void;
+};
 
 /* =====================================================
    CONTEXT
@@ -119,7 +125,6 @@ const CartContext =
     CartContextType | undefined
   >(undefined);
 
-
 /* =====================================================
    STORAGE
 ===================================================== */
@@ -127,18 +132,8 @@ const CartContext =
 const CART_STORAGE_KEY =
   "nightnow_cart";
 
-
 /* =====================================================
    ITEM KEY
-=====================================================
-
-   Normal product:
-   product + variant + normal
-
-   Offer product:
-   product + variant + offer
-
-   This keeps normal and offer products separate.
 ===================================================== */
 
 const getItemKey = (
@@ -160,7 +155,6 @@ const getItemKey = (
   return `${item.id}__${variant}__${offer}`;
 };
 
-
 /* =====================================================
    OFFER CALCULATOR
 ===================================================== */
@@ -169,7 +163,6 @@ const calculateOffer = (
   item: CartItem,
   paidQuantity: number
 ) => {
-
   const type =
     item.offerType ||
     "NONE";
@@ -200,16 +193,12 @@ const calculateOffer = (
       )
     );
 
-
-  /* ===================================================
-     BUY 1 GET 1
-  =================================================== */
+  /* BUY 1 GET 1 */
 
   if (
     type ===
     "BUY_1_GET_1"
   ) {
-
     const freeQuantity =
       safePaidQuantity;
 
@@ -222,16 +211,12 @@ const calculateOffer = (
     };
   }
 
-
-  /* ===================================================
-     BUY 1 GET 2
-  =================================================== */
+  /* BUY 1 GET 2 */
 
   if (
     type ===
     "BUY_1_GET_2"
   ) {
-
     const freeQuantity =
       safePaidQuantity * 2;
 
@@ -244,16 +229,12 @@ const calculateOffer = (
     };
   }
 
-
-  /* ===================================================
-     BUY X GET Y
-  =================================================== */
+  /* BUY X GET Y */
 
   if (
     type ===
     "BUY_X_GET_Y"
   ) {
-
     const completedSets =
       Math.floor(
         safePaidQuantity /
@@ -273,10 +254,7 @@ const calculateOffer = (
     };
   }
 
-
-  /* ===================================================
-     NORMAL PRODUCT
-  =================================================== */
+  /* NORMAL PRODUCT */
 
   return {
     freeQuantity: 0,
@@ -286,7 +264,6 @@ const calculateOffer = (
   };
 };
 
-
 /* =====================================================
    NORMALIZE CART ITEM
 ===================================================== */
@@ -295,7 +272,6 @@ const normalizeCartItem = (
   item: CartItem,
   quantity: number
 ): CartItem => {
-
   const paidQuantity =
     Math.max(
       1,
@@ -304,13 +280,11 @@ const normalizeCartItem = (
       )
     );
 
-
   const offer =
     calculateOffer(
       item,
       paidQuantity
     );
-
 
   const price =
     Math.max(
@@ -320,11 +294,9 @@ const normalizeCartItem = (
       )
     );
 
-
   const offerSaving =
     price *
     offer.freeQuantity;
-
 
   let offerBuyQuantity =
     0;
@@ -332,38 +304,30 @@ const normalizeCartItem = (
   let offerFreeQuantity =
     0;
 
-
-  /* ===================================================
-     NORMALIZE OFFER TYPE
-  =================================================== */
+  /* NORMALIZE OFFER TYPE */
 
   if (
     item.offerType ===
     "BUY_1_GET_1"
   ) {
-
     offerBuyQuantity = 1;
 
     offerFreeQuantity = 1;
   }
 
-
   if (
     item.offerType ===
     "BUY_1_GET_2"
   ) {
-
     offerBuyQuantity = 1;
 
     offerFreeQuantity = 2;
   }
 
-
   if (
     item.offerType ===
     "BUY_X_GET_Y"
   ) {
-
     offerBuyQuantity =
       Math.max(
         1,
@@ -382,7 +346,6 @@ const normalizeCartItem = (
         )
       );
   }
-
 
   return {
     ...item,
@@ -404,7 +367,6 @@ const normalizeCartItem = (
   };
 };
 
-
 /* =====================================================
    CART PROVIDER
 ===================================================== */
@@ -414,40 +376,63 @@ export function CartProvider({
 }: {
   children: ReactNode;
 }) {
-
   const [cart, setCart] =
     useState<CartItem[]>([]);
 
   const [loaded, setLoaded] =
     useState(false);
 
+  /* CART POPUP */
+
+  const [
+    cartPopupVisible,
+    setCartPopupVisible,
+  ] = useState(false);
+
+  const [
+    cartPopupItem,
+    setCartPopupItem,
+  ] = useState<CartItem | null>(
+    null
+  );
+
+  const popupTimerRef =
+    useRef<ReturnType<
+      typeof setTimeout
+    > | null>(null);
+
+  /* CLEAN TIMER */
+
+  useEffect(() => {
+    return () => {
+      if (
+        popupTimerRef.current
+      ) {
+        clearTimeout(
+          popupTimerRef.current
+        );
+      }
+    };
+  }, []);
 
   /* ===================================================
      LOAD CART
   =================================================== */
 
   useEffect(() => {
-
     try {
-
       const saved =
         localStorage.getItem(
           CART_STORAGE_KEY
         );
 
-
       if (saved) {
-
         const parsed =
           JSON.parse(saved);
 
-
         if (
-          Array.isArray(
-            parsed
-          )
+          Array.isArray(parsed)
         ) {
-
           setCart(
             parsed.map(
               (
@@ -462,60 +447,42 @@ export function CartProvider({
                 )
             )
           );
-
         }
-
       }
-
     } catch (error) {
-
       console.error(
         "Cart loading failed:",
         error
       );
-
     }
 
-
     setLoaded(true);
-
   }, []);
-
 
   /* ===================================================
      SAVE CART
   =================================================== */
 
   useEffect(() => {
-
     if (!loaded) {
       return;
     }
 
-
     try {
-
       localStorage.setItem(
         CART_STORAGE_KEY,
-        JSON.stringify(
-          cart
-        )
+        JSON.stringify(cart)
       );
-
     } catch (error) {
-
       console.error(
         "Cart saving failed:",
         error
       );
-
     }
-
   }, [
     cart,
     loaded,
   ]);
-
 
   /* ===================================================
      ADD TO CART
@@ -524,9 +491,7 @@ export function CartProvider({
   const addToCart = (
     item: CartItem
   ) => {
-
     if (!item?.id) {
-
       console.warn(
         "Product ID missing"
       );
@@ -534,16 +499,83 @@ export function CartProvider({
       return;
     }
 
+    const itemKey =
+      getItemKey(item);
+
+    const existingItem =
+      cart.find(
+        (
+          cartItem
+        ) =>
+          getItemKey(
+            cartItem
+          ) === itemKey
+      );
+
+    const currentQuantity =
+      Number(
+        existingItem?.quantity ||
+          0
+      );
+
+    const stock =
+      Number(
+        item.stock ||
+          existingItem?.stock ||
+          0
+      );
+
+    /* STOCK LIMIT */
+
+    if (
+      stock > 0 &&
+      currentQuantity >=
+        stock
+    ) {
+      return;
+    }
+
+    const popupQuantity =
+      Math.max(
+        1,
+        currentQuantity + 1
+      );
+
+    /* POPUP ITEM */
+
+    setCartPopupItem(
+      normalizeCartItem(
+        existingItem ||
+          item,
+        popupQuantity
+      )
+    );
+
+    setCartPopupVisible(true);
+
+    /* RESET TIMER */
+
+    if (
+      popupTimerRef.current
+    ) {
+      clearTimeout(
+        popupTimerRef.current
+      );
+    }
+
+    popupTimerRef.current =
+      setTimeout(() => {
+        setCartPopupVisible(
+          false
+        );
+      }, 5000);
+
+    /* UPDATE CART */
 
     setCart(
       (
         currentCart
       ) => {
-
-        const itemKey =
-          getItemKey(item);
-
-
         const existingIndex =
           currentCart.findIndex(
             (
@@ -554,21 +586,16 @@ export function CartProvider({
               ) === itemKey
           );
 
-
-        /* ==========================================
-           NEW ITEM
-        ========================================== */
+        /* NEW ITEM */
 
         if (
           existingIndex ===
           -1
         ) {
-
-          const stock =
+          const itemStock =
             Number(
               item.stock || 0
             );
-
 
           const quantity =
             Math.max(
@@ -579,15 +606,13 @@ export function CartProvider({
               )
             );
 
-
           const finalQuantity =
-            stock > 0
+            itemStock > 0
               ? Math.min(
                   quantity,
-                  stock
+                  itemStock
                 )
               : quantity;
-
 
           return [
             ...currentCart,
@@ -599,50 +624,40 @@ export function CartProvider({
           ];
         }
 
-
-        /* ==========================================
-           EXISTING ITEM
-        ========================================== */
+        /* EXISTING ITEM */
 
         const updated = [
           ...currentCart,
         ];
-
 
         const existing =
           updated[
             existingIndex
           ];
 
-
-        const currentQuantity =
+        const existingQuantity =
           Number(
             existing.quantity ||
               1
           );
 
-
-        const stock =
+        const existingStock =
           Number(
             existing.stock ||
               0
           );
 
-
         if (
-          stock > 0 &&
-          currentQuantity >=
-            stock
+          existingStock > 0 &&
+          existingQuantity >=
+            existingStock
         ) {
-
           return currentCart;
         }
 
-
         const newQuantity =
-          currentQuantity +
+          existingQuantity +
           1;
-
 
         updated[
           existingIndex
@@ -652,13 +667,31 @@ export function CartProvider({
             newQuantity
           );
 
-
         return updated;
-
       }
     );
   };
 
+  /* ===================================================
+     HIDE CART POPUP
+  =================================================== */
+
+  const hideCartPopup = () => {
+    setCartPopupVisible(
+      false
+    );
+
+    if (
+      popupTimerRef.current
+    ) {
+      clearTimeout(
+        popupTimerRef.current
+      );
+
+      popupTimerRef.current =
+        null;
+    }
+  };
 
   /* ===================================================
      REMOVE ONE
@@ -669,16 +702,13 @@ export function CartProvider({
     variantId?: string,
     offerId?: string
   ) => {
-
     setCart(
       (
         currentCart
       ) => {
-
         const targetOfferId =
           offerId ||
           "normal";
-
 
         const index =
           currentCart.findIndex(
@@ -705,23 +735,18 @@ export function CartProvider({
                 targetOfferId
           );
 
-
         if (
           index === -1
         ) {
-
           return currentCart;
         }
-
 
         const updated = [
           ...currentCart,
         ];
 
-
         const item =
           updated[index];
-
 
         const quantity =
           Number(
@@ -729,20 +754,20 @@ export function CartProvider({
               1
           );
 
+        /* REMOVE COMPLETE ITEM */
 
         if (
           quantity <= 1
         ) {
-
           updated.splice(
             index,
             1
           );
 
-
           return updated;
         }
 
+        /* DECREASE */
 
         updated[
           index
@@ -752,16 +777,13 @@ export function CartProvider({
             quantity - 1
           );
 
-
         return updated;
-
       }
     );
   };
 
-
   /* ===================================================
-     DELETE ITEM
+     DELETE COMPLETE ITEM
   =================================================== */
 
   const deleteFromCart = (
@@ -769,11 +791,9 @@ export function CartProvider({
     variantId?: string,
     offerId?: string
   ) => {
-
     const targetOfferId =
       offerId ||
       "normal";
-
 
     setCart(
       (
@@ -807,17 +827,30 @@ export function CartProvider({
     );
   };
 
-
   /* ===================================================
      CLEAR CART
   =================================================== */
 
   const clearCart = () => {
-
     setCart([]);
 
-  };
+    setCartPopupVisible(
+      false
+    );
 
+    setCartPopupItem(null);
+
+    if (
+      popupTimerRef.current
+    ) {
+      clearTimeout(
+        popupTimerRef.current
+      );
+
+      popupTimerRef.current =
+        null;
+    }
+  };
 
   /* ===================================================
      CHECK ITEM
@@ -828,11 +861,9 @@ export function CartProvider({
     variantId?: string,
     offerId?: string
   ) => {
-
     const targetOfferId =
       offerId ||
       "normal";
-
 
     return cart.some(
       (
@@ -859,7 +890,6 @@ export function CartProvider({
     );
   };
 
-
   /* ===================================================
      GET ITEM QUANTITY
   =================================================== */
@@ -869,11 +899,9 @@ export function CartProvider({
     variantId?: string,
     offerId?: string
   ) => {
-
     const targetOfferId =
       offerId ||
       "normal";
-
 
     const item =
       cart.find(
@@ -900,39 +928,30 @@ export function CartProvider({
             targetOfferId
       );
 
-
     return Number(
       item?.quantity ||
         0
     );
   };
 
-
   /* ===================================================
      CART TOTAL
      
-     IMPORTANT:
-     
-     quantity = PAID quantity
-
-     freeQuantity is NOT charged.
+     Only PAID quantity is charged.
   =================================================== */
 
   const cartTotal =
     useMemo(() => {
-
       return cart.reduce(
         (
           total,
           item
         ) => {
-
           const price =
             Number(
               item.price ||
                 0
             );
-
 
           const quantity =
             Number(
@@ -940,77 +959,55 @@ export function CartProvider({
                 1
             );
 
-
           return (
             total +
             price *
               quantity
           );
-
         },
         0
       );
-
     }, [cart]);
-
 
   /* ===================================================
      OFFER SAVINGS
-     
-     Example:
-     
-     BUY 1 GET 1
-     ₹100 × 1 paid
-     ₹100 × 1 free
-     
-     Saving = ₹100
   =================================================== */
 
   const offerSavings =
     useMemo(() => {
-
       return cart.reduce(
         (
           total,
           item
         ) => {
-
           const saving =
             Number(
               item.offerSaving ||
                 0
             );
 
-
           return (
             total +
             saving
           );
-
         },
         0
       );
-
     }, [cart]);
-
 
   /* ===================================================
      CART COUNT
      
-     Physical quantity:
-     
-     Paid + Free
+     Paid + Free quantity
   =================================================== */
 
   const cartCount =
     useMemo(() => {
-
       return cart.reduce(
         (
           total,
           item
         ) => {
-
           return (
             total +
             Number(
@@ -1019,13 +1016,10 @@ export function CartProvider({
                 0
             )
           );
-
         },
         0
       );
-
     }, [cart]);
-
 
   /* ===================================================
      PROVIDER
@@ -1053,6 +1047,14 @@ export function CartProvider({
         isInCart,
 
         getItemQuantity,
+
+        /* POPUP */
+
+        cartPopupVisible,
+
+        cartPopupItem,
+
+        hideCartPopup,
       }}
     >
       {children}
@@ -1060,27 +1062,21 @@ export function CartProvider({
   );
 }
 
-
 /* =====================================================
    USE CART
 ===================================================== */
 
 export function useCart() {
-
   const context =
     useContext(
       CartContext
     );
 
-
   if (!context) {
-
     throw new Error(
       "useCart must be used inside CartProvider"
     );
-
   }
-
 
   return context;
 }
