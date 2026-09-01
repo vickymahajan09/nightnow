@@ -3,8 +3,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import { CartProvider } from "./context/CartContext";
+
 import MobileNav from "./components/MobileNav";
+
 import CartAddedPopup from "./components/CartAddedPopup";
+
+import CustomerNotificationPopup from "./components/CustomerNotificationPopup";
 
 export const metadata: Metadata = {
   title: "Night Now",
@@ -30,6 +34,8 @@ export default function RootLayout({
           <MobileNav />
 
           <CartAddedPopup />
+
+          <CustomerNotificationPopup />
 
         </CartProvider>
 

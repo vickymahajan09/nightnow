@@ -8,11 +8,16 @@ export async function POST(request: Request) {
 
     const amount = Number(body?.amount);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      amount > 100000
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid payment amount",
+          error:
+            "Invalid payment amount",
         },
         { status: 400 }
       );
@@ -25,55 +30,40 @@ export async function POST(request: Request) {
       process.env.RAZORPAY_KEY_SECRET?.trim();
 
     if (!keyId || !keySecret) {
-      console.error(
-        "Razorpay keys missing:",
-        {
-          hasKeyId: !!keyId,
-          hasKeySecret: !!keySecret,
-        }
-      );
-
       return NextResponse.json(
         {
           success: false,
           error:
-            "Razorpay server keys are not configured in .env.local",
+            "Razorpay server keys are not configured",
         },
         { status: 500 }
       );
     }
 
-    const credentials =
-      Buffer.from(
-        `${keyId}:${keySecret}`
-      ).toString("base64");
+    const credentials = Buffer.from(
+      `${keyId}:${keySecret}`
+    ).toString("base64");
 
-    const razorpayResponse =
-      await fetch(
-        "https://api.razorpay.com/v1/orders",
-        {
-          method: "POST",
-
-          headers: {
-            Authorization:
-              `Basic ${credentials}`,
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            amount:
-              Math.round(amount * 100),
-
-            currency: "INR",
-
-            receipt:
-              `nightnow_${Date.now()}`,
-          }),
-
-          cache: "no-store",
-        }
-      );
+    const razorpayResponse = await fetch(
+      "https://api.razorpay.com/v1/orders",
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Basic ${credentials}`,
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          amount: Math.round(amount * 100),
+          currency: "INR",
+          receipt:
+            `nightnow_${Date.now()}`,
+          payment_capture: 1,
+        }),
+        cache: "no-store",
+      }
+    );
 
     const responseText =
       await razorpayResponse.text();
@@ -81,22 +71,10 @@ export async function POST(request: Request) {
     let data: any = null;
 
     try {
-      data =
-        JSON.parse(responseText);
+      data = JSON.parse(responseText);
     } catch {
       data = null;
     }
-
-    console.log(
-      "Razorpay response:",
-      {
-        status:
-          razorpayResponse.status,
-        ok:
-          razorpayResponse.ok,
-        data,
-      }
-    );
 
     if (!razorpayResponse.ok) {
       return NextResponse.json(
@@ -105,21 +83,22 @@ export async function POST(request: Request) {
           error:
             data?.error?.description ||
             data?.error?.message ||
-            "Razorpay rejected the order request.",
+            "Razorpay order creation failed",
         },
         {
-          status:
-            razorpayResponse.status,
+          status: razorpayResponse.status,
         }
       );
     }
 
     return NextResponse.json({
       success: true,
-      id: data.id,
-      amount: data.amount,
+      id: data?.id,
+      amount: data?.amount,
       currency:
-        data.currency || "INR",
+        data?.currency || "INR",
+      status:
+        data?.status || "created",
     });
   } catch (error: any) {
     console.error(

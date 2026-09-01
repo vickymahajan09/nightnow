@@ -17,6 +17,8 @@ import {
   deleteOrder,
 } from "../../services/orderService";
 
+import { createTrackingLink } from "../../services/deliveryTrackingService";
+
 import { db, auth } from "../../lib/firebase";
 
 type Order = {
@@ -120,6 +122,59 @@ export default function AdminOrdersPage() {
     setNotificationLoading,
   ] =
     useState(true);
+
+  // =====================================================
+  // DELIVERY PARTNER TRACKING LINK
+  // =====================================================
+
+  const [trackingModalOrderId, setTrackingModalOrderId] =
+    useState<string | null>(null);
+
+  const [partnerNameInput, setPartnerNameInput] =
+    useState("");
+
+  const [partnerPhoneInput, setPartnerPhoneInput] =
+    useState("");
+
+  const [generatingLink, setGeneratingLink] =
+    useState(false);
+
+  const [generatedLink, setGeneratedLink] =
+    useState("");
+
+  const openTrackingModal = (orderId: string) => {
+    setTrackingModalOrderId(orderId);
+    setPartnerNameInput("");
+    setPartnerPhoneInput("");
+    setGeneratedLink("");
+  };
+
+  const closeTrackingModal = () => {
+    setTrackingModalOrderId(null);
+    setGeneratedLink("");
+  };
+
+  const handleGenerateLink = async (
+    orderId: string,
+    dropAddress?: string
+  ) => {
+    try {
+      setGeneratingLink(true);
+
+      const { url } = await createTrackingLink(orderId, {
+        partnerName: partnerNameInput,
+        partnerPhone: partnerPhoneInput,
+        dropAddress,
+      });
+
+      setGeneratedLink(url);
+    } catch (error) {
+      console.error("Tracking link error:", error);
+      alert("Tracking link generate nahi ho paya.");
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
 
   // =====================================================
   // LOAD ORDERS
@@ -866,6 +921,16 @@ export default function AdminOrdersPage() {
                         )}
                       </select>
 
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openTrackingModal(order.id)
+                        }
+                        className="mt-2 rounded-xl border border-orange-300 bg-orange-50 px-3 py-2 text-xs font-black text-orange-700"
+                      >
+                        🚚 Assign Delivery Partner
+                      </button>
+
                     </div>
 
                     {/* CUSTOMER + LOCATION */}
@@ -1142,6 +1207,103 @@ export default function AdminOrdersPage() {
         )}
 
       </div>
+
+      {/* DELIVERY PARTNER TRACKING MODAL */}
+
+      {trackingModalOrderId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5">
+            <p className="text-lg font-black">
+              🚚 Assign Delivery Partner
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Order #{trackingModalOrderId}
+            </p>
+
+            {!generatedLink ? (
+              <>
+                <input
+                  value={partnerNameInput}
+                  onChange={(e) =>
+                    setPartnerNameInput(e.target.value)
+                  }
+                  placeholder="Partner Name"
+                  className="mt-4 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none"
+                />
+
+                <input
+                  value={partnerPhoneInput}
+                  onChange={(e) =>
+                    setPartnerPhoneInput(
+                      e.target.value.replace(/\D/g, "")
+                    )
+                  }
+                  placeholder="Partner Phone"
+                  inputMode="numeric"
+                  className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none"
+                />
+
+                <button
+                  type="button"
+                  disabled={generatingLink}
+                  onClick={() =>
+                    handleGenerateLink(trackingModalOrderId)
+                  }
+                  className="mt-4 w-full rounded-xl bg-yellow-400 py-3 text-sm font-black text-black disabled:opacity-60"
+                >
+                  {generatingLink
+                    ? "Generating..."
+                    : "Generate Tracking Link"}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="mt-4 text-xs font-bold text-slate-500">
+                  Yeh link partner ko bhejo (WhatsApp/SMS):
+                </p>
+
+                <div className="mt-2 break-all rounded-xl bg-slate-50 p-3 text-xs">
+                  {generatedLink}
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigator.clipboard?.writeText(
+                        generatedLink
+                      )
+                    }
+                    className="flex-1 rounded-xl bg-slate-900 py-2.5 text-xs font-black text-white"
+                  >
+                    📋 Copy Link
+                  </button>
+
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(
+                      `NightNow delivery link: ${generatedLink}`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 rounded-xl bg-green-500 py-2.5 text-center text-xs font-black text-white"
+                  >
+                    💬 WhatsApp
+                  </a>
+                </div>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={closeTrackingModal}
+              className="mt-3 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-black text-slate-500"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

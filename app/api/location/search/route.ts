@@ -557,196 +557,67 @@ function dedupe(
   );
 }
 
-export async function GET(
-  request: NextRequest
-) {
-  const query =
-    request.nextUrl.searchParams
-      .get("q")
-      ?.trim() || "";
+export async function GET(request: NextRequest) {
+  const rawQuery = request.nextUrl.searchParams.get("q")?.trim() || "";
+  const query = rawQuery.replace(/\s+/g, " ");
 
   if (query.length < 2) {
-    return NextResponse.json({
-      results: [],
-    });
+    return NextResponse.json({ results: [] });
+  }
+
+  const importantWords = cleanWords(query).filter(
+    (word) => word.length >= 3 && !GENERIC_WORDS.has(word)
+  );
+
+  if (importantWords.length === 0) {
+    return NextResponse.json({ results: [] });
   }
 
   try {
-    let results: any[] =
-      [];
+    const photonUrl = makeSearchUrl(PHOTON_URL, query);
+    photonUrl.searchParams.set("limit", "25");
+    photonUrl.searchParams.set("lang", "en");
 
-    /*
-      --------------------------------------------------
-      1. PHOTON
-      --------------------------------------------------
-    */
-    try {
-      const photonUrl =
-        makeSearchUrl(
-          PHOTON_URL,
-          query
-        );
+    const nominatimUrl = makeSearchUrl(NOMINATIM_URL, query);
+    nominatimUrl.searchParams.set("format", "jsonv2");
+    nominatimUrl.searchParams.set("addressdetails", "1");
+    nominatimUrl.searchParams.set("namedetails", "1");
+    nominatimUrl.searchParams.set("limit", "20");
+    nominatimUrl.searchParams.set("countrycodes", "in");
+    nominatimUrl.searchParams.set("accept-language", "en-IN,en;q=0.9");
 
-      photonUrl.searchParams.set(
-        "limit",
-        "20"
-      );
+    const [photonResult, nominatimResult] = await Promise.allSettled([
+      fetchJson(photonUrl),
+      fetchJson(nominatimUrl),
+    ]);
 
-      photonUrl.searchParams.set(
-        "lang",
-        "en"
-      );
+    const photonItems =
+      photonResult.status === "fulfilled" && Array.isArray(photonResult.value?.features)
+        ? photonResult.value.features.map(photonToResult)
+        : [];
 
-      const data =
-        await fetchJson(
-          photonUrl
-        );
+    const nominatimItems =
+      nominatimResult.status === "fulfilled" && Array.isArray(nominatimResult.value)
+        ? nominatimResult.value.map(nominatimToResult)
+        : [];
 
-      const features =
-        Array.isArray(
-          data?.features
-        )
-          ? data.features
-          : [];
-
-      results =
-        features.map(
-          photonToResult
-        );
-    } catch (error) {
-      console.warn(
-        "Photon search failed:",
-        error
-      );
-    }
-
-    /*
-      IMPORTANT:
-      Never return raw Photon fuzzy results.
-
-      First apply the HARD filter.
-    */
-    let filtered =
-      scoreAndFilter(
-        results,
-        query
-      );
-
-    /*
-      --------------------------------------------------
-      2. NOMINATIM FALLBACK
-      --------------------------------------------------
-
-      Only call it when Photon has NO correct
-      result.
-
-      If Nominatim is rate-limited, we simply
-      return no result instead of returning a
-      wrong Photon result.
-    */
-    if (
-      filtered.length === 0
-    ) {
-      try {
-        const nominatimUrl =
-          makeSearchUrl(
-            NOMINATIM_URL,
-            query
-          );
-
-        nominatimUrl.searchParams.set(
-          "format",
-          "jsonv2"
-        );
-
-        nominatimUrl.searchParams.set(
-          "addressdetails",
-          "1"
-        );
-
-        nominatimUrl.searchParams.set(
-          "namedetails",
-          "1"
-        );
-
-        nominatimUrl.searchParams.set(
-          "limit",
-          "15"
-        );
-
-        nominatimUrl.searchParams.set(
-          "countrycodes",
-          "in"
-        );
-
-        nominatimUrl.searchParams.set(
-          "accept-language",
-          "en"
-        );
-
-        const data =
-          await fetchJson(
-            nominatimUrl
-          );
-
-        results =
-          Array.isArray(data)
-            ? data.map(
-                nominatimToResult
-              )
-            : [];
-
-        filtered =
-          scoreAndFilter(
-            results,
-            query
-          );
-      } catch (error) {
-        console.warn(
-          "Nominatim fallback failed:",
-          error
-        );
-
-        /*
-          DO NOT fall back to the old Photon
-          fuzzy results here.
-        */
-        filtered = [];
-      }
-    }
-
-    const finalResults =
-      dedupe(
-        filtered
-      ).slice(0, 8);
+    const merged = dedupe([...photonItems, ...nominatimItems]);
+    const filtered = scoreAndFilter(merged, query);
+    const finalResults = dedupe(filtered).slice(0, 10);
 
     return NextResponse.json(
-      {
-        results:
-          finalResults,
-      },
+      { results: finalResults },
       {
         headers: {
-          "Cache-Control":
-            "no-store",
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
         },
       }
     );
   } catch (error) {
-    console.error(
-      "Location search error:",
-      error
-    );
-
+    console.error("Location search error:", error);
     return NextResponse.json(
-      {
-        results: [],
-        error:
-          "Location search failed",
-      },
-      {
-        status: 500,
-      }
+      { results: [], error: "Location search failed. Please try again." },
+      { status: 502 }
     );
   }
 }

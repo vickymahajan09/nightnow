@@ -6,6 +6,7 @@ import {
 } from "react";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   onAuthStateChanged,
@@ -48,6 +49,8 @@ type Coupon = {
 };
 
 export default function CheckoutPage() {
+  const router = useRouter();
+
   const {
     cart,
     cartTotal,
@@ -844,8 +847,7 @@ export default function CheckoutPage() {
 
     clearCart();
 
-    window.location.href =
-      "/orders";
+    router.push("/orders");
   };
 
   /* =====================================================
@@ -1021,18 +1023,87 @@ export default function CheckoutPage() {
             paymentResponse: any
           ) => {
             try {
+              const verifyResponse =
+                await fetch(
+                  "/api/razorpay/verify-payment",
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type":
+                        "application/json",
+                    },
+                    body: JSON.stringify({
+                      razorpay_payment_id:
+                        paymentResponse?.razorpay_payment_id,
+                      razorpay_order_id:
+                        paymentResponse?.razorpay_order_id,
+                      razorpay_signature:
+                        paymentResponse?.razorpay_signature,
+                      expectedAmount:
+                        razorpayOrder.amount,
+                    }),
+                  }
+                );
+
+              const verification =
+                await verifyResponse.json();
+
+              if (
+                !verifyResponse.ok ||
+                !verification?.success ||
+                !verification?.verified
+              ) {
+                throw new Error(
+                  verification?.error ||
+                    "Payment verification failed."
+                );
+              }
+
               await saveOrder(
                 "Online",
-                paymentResponse
+                {
+                  ...paymentResponse,
+                  verified: true,
+                  verifiedAt: new Date().toISOString(),
+                  razorpayOrderId:
+                    paymentResponse?.razorpay_order_id ||
+                    razorpayOrder.id,
+                  amount: Number(
+                    razorpayOrder.amount || 0
+                  ) / 100,
+                  currency:
+                    razorpayOrder.currency || "INR",
+                }
               );
-            } catch (error) {
+            } catch (error: any) {
               console.error(
-                "Order save after payment failed:",
+                "Payment verification/order save failed:",
                 error
               );
 
+              try {
+                localStorage.setItem(
+                  "nightnow-payment-pending",
+                  JSON.stringify({
+                    razorpayPaymentId:
+                      paymentResponse?.razorpay_payment_id ||
+                      null,
+                    razorpayOrderId:
+                      paymentResponse?.razorpay_order_id ||
+                      razorpayOrder?.id ||
+                      null,
+                    error:
+                      error?.message ||
+                      "Payment verification failed",
+                    createdAt:
+                      new Date().toISOString(),
+                  })
+                );
+              } catch {}
+
               alert(
-                "Payment successful but order saving failed. Please contact support."
+                error?.message ||
+                  "Payment verification failed. Please contact support before making another payment."
               );
             }
           },

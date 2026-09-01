@@ -1,0 +1,222 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && (
+          request.auth.token.email == "mahajanvicky04@gmail.com"
+          || request.auth.token.admin == true
+          || request.auth.token.role == "admin"
+        );
+    }
+
+    // PRODUCTS
+    match /products/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // BRANDS
+    match /brands/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // CATEGORIES
+    match /categories/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // NEEDS
+    match /needs/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // BUY 1 GET 2 OFFERS
+    match /buy1get2Offers/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // OFFERS
+    match /offers/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // COUPONS
+    match /coupons/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // HOME SECTIONS
+    match /homeSections/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // CAMPAIGNS
+         match /campaigns/{id} {
+  allow read: if true;
+  allow create, update, delete: if isAdmin();
+}
+
+    // HOME CATEGORIES
+    match /homeCategories/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // REVIEWS
+    match /reviews/{id} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
+    }
+
+    // WISHLIST
+    match /wishlist/{id} {
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && (
+            resource.data.userId == request.auth.uid
+            || resource.data.uid == request.auth.uid
+            || resource.data.email == request.auth.token.email
+          )
+        );
+
+      allow create: if signedIn()
+        && (
+          request.resource.data.userId == request.auth.uid
+          || request.resource.data.uid == request.auth.uid
+          || request.resource.data.email == request.auth.token.email
+        );
+
+      allow delete: if isAdmin()
+        || (
+          signedIn()
+          && (
+            resource.data.userId == request.auth.uid
+            || resource.data.uid == request.auth.uid
+            || resource.data.email == request.auth.token.email
+          )
+        );
+    }
+
+    // ORDERS
+    match /orders/{id} {
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // DELIVERY TRACKING
+    // The doc id is a long random token — knowing it is what
+    // authorizes access (a "share link"), same as the order
+    // itself is not exposed. Anonymous partner sign-in satisfies
+    // signedIn() for the update.
+    match /deliveryTracking/{token} {
+      allow read: if signedIn();
+      allow create: if isAdmin();
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["location", "active"]);
+      allow delete: if isAdmin();
+    }
+
+    // SETTINGS (store info, hero banner, etc.)
+    match /settings/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // NOTIFICATIONS
+    match /notifications/{id} {
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        )
+        || (
+          signedIn()
+          && resource.data.audience == "admin"
+        );
+
+      allow create: if signedIn()
+        && (
+          request.resource.data.userId == request.auth.uid
+          || request.resource.data.audience == "admin"
+          || isAdmin()
+        );
+
+      allow update, delete: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
+    }
+
+    // USERS
+    match /users/{userId} {
+      allow read, write: if isAdmin()
+        || (
+          signedIn()
+          && request.auth.uid == userId
+        );
+
+      match /addresses/{addressId} {
+        allow read, write: if isAdmin()
+          || (
+            signedIn()
+            && request.auth.uid == userId
+          );
+      }
+
+      match /wallet/{walletId} {
+        allow read: if isAdmin()
+          || (
+            signedIn()
+            && request.auth.uid == userId
+          );
+
+        allow write: if isAdmin();
+      }
+    }
+
+    // DEFAULT DENY
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

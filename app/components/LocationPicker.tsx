@@ -29,8 +29,12 @@ export default function LocationPicker({
   });
 
   useEffect(() => {
+    let mounted = true;
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (!mounted) return;
+
         setLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -38,7 +42,11 @@ export default function LocationPicker({
       },
       () => {}
     );
-  }, []);
+
+    return () => {
+      mounted = false;
+    };
+  }, [setLocation]);
 
   if (!isLoaded) {
     return (

@@ -7,7 +7,9 @@ import {
 
 import Link from "next/link";
 
-import { onAuthStateChanged } from "firebase/auth";
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
 
 import { auth } from "../lib/firebase";
 
@@ -150,7 +152,9 @@ function getStatusClass(
   }
 
   if (
-    value.includes("out") ||
+    value.includes(
+      "out"
+    ) ||
     value.includes(
       "delivery"
     )
@@ -164,6 +168,12 @@ function getStatusClass(
     ) ||
     value.includes(
       "confirm"
+    ) ||
+    value.includes(
+      "preparing"
+    ) ||
+    value.includes(
+      "packed"
     )
   ) {
     return "bg-purple-100 text-purple-700";
@@ -203,10 +213,7 @@ export default function CustomerOrdersPage() {
   ] = useState(0);
 
   /* ===================================================
-     AUTH + ORDERS
-     Single auth listener
-     No duplicate subscription
-     No artificial 10s timeout
+     AUTH + REALTIME ORDERS
   =================================================== */
 
   useEffect(() => {
@@ -215,6 +222,26 @@ export default function CustomerOrdersPage() {
     let unsubscribeOrders:
       | (() => void)
       | null = null;
+
+    let loadingTimer:
+      | ReturnType<
+          typeof setTimeout
+        >
+      | null = null;
+
+    const clearLoadingTimer =
+      () => {
+        if (
+          loadingTimer
+        ) {
+          clearTimeout(
+            loadingTimer
+          );
+
+          loadingTimer =
+            null;
+        }
+      };
 
     const cleanupOrders =
       () => {
@@ -226,22 +253,59 @@ export default function CustomerOrdersPage() {
           unsubscribeOrders =
             null;
         }
+
+        clearLoadingTimer();
       };
 
-    const startOrders = (
-      user: any
-    ) => {
-      if (!active) {
-        return;
-      }
+    const startOrders =
+      (currentUser: any) => {
+        if (
+          !active ||
+          !currentUser
+        ) {
+          return;
+        }
 
-      cleanupOrders();
+        cleanupOrders();
 
-      setLoading(true);
-      setError("");
-      setLoggedOut(false);
+        setLoading(true);
+        setError("");
+        setLoggedOut(false);
 
-      try {
+        console.log(
+          "🟢 ORDERS USER:",
+          currentUser.uid
+        );
+
+        /*
+         * Safety timeout.
+         *
+         * This belongs to this single subscription only,
+         * so an old subscription cannot trigger a timeout
+         * after a new subscription has already received data.
+         */
+
+        loadingTimer =
+          setTimeout(() => {
+            if (!active) {
+              return;
+            }
+
+            setLoading(false);
+
+            setError(
+              "Orders could not be loaded. Please refresh the page and try again."
+            );
+
+            console.error(
+              "⏱️ Orders loading timeout"
+            );
+          }, 15000);
+
+        /*
+         * REALTIME ORDER SUBSCRIPTION
+         */
+
         unsubscribeOrders =
           subscribeToOrders(
             (
@@ -250,6 +314,8 @@ export default function CustomerOrdersPage() {
               if (!active) {
                 return;
               }
+
+              clearLoadingTimer();
 
               const safeOrders =
                 Array.isArray(
@@ -260,6 +326,16 @@ export default function CustomerOrdersPage() {
                     )
                   : [];
 
+              console.log(
+                "📦 ORDERS RECEIVED:",
+                safeOrders
+              );
+
+              /*
+               * Firestore successfully responded.
+               * Empty array is also a valid response.
+               */
+
               setOrders(
                 safeOrders
               );
@@ -268,34 +344,30 @@ export default function CustomerOrdersPage() {
               setError("");
             }
           );
-      } catch (err) {
-        console.error(
-          "Orders subscription error:",
-          err
-        );
+      };
 
-        if (!active) {
-          return;
-        }
-
-        setOrders([]);
-        setLoading(false);
-
-        setError(
-          "Orders load nahi ho paaye. Please try again."
-        );
-      }
-    };
+    /*
+     * SINGLE AUTH LISTENER
+     *
+     * We no longer start the order subscription
+     * from multiple places.
+     */
 
     const unsubscribeAuth =
       onAuthStateChanged(
         auth,
-        (user) => {
+        (currentUser) => {
           if (!active) {
             return;
           }
 
-          if (!user) {
+          console.log(
+            "🔐 AUTH CHANGE:",
+            currentUser?.uid ||
+              "Logged out"
+          );
+
+          if (!currentUser) {
             cleanupOrders();
 
             setOrders([]);
@@ -306,7 +378,9 @@ export default function CustomerOrdersPage() {
             return;
           }
 
-          startOrders(user);
+          startOrders(
+            currentUser
+          );
         },
         (authError) => {
           console.error(
@@ -320,21 +394,24 @@ export default function CustomerOrdersPage() {
 
           cleanupOrders();
 
-          setOrders([]);
           setLoading(false);
 
           setError(
-            "Login session verify nahi ho paayi."
+            "Your login session could not be verified. Please login again."
           );
         }
       );
 
+    /*
+     * CLEANUP
+     */
+
     return () => {
       active = false;
 
-      unsubscribeAuth();
-
       cleanupOrders();
+
+      unsubscribeAuth();
     };
   }, [retryKey]);
 
@@ -359,7 +436,9 @@ export default function CustomerOrdersPage() {
   if (loggedOut) {
     return (
       <main className="min-h-screen bg-slate-50 px-4 py-8 pb-24 text-slate-900">
+
         <div className="mx-auto max-w-3xl rounded-3xl bg-white p-8 text-center shadow-sm">
+
           <div className="text-5xl">
             🔐
           </div>
@@ -379,7 +458,9 @@ export default function CustomerOrdersPage() {
           >
             Login
           </Link>
+
         </div>
+
       </main>
     );
   }
@@ -390,12 +471,17 @@ export default function CustomerOrdersPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-5 pb-24 text-slate-900">
+
       <div className="mx-auto max-w-3xl">
 
-        {/* HEADER */}
+        {/* ==========================================
+            HEADER
+        ========================================== */}
 
         <div className="mb-5 flex items-start justify-between gap-3">
+
           <div>
+
             <Link
               href="/"
               className="text-xs font-black text-slate-500"
@@ -410,6 +496,7 @@ export default function CustomerOrdersPage() {
             <p className="mt-1 text-xs text-slate-400">
               Your complete order history
             </p>
+
           </div>
 
           <Link
@@ -418,31 +505,41 @@ export default function CustomerOrdersPage() {
           >
             Cart
           </Link>
+
         </div>
 
-        {/* ERROR */}
+        {/* ==========================================
+            ERROR
+        ========================================== */}
 
-        {error &&
-          !loading && (
-            <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 p-4">
-              <p className="text-xs font-bold text-red-600">
-                {error}
-              </p>
+        {error && !loading && (
 
-              <button
-                type="button"
-                onClick={retry}
-                className="mt-3 rounded-xl bg-red-500 px-4 py-2 text-xs font-black text-white"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
+          <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 p-4">
 
-        {/* LOADING */}
+            <p className="text-xs font-bold text-red-600">
+              {error}
+            </p>
+
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-3 rounded-xl bg-red-500 px-4 py-2 text-xs font-black text-white"
+            >
+              Try Again
+            </button>
+
+          </div>
+
+        )}
+
+        {/* ==========================================
+            LOADING
+        ========================================== */}
 
         {loading ? (
+
           <div className="rounded-3xl bg-white p-10 text-center shadow-sm">
+
             <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-zinc-200 border-t-yellow-400" />
 
             <p className="mt-4 text-sm font-black">
@@ -452,12 +549,17 @@ export default function CustomerOrdersPage() {
             <p className="mt-1 text-[10px] text-slate-400">
               Please wait...
             </p>
+
           </div>
+
         ) : orders.length === 0 ? (
 
-          /* NO ORDERS */
+          /* ==========================================
+             NO ORDERS
+          ========================================== */
 
           <div className="rounded-3xl bg-white p-10 text-center shadow-sm">
+
             <div className="text-6xl">
               📦
             </div>
@@ -477,15 +579,20 @@ export default function CustomerOrdersPage() {
             >
               Start Shopping
             </Link>
+
           </div>
 
         ) : (
 
-          /* ORDER LIST */
+          /* ==========================================
+             ORDER LIST
+          ========================================== */
 
           <div className="space-y-3">
+
             {orders.map(
               (order) => {
+
                 const items =
                   Array.isArray(
                     order.items
@@ -519,6 +626,7 @@ export default function CustomerOrdersPage() {
                   );
 
                 return (
+
                   <Link
                     key={
                       order.id
@@ -530,7 +638,9 @@ export default function CustomerOrdersPage() {
                     {/* ORDER HEADER */}
 
                     <div className="flex items-start justify-between gap-3">
+
                       <div className="min-w-0">
+
                         <p className="text-[10px] font-black text-slate-400">
                           ORDER #
                           {order.id
@@ -546,6 +656,7 @@ export default function CustomerOrdersPage() {
                             order.createdAt
                           )}
                         </p>
+
                       </div>
 
                       <span
@@ -563,11 +674,13 @@ export default function CustomerOrdersPage() {
                       >
                         {status}
                       </span>
+
                     </div>
 
                     {/* PRODUCT IMAGES */}
 
                     <div className="mt-4 flex items-center gap-2 overflow-hidden">
+
                       {items
                         .slice(
                           0,
@@ -578,11 +691,14 @@ export default function CustomerOrdersPage() {
                             item,
                             index
                           ) => (
+
                             <div
                               key={`${order.id}-${item.id || index}`}
                               className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-zinc-50"
                             >
+
                               {item.image ? (
+
                                 <img
                                   src={
                                     item.image
@@ -591,34 +707,43 @@ export default function CustomerOrdersPage() {
                                     item.name ||
                                     "Product"
                                   }
-                                  loading="lazy"
-                                  decoding="async"
                                   className="h-full w-full object-contain"
                                 />
+
                               ) : (
+
                                 <div className="flex h-full w-full items-center justify-center text-lg">
                                   📦
                                 </div>
+
                               )}
+
                             </div>
+
                           )
                         )}
 
                       {items.length >
                         4 && (
+
                         <span className="text-[10px] font-black text-slate-400">
                           +
                           {items.length -
                             4}
                         </span>
+
                       )}
+
                     </div>
 
                     {/* ORDER FOOTER */}
 
                     <div className="mt-4 flex items-end justify-between border-t border-zinc-100 pt-3">
+
                       <div>
+
                         <p className="text-[10px] text-slate-400">
+
                           {itemCount}{" "}
                           item
                           {itemCount ===
@@ -631,6 +756,7 @@ export default function CustomerOrdersPage() {
                           {order.paymentMethod ||
                             order.payment ||
                             "Payment"}
+
                         </p>
 
                         <p className="mt-1 text-base font-black">
@@ -639,20 +765,27 @@ export default function CustomerOrdersPage() {
                             total
                           )}
                         </p>
+
                       </div>
 
                       <span className="text-xs font-black text-yellow-600">
                         View Order →
                       </span>
+
                     </div>
 
                   </Link>
+
                 );
               }
             )}
+
           </div>
+
         )}
+
       </div>
+
     </main>
   );
 }

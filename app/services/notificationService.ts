@@ -7,7 +7,12 @@ import {
   query,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
+
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
 
 import {
   auth,
@@ -17,7 +22,7 @@ import {
 export type AppNotification = {
   id?: string;
   userId?: string;
-  audience?: string;
+  audience?: "admin" | "customer" | string;
   type?: string;
   title?: string;
   message?: string;
@@ -26,58 +31,70 @@ export type AppNotification = {
   read?: boolean;
   createdAt?: any;
   updatedAt?: any;
+
   [key: string]: any;
 };
 
-const getCurrentUserId =
-  () =>
-    auth.currentUser?.uid ||
-    "";
+/* =====================================================
+   HELPERS
+===================================================== */
 
-const getNotificationTime =
-  (value: any) => {
-    if (
-      typeof value?.toMillis ===
-      "function"
-    ) {
-      return value.toMillis();
-    }
+const getCurrentUserId = () =>
+  auth.currentUser?.uid || "";
 
-    if (
-      typeof value?.seconds ===
-      "number"
-    ) {
-      return (
-        value.seconds *
-        1000
-      );
-    }
+const getNotificationTime = (
+  value: any
+) => {
+  if (!value) {
+    return 0;
+  }
 
-    const time =
-      new Date(
-        value || 0
-      ).getTime();
+  if (
+    typeof value?.toMillis ===
+    "function"
+  ) {
+    return value.toMillis();
+  }
 
-    return Number.isNaN(
-      time
-    )
-      ? 0
-      : time;
-  };
+  if (
+    typeof value?.toDate ===
+    "function"
+  ) {
+    return value.toDate().getTime();
+  }
 
-const sortNotifications =
-  (
-    items: AppNotification[]
-  ) =>
-    [...items].sort(
-      (a, b) =>
-        getNotificationTime(
-          b.createdAt
-        ) -
-        getNotificationTime(
-          a.createdAt
-        )
-    );
+  if (
+    typeof value?.seconds ===
+    "number"
+  ) {
+    return value.seconds * 1000;
+  }
+
+  const time =
+    new Date(value).getTime();
+
+  return Number.isNaN(time)
+    ? 0
+    : time;
+};
+
+const sortNotifications = (
+  items: AppNotification[]
+) => {
+  return [...items].sort(
+    (a, b) =>
+      getNotificationTime(
+        b.createdAt
+      ) -
+      getNotificationTime(
+        a.createdAt
+      )
+  );
+};
+
+/* =====================================================
+   GET MY NOTIFICATIONS
+===================================================== */
 
 export const getMyNotifications =
   async (): Promise<
@@ -90,31 +107,49 @@ export const getMyNotifications =
       return [];
     }
 
-    const snapshot =
-      await getDocs(
-        query(
-          collection(
-            db,
-            "notifications"
-          ),
-          where(
-            "userId",
-            "==",
-            uid
+    try {
+      const snapshot =
+        await getDocs(
+          query(
+            collection(
+              db,
+              "notifications"
+            ),
+            where(
+              "userId",
+              "==",
+              uid
+            ),
+            where(
+              "audience",
+              "==",
+              "customer"
+            )
           )
+        );
+
+      return sortNotifications(
+        snapshot.docs.map(
+          (item) =>
+            ({
+              id: item.id,
+              ...item.data(),
+            }) as AppNotification
         )
       );
+    } catch (error) {
+      console.error(
+        "Get customer notifications error:",
+        error
+      );
 
-    return sortNotifications(
-      snapshot.docs.map(
-        (item) =>
-          ({
-            id: item.id,
-            ...item.data(),
-          }) as AppNotification
-      )
-    );
+      return [];
+    }
   };
+
+/* =====================================================
+   GET USER NOTIFICATIONS
+===================================================== */
 
 export const getUserNotifications =
   async (
@@ -130,31 +165,49 @@ export const getUserNotifications =
       return [];
     }
 
-    const snapshot =
-      await getDocs(
-        query(
-          collection(
-            db,
-            "notifications"
-          ),
-          where(
-            "userId",
-            "==",
-            uid
+    try {
+      const snapshot =
+        await getDocs(
+          query(
+            collection(
+              db,
+              "notifications"
+            ),
+            where(
+              "userId",
+              "==",
+              uid
+            ),
+            where(
+              "audience",
+              "==",
+              "customer"
+            )
           )
+        );
+
+      return sortNotifications(
+        snapshot.docs.map(
+          (item) =>
+            ({
+              id: item.id,
+              ...item.data(),
+            }) as AppNotification
         )
       );
+    } catch (error) {
+      console.error(
+        "Get user notifications error:",
+        error
+      );
 
-    return sortNotifications(
-      snapshot.docs.map(
-        (item) =>
-          ({
-            id: item.id,
-            ...item.data(),
-          }) as AppNotification
-      )
-    );
+      return [];
+    }
   };
+
+/* =====================================================
+   GET UNREAD COUNT
+===================================================== */
 
 export const getUnreadCount =
   async () => {
@@ -167,56 +220,189 @@ export const getUnreadCount =
     ).length;
   };
 
+/* =====================================================
+   CUSTOMER REALTIME NOTIFICATIONS
+===================================================== */
+
 export const subscribeToMyNotifications =
   (
     callback: (
       notifications: AppNotification[]
     ) => void
   ) => {
-    const uid =
-      getCurrentUserId();
+    let active = true;
 
-    if (!uid) {
-      callback([]);
+    let unsubscribeSnapshot:
+      | (() => void)
+      | null = null;
 
-      return () => {};
-    }
+    let unsubscribeAuth:
+      | (() => void)
+      | null = null;
 
-    return onSnapshot(
-      query(
-        collection(
-          db,
-          "notifications"
-        ),
-        where(
-          "userId",
-          "==",
-          uid
-        )
-      ),
-      (snapshot) => {
-        callback(
-          sortNotifications(
-            snapshot.docs.map(
-              (item) =>
-                ({
-                  id: item.id,
-                  ...item.data(),
-                }) as AppNotification
-            )
+    const stopSnapshot =
+      () => {
+        if (
+          unsubscribeSnapshot
+        ) {
+          unsubscribeSnapshot();
+
+          unsubscribeSnapshot =
+            null;
+        }
+      };
+
+    const startSnapshot = (
+      uid: string
+    ) => {
+      if (
+        !active ||
+        !uid
+      ) {
+        return;
+      }
+
+      stopSnapshot();
+
+      const notificationsQuery =
+        query(
+          collection(
+            db,
+            "notifications"
+          ),
+          where(
+            "userId",
+            "==",
+            uid
+          ),
+          where(
+            "audience",
+            "==",
+            "customer"
           )
         );
-      },
-      (error) => {
-        console.error(
-          "Customer notification subscription error:",
-          error
-        );
 
-        callback([]);
+      unsubscribeSnapshot =
+        onSnapshot(
+          notificationsQuery,
+
+          (snapshot) => {
+            if (!active) {
+              return;
+            }
+
+            const notifications =
+              snapshot.docs.map(
+                (item) =>
+                  ({
+                    id: item.id,
+                    ...item.data(),
+                  }) as AppNotification
+              );
+
+            callback(
+              sortNotifications(
+                notifications
+              )
+            );
+          },
+
+          (error) => {
+            console.error(
+              "Customer notification realtime error:",
+              error
+            );
+
+            if (active) {
+              callback([]);
+            }
+          }
+        );
+    };
+
+    /*
+     * Firebase Auth ready hone ke baad hi
+     * notification listener start karo.
+     */
+
+    const start =
+      async () => {
+        try {
+          await auth.authStateReady();
+
+          if (!active) {
+            return;
+          }
+
+          const currentUser =
+            auth.currentUser;
+
+          if (!currentUser) {
+            callback([]);
+            return;
+          }
+
+          startSnapshot(
+            currentUser.uid
+          );
+
+          /*
+           * Login/logout change ko bhi handle karo.
+           */
+
+          unsubscribeAuth =
+            onAuthStateChanged(
+              auth,
+              (user) => {
+                if (!active) {
+                  return;
+                }
+
+                stopSnapshot();
+
+                if (!user) {
+                  callback([]);
+                  return;
+                }
+
+                startSnapshot(
+                  user.uid
+                );
+              }
+            );
+        } catch (error) {
+          console.error(
+            "Customer notification listener start error:",
+            error
+          );
+
+          if (active) {
+            callback([]);
+          }
+        }
+      };
+
+    start();
+
+    return () => {
+      active = false;
+
+      stopSnapshot();
+
+      if (
+        unsubscribeAuth
+      ) {
+        unsubscribeAuth();
+
+        unsubscribeAuth =
+          null;
       }
-    );
+    };
   };
+
+/* =====================================================
+   ADMIN REALTIME NOTIFICATIONS
+===================================================== */
 
 export const subscribeToAdminNotifications =
   (
@@ -224,7 +410,7 @@ export const subscribeToAdminNotifications =
       notifications: AppNotification[]
     ) => void
   ) => {
-    return onSnapshot(
+    const notificationsQuery =
       query(
         collection(
           db,
@@ -235,30 +421,54 @@ export const subscribeToAdminNotifications =
           "==",
           "admin"
         )
-      ),
-      (snapshot) => {
-        callback(
-          sortNotifications(
+      );
+
+    let active = true;
+
+    const unsubscribe =
+      onSnapshot(
+        notificationsQuery,
+        (snapshot) => {
+          if (!active) {
+            return;
+          }
+
+          const notifications =
             snapshot.docs.map(
               (item) =>
                 ({
                   id: item.id,
                   ...item.data(),
                 }) as AppNotification
-            )
-          )
-        );
-      },
-      (error) => {
-        console.error(
-          "Admin notification subscription error:",
-          error
-        );
+            );
 
-        callback([]);
-      }
-    );
+          callback(
+            sortNotifications(
+              notifications
+            )
+          );
+        },
+        (error) => {
+          console.error(
+            "Admin notification subscription error:",
+            error
+          );
+
+          if (active) {
+            callback([]);
+          }
+        }
+      );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   };
+
+/* =====================================================
+   MARK SINGLE CUSTOMER NOTIFICATION READ
+===================================================== */
 
 export const markNotificationRead =
   async (
@@ -266,6 +476,47 @@ export const markNotificationRead =
   ) => {
     if (!id) {
       return;
+    }
+
+    const uid =
+      getCurrentUserId();
+
+    if (!uid) {
+      throw new Error(
+        "Please login again."
+      );
+    }
+
+    const snapshot =
+      await getDocs(
+        query(
+          collection(
+            db,
+            "notifications"
+          ),
+          where(
+            "userId",
+            "==",
+            uid
+          ),
+          where(
+            "audience",
+            "==",
+            "customer"
+          )
+        )
+      );
+
+    const belongsToUser =
+      snapshot.docs.some(
+        (item) =>
+          item.id === id
+      );
+
+    if (!belongsToUser) {
+      throw new Error(
+        "Notification not found."
+      );
     }
 
     await updateDoc(
@@ -276,41 +527,128 @@ export const markNotificationRead =
       ),
       {
         read: true,
-        updatedAt:
-          new Date(),
+        updatedAt: new Date(),
       }
     );
   };
 
+/* =====================================================
+   MARK ALL CUSTOMER NOTIFICATIONS READ
+===================================================== */
+
 export const markAllNotificationsRead =
   async () => {
-    const items =
-      await getMyNotifications();
+    const uid =
+      getCurrentUserId();
 
-    await Promise.all(
-      items
-        .filter(
-          (item) =>
-            item.id &&
-            item.read !== true
+    if (!uid) {
+      throw new Error(
+        "Please login again."
+      );
+    }
+
+    const snapshot =
+      await getDocs(
+        query(
+          collection(
+            db,
+            "notifications"
+          ),
+          where(
+            "userId",
+            "==",
+            uid
+          ),
+          where(
+            "audience",
+            "==",
+            "customer"
+          ),
+          where(
+            "read",
+            "==",
+            false
+          )
         )
-        .map(
-          (item) =>
-            updateDoc(
-              doc(
-                db,
-                "notifications",
-                item.id!
-              ),
-              {
-                read: true,
-                updatedAt:
-                  new Date(),
-              }
-            )
-        )
+      );
+
+    if (
+      snapshot.empty
+    ) {
+      return;
+    }
+
+    const batch =
+      writeBatch(db);
+
+    snapshot.docs.forEach(
+      (notification) => {
+        batch.update(
+          notification.ref,
+          {
+            read: true,
+            updatedAt: new Date(),
+          }
+        );
+      }
     );
+
+    await batch.commit();
   };
+
+/* =====================================================
+   MARK ALL ADMIN NOTIFICATIONS READ
+===================================================== */
+
+export const markAllAdminNotificationsRead =
+  async () => {
+    const snapshot =
+      await getDocs(
+        query(
+          collection(
+            db,
+            "notifications"
+          ),
+          where(
+            "audience",
+            "==",
+            "admin"
+          ),
+          where(
+            "read",
+            "==",
+            false
+          )
+        )
+      );
+
+    if (
+      snapshot.empty
+    ) {
+      return;
+    }
+
+    const batch =
+      writeBatch(db);
+
+    snapshot.docs.forEach(
+      (notification) => {
+        batch.update(
+          notification.ref,
+          {
+            read: true,
+            updatedAt: new Date(),
+          }
+        );
+      }
+    );
+
+    await batch.commit();
+  };
+
+/* =====================================================
+   DELETE CUSTOMER NOTIFICATION
+===================================================== */
 
 export const deleteNotification =
   async (
@@ -320,6 +658,47 @@ export const deleteNotification =
       return;
     }
 
+    const uid =
+      getCurrentUserId();
+
+    if (!uid) {
+      throw new Error(
+        "Please login again."
+      );
+    }
+
+    const snapshot =
+      await getDocs(
+        query(
+          collection(
+            db,
+            "notifications"
+          ),
+          where(
+            "userId",
+            "==",
+            uid
+          ),
+          where(
+            "audience",
+            "==",
+            "customer"
+          )
+        )
+      );
+
+    const belongsToUser =
+      snapshot.docs.some(
+        (item) =>
+          item.id === id
+      );
+
+    if (!belongsToUser) {
+      throw new Error(
+        "Notification not found."
+      );
+    }
+
     await deleteDoc(
       doc(
         db,
@@ -327,4 +706,70 @@ export const deleteNotification =
         id
       )
     );
+  };
+
+/* =====================================================
+   CLEANUP OLD CUSTOMER NOTIFICATIONS
+===================================================== */
+
+export const cleanupMyNotifications =
+  async (
+    keepCount = 100
+  ) => {
+    const uid =
+      getCurrentUserId();
+
+    if (!uid) {
+      return;
+    }
+
+    const safeKeepCount =
+      Math.max(
+        20,
+        Math.min(
+          Number(keepCount) || 100,
+          500
+        )
+      );
+
+    try {
+      const items =
+        await getMyNotifications();
+
+      if (
+        items.length <=
+        safeKeepCount
+      ) {
+        return;
+      }
+
+      const oldItems =
+        items.slice(
+          safeKeepCount
+        );
+
+      const batch =
+        writeBatch(db);
+
+      oldItems.forEach(
+        (item) => {
+          if (item.id) {
+            batch.delete(
+              doc(
+                db,
+                "notifications",
+                item.id
+              )
+            );
+          }
+        }
+      );
+
+      await batch.commit();
+    } catch (error) {
+      console.error(
+        "Notification cleanup error:",
+        error
+      );
+    }
   };

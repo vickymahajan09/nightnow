@@ -13,7 +13,15 @@ import {
   cancelOrderByCustomer,
 } from "../../services/orderService";
 
+import { subscribeToPartnerLocation } from "../../services/deliveryTrackingService";
+
 import { onAuthStateChanged } from "firebase/auth";
+
+import {
+  GoogleMap,
+  Marker,
+  useJsApiLoader,
+} from "@react-google-maps/api";
 
 type OrderItem = {
   id?: string;
@@ -55,6 +63,10 @@ type Order = {
   cancelledAt?: any;
 
   createdAt?: any;
+
+  trackingToken?: string;
+  partnerName?: string;
+  partnerPhone?: string;
 };
 
 export default function CustomerOrderDetailPage() {
@@ -82,6 +94,41 @@ export default function CustomerOrderDetailPage() {
 
   const [cancelling, setCancelling] =
     useState(false);
+
+  const [partnerLocation, setPartnerLocation] =
+    useState<{ lat: number; lng: number } | null>(null);
+
+  const { isLoaded: mapLoaded } = useJsApiLoader({
+    googleMapsApiKey:
+      process.env.NEXT_PUBLIC_GOOGLE_MAP_KEY || "",
+  });
+
+  // =====================================================
+  // LIVE PARTNER LOCATION (while Out for Delivery)
+  // =====================================================
+
+  useEffect(() => {
+    if (!order?.trackingToken) {
+      setPartnerLocation(null);
+      return;
+    }
+
+    const unsubscribe = subscribeToPartnerLocation(
+      order.trackingToken,
+      (data) => {
+        if (data?.location?.lat && data?.location?.lng) {
+          setPartnerLocation({
+            lat: data.location.lat,
+            lng: data.location.lng,
+          });
+        } else {
+          setPartnerLocation(null);
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, [order?.trackingToken]);
 
   // =====================================================
   // AUTH + REAL-TIME ORDER
@@ -527,11 +574,39 @@ export default function CustomerOrderDetailPage() {
                 🚚 Delivery partner is on the way
               </p>
 
-              <p className="mt-1 text-xs text-orange-600">
-                Your delivery address is shown above.
-                Live driver GPS will appear here when
-                a driver-location feature is connected.
-              </p>
+              {order?.partnerName && (
+                <p className="mt-1 text-xs text-orange-600">
+                  {order.partnerName}
+                  {order.partnerPhone
+                    ? ` • ${order.partnerPhone}`
+                    : ""}
+                </p>
+              )}
+
+              {partnerLocation && mapLoaded ? (
+                <div className="mt-3 overflow-hidden rounded-xl">
+                  <GoogleMap
+                    mapContainerStyle={{
+                      width: "100%",
+                      height: "220px",
+                    }}
+                    center={partnerLocation}
+                    zoom={15}
+                    options={{
+                      disableDefaultUI: true,
+                      zoomControl: true,
+                    }}
+                  >
+                    <Marker position={partnerLocation} />
+                  </GoogleMap>
+                </div>
+              ) : (
+                <p className="mt-1 text-xs text-orange-600">
+                  Your delivery address is shown above.
+                  Live location abhi start nahi hui — partner
+                  ke sharing start karte hi yahan map dikhega.
+                </p>
+              )}
             </div>
           )}
         </section>

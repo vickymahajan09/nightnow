@@ -1841,6 +1841,25 @@ export default function ProfilePage() {
             </span>
           </Link>
 
+          {/* PRIVACY POLICY */}
+
+          <Link
+            href="/privacy"
+            className="flex items-center gap-3 border-b border-zinc-200 p-4 dark:border-zinc-800"
+          >
+            <span className="text-xl">
+              🛡️
+            </span>
+
+            <span className="text-sm font-black">
+              Privacy Policy
+            </span>
+
+            <span className="ml-auto">
+              →
+            </span>
+          </Link>
+
           {/* SHARE */}
 
           <button

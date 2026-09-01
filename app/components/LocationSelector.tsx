@@ -85,7 +85,10 @@ export default function LocationSelector({
     useRef(0);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      controllerRef.current?.abort();
+      return;
+    }
 
     setQuery("");
     setResults([]);
@@ -213,7 +216,7 @@ export default function LocationSelector({
             }
           }
         },
-        500
+        350
       );
 
     return () =>

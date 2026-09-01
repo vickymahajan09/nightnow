@@ -2,19 +2,16 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
 
-    const amount =
-      Number(body?.amount);
+    const amount = Number(body?.amount);
 
     if (
       !Number.isFinite(amount) ||
-      amount <= 0
+      amount <= 0 ||
+      amount > 100000
     ) {
       return NextResponse.json(
         {
@@ -27,15 +24,12 @@ export async function POST(
     }
 
     const keyId =
-      process.env.RAZORPAY_KEY_ID;
+      process.env.RAZORPAY_KEY_ID?.trim();
 
     const keySecret =
-      process.env.RAZORPAY_KEY_SECRET;
+      process.env.RAZORPAY_KEY_SECRET?.trim();
 
-    if (
-      !keyId ||
-      !keySecret
-    ) {
+    if (!keyId || !keySecret) {
       return NextResponse.json(
         {
           success: false,
@@ -46,83 +40,65 @@ export async function POST(
       );
     }
 
-    const auth =
-      Buffer.from(
-        `${keyId}:${keySecret}`
-      ).toString("base64");
+    const credentials = Buffer.from(
+      `${keyId}:${keySecret}`
+    ).toString("base64");
 
-    const razorpayResponse =
-      await fetch(
-        "https://api.razorpay.com/v1/orders",
-        {
-          method: "POST",
+    const razorpayResponse = await fetch(
+      "https://api.razorpay.com/v1/orders",
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Basic ${credentials}`,
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          amount: Math.round(amount * 100),
+          currency: "INR",
+          receipt:
+            `nightnow_${Date.now()}`,
+          payment_capture: 1,
+        }),
+        cache: "no-store",
+      }
+    );
 
-          headers: {
-            Authorization:
-              `Basic ${auth}`,
-
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            amount:
-              Math.round(
-                amount * 100
-              ),
-
-            currency: "INR",
-
-            receipt:
-              `nightnow_${Date.now()}`,
-
-            payment_capture: 1,
-          }),
-
-          cache: "no-store",
-        }
-      );
-
-    const text =
+    const responseText =
       await razorpayResponse.text();
 
-    let data: any;
+    let data: any = null;
 
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(responseText);
     } catch {
-      data = {
-        error:
-          "Razorpay returned a non-JSON response",
-        raw:
-          text.slice(0, 500),
-      };
+      data = null;
     }
 
-    if (
-      !razorpayResponse.ok
-    ) {
+    if (!razorpayResponse.ok) {
       return NextResponse.json(
         {
           success: false,
           error:
             data?.error?.description ||
-            data?.error ||
+            data?.error?.message ||
             "Razorpay order creation failed",
         },
         {
-          status:
-            razorpayResponse.status,
+          status: razorpayResponse.status,
         }
       );
     }
 
     return NextResponse.json({
       success: true,
-      id: data.id,
-      amount: data.amount,
+      id: data?.id,
+      amount: data?.amount,
       currency:
-        data.currency,
+        data?.currency || "INR",
+      status:
+        data?.status || "created",
     });
   } catch (error: any) {
     console.error(

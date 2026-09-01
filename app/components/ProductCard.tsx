@@ -56,23 +56,42 @@ export default function ProductCard({
     useState("");
   const [wishlist, setWishlist] =
     useState<string[]>([]);
+  const [retryKey, setRetryKey] =
+    useState(0);
 
   useEffect(() => {
+    let mounted = true;
+
     const loadProducts = async () => {
       try {
         setLoading(true);
         setError("");
 
-        const snapshot = await getDocs(
-          collection(db, "products")
+        // Guard against a hung Firestore request (bad config / blocked
+        // rules / network issue) so the UI never gets stuck on
+        // "Loading..." forever.
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("timeout")),
+            10000
+          )
         );
 
-        const data = snapshot.docs.map(
-          (item) => ({
+        const snapshot = await Promise.race([
+          getDocs(collection(db, "products")),
+          timeout,
+        ]);
+
+        if (!mounted) return;
+
+        const data = snapshot.docs
+          .map((item) => ({
             id: item.id,
             ...item.data(),
-          })
-        ) as Product[];
+          }))
+          // Skip products explicitly marked inactive, same rule
+          // ProductGridPro already applies — keeps both lists consistent.
+          .filter((p: any) => p?.active !== false) as Product[];
 
         setProducts(data);
       } catch (err) {
@@ -80,16 +99,22 @@ export default function ProductCard({
           "Product loading error:",
           err
         );
-        setError(
-          "Products load nahi ho pa rahe."
-        );
+        if (mounted) {
+          setError(
+            "Products load nahi ho pa rahe. Please check your connection and try again."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     loadProducts();
-  }, []);
+
+    return () => {
+      mounted = false;
+    };
+  }, [retryKey]);
 
   useEffect(() => {
     try {
@@ -229,9 +254,11 @@ export default function ProductCard({
           </p>
           <button
             type="button"
-            onClick={() =>
-              window.location.reload()
-            }
+            onClick={() => {
+              setError("");
+              setLoading(true);
+              setRetryKey((key) => key + 1);
+            }}
             className="mt-5 rounded-xl bg-yellow-400 px-6 py-3 font-black"
           >
             Try Again

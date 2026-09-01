@@ -790,6 +790,13 @@ export default function AddProductPage() {
         brandName ||
         "";
 
+      const selectedCategoryDoc = categories.find(
+        (cat) => cat.id === category.trim()
+      );
+
+      const categoryDisplayName =
+        selectedCategoryDoc?.name?.trim() || category.trim();
+
       const product = {
         // BASIC
         name:
@@ -813,7 +820,7 @@ export default function AddProductPage() {
 
         // CATEGORY
         category:
-          category.trim(),
+          categoryDisplayName,
 
         categoryId:
           category.trim(),

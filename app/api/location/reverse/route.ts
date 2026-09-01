@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse";
 
+const isValidCoordinate = (value: string, min: number, max: number) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= min && number <= max;
+};
+
 export async function GET(request: NextRequest) {
   const lat = request.nextUrl.searchParams.get("lat")?.trim() || "";
   const lon = request.nextUrl.searchParams.get("lon")?.trim() || "";
 
-  if (!lat || !lon) {
+  if (!lat || !lon || !isValidCoordinate(lat, -90, 90) || !isValidCoordinate(lon, -180, 180)) {
     return NextResponse.json(
       { error: "Latitude and longitude are required" },
       { status: 400 }

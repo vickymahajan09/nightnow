@@ -111,6 +111,16 @@ export const addAddress =
         existing.length === 0
       );
 
+    const normalizedAddress = {
+      ...address,
+      name: address.name?.trim() || "",
+      phone: address.phone?.replace(/\D/g, "").slice(-10) || "",
+      address: address.address?.trim() || "",
+      city: address.city?.trim() || "",
+      pincode: address.pincode?.replace(/\D/g, "").slice(0, 6) || "",
+      label: address.label?.trim() || "",
+    };
+
     if (shouldBeDefault) {
       await Promise.all(
         existing
@@ -143,7 +153,7 @@ export const addAddress =
       await addDoc(
         getAddressCollection(),
         {
-          ...address,
+          ...normalizedAddress,
           isDefault:
             shouldBeDefault,
           createdAt:
@@ -170,7 +180,17 @@ export const updateAddress =
       );
     }
 
-    if (address.isDefault) {
+    const normalizedAddress = {
+      ...address,
+      ...(address.name !== undefined ? { name: address.name.trim() } : {}),
+      ...(address.phone !== undefined ? { phone: address.phone.replace(/\D/g, "").slice(-10) } : {}),
+      ...(address.address !== undefined ? { address: address.address.trim() } : {}),
+      ...(address.city !== undefined ? { city: address.city.trim() } : {}),
+      ...(address.pincode !== undefined ? { pincode: address.pincode.replace(/\D/g, "").slice(0, 6) } : {}),
+      ...(address.label !== undefined ? { label: address.label.trim() } : {}),
+    };
+
+    if (normalizedAddress.isDefault) {
       const existing =
         await getAddresses();
 
@@ -211,7 +231,7 @@ export const updateAddress =
         id
       ),
       {
-        ...address,
+        ...normalizedAddress,
         updatedAt:
           new Date(),
       }

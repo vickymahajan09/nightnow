@@ -222,6 +222,10 @@ export async function POST(
           0
       );
 
+    const orderTotal = Number(
+      order?.total ?? 0
+    );
+
     if (
       !Number.isFinite(
         requestedAmount
@@ -233,6 +237,22 @@ export async function POST(
         {
           error:
             "Invalid refund amount.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      Number.isFinite(orderTotal) &&
+      orderTotal > 0 &&
+      requestedAmount > orderTotal
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Refund amount cannot exceed the order total.",
         },
         {
           status: 400,

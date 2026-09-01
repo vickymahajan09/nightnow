@@ -67,7 +67,9 @@ export default function AdminPage() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
-        <p className="font-bold text-yellow-400">Loading Admin...</p>
+        <p className="font-bold text-yellow-400">
+          Loading Admin...
+        </p>
       </main>
     );
   }
@@ -100,7 +102,9 @@ export default function AdminPage() {
   }
 
   const pendingOrders = orders.filter(
-    (order) => !order.status || order.status === "Pending"
+    (order) =>
+      !order.status ||
+      order.status === "Pending"
   ).length;
 
   const deliveredOrders = orders.filter(
@@ -112,67 +116,80 @@ export default function AdminPage() {
   ).length;
 
   const totalSales = orders
-    .filter((order) => order.status !== "Cancelled")
+    .filter(
+      (order) =>
+        order.status !== "Cancelled"
+    )
     .reduce(
-      (sum, order) => sum + Number(order.total || 0),
+      (sum, order) =>
+        sum + Number(order.total || 0),
       0
     );
 
   const lowStock = products.filter(
-    (product) => Number(product.stock || 0) <= 5
+    (product) =>
+      Number(product.stock || 0) <= 5
   ).length;
 
-  // These are the admin pages/routes already used by the current NightNow
-  // dashboard plus the admin modules we have been working toward.
   const managementCards: AdminCard[] = [
     {
       href: "/admin/orders",
       icon: "📦",
       title: "Manage Orders",
       description: `${orders.length} total orders`,
-      className: "bg-blue-600 hover:bg-blue-500",
+      className:
+        "bg-blue-600 hover:bg-blue-500",
     },
     {
       href: "/admin/product",
       icon: "🛍️",
       title: "Manage Products",
       description: `${products.length} products`,
-      className: "bg-green-600 hover:bg-green-500",
+      className:
+        "bg-green-600 hover:bg-green-500",
     },
     {
       href: "/admin/categories",
       icon: "🗂️",
       title: "Categories",
       description: `${categories.length} categories`,
-      className: "bg-purple-600 hover:bg-purple-500",
+      className:
+        "bg-purple-600 hover:bg-purple-500",
     },
     {
       href: "/admin/brands",
       icon: "🏷️",
       title: "Brand Master",
       description: "Manage product brands",
-      className: "bg-orange-600 hover:bg-orange-500",
+      className:
+        "bg-orange-600 hover:bg-orange-500",
     },
     {
       href: "/admin/offers",
       icon: "🎁",
       title: "Live Offers",
-      description: "Create and manage active offers",
-      className: "bg-pink-600 hover:bg-pink-500",
+      description:
+        "Create and manage active offers",
+      className:
+        "bg-pink-600 hover:bg-pink-500",
     },
     {
       href: "/admin/home-sections",
       icon: "🏠",
       title: "Home Sections",
-      description: "Manage homepage sections and products",
-      className: "bg-indigo-600 hover:bg-indigo-500",
+      description:
+        "Manage homepage sections and products",
+      className:
+        "bg-indigo-600 hover:bg-indigo-500",
     },
     {
       href: "/admin/needs",
       icon: "⚡",
       title: "Needs / Smart Picks",
-      description: "Manage quick-pick content",
-      className: "bg-cyan-600 hover:bg-cyan-500",
+      description:
+        "Manage quick-pick content",
+      className:
+        "bg-cyan-600 hover:bg-cyan-500",
     },
   ];
 
@@ -212,33 +229,52 @@ export default function AdminPage() {
 
         {/* STATS */}
         <section className="mt-6 grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-5">
-            <p className="text-sm text-zinc-400">Total Orders</p>
-            <p className="mt-2 text-3xl font-black">{orders.length}</p>
+            <p className="text-sm text-zinc-400">
+              Total Orders
+            </p>
+
+            <p className="mt-2 text-3xl font-black">
+              {orders.length}
+            </p>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-5">
-            <p className="text-sm text-zinc-400">Pending</p>
+            <p className="text-sm text-zinc-400">
+              Pending
+            </p>
+
             <p className="mt-2 text-3xl font-black text-yellow-400">
               {pendingOrders}
             </p>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-5">
-            <p className="text-sm text-zinc-400">Products</p>
-            <p className="mt-2 text-3xl font-black">{products.length}</p>
+            <p className="text-sm text-zinc-400">
+              Products
+            </p>
+
+            <p className="mt-2 text-3xl font-black">
+              {products.length}
+            </p>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-5">
-            <p className="text-sm text-zinc-400">Sales</p>
+            <p className="text-sm text-zinc-400">
+              Sales
+            </p>
+
             <p className="mt-2 text-3xl font-black text-green-400">
               ₹{totalSales}
             </p>
           </div>
+
         </section>
 
-        {/* ALL MANAGEMENT OPTIONS */}
+        {/* MANAGEMENT */}
         <section className="mt-8">
+
           <div className="mb-4">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-yellow-400">
               Control Center
@@ -255,11 +291,16 @@ export default function AdminPage() {
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {managementCards.map((card) => (
-              <Link key={card.href} href={card.href}>
+              <Link
+                key={card.href}
+                href={card.href}
+              >
                 <div
                   className={`min-h-[165px] rounded-2xl p-5 shadow-lg transition duration-200 hover:-translate-y-1 ${card.className}`}
                 >
-                  <div className="text-4xl">{card.icon}</div>
+                  <div className="text-4xl">
+                    {card.icon}
+                  </div>
 
                   <h3 className="mt-4 text-xl font-black">
                     {card.title}
@@ -272,13 +313,17 @@ export default function AdminPage() {
               </Link>
             ))}
           </div>
+
         </section>
 
         {/* QUICK ACCESS */}
         <section className="mt-8 grid gap-4 md:grid-cols-2">
+
           <Link href="/orders">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition hover:bg-zinc-800">
-              <div className="text-3xl">👤</div>
+              <div className="text-3xl">
+                👤
+              </div>
 
               <h2 className="mt-3 text-lg font-black">
                 Customer View
@@ -292,7 +337,9 @@ export default function AdminPage() {
 
           <Link href="/">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition hover:bg-zinc-800">
-              <div className="text-3xl">🛒</div>
+              <div className="text-3xl">
+                🛒
+              </div>
 
               <h2 className="mt-3 text-lg font-black">
                 Open Store
@@ -303,68 +350,102 @@ export default function AdminPage() {
               </p>
             </div>
           </Link>
+
         </section>
 
         {/* SUMMARIES */}
         <section className="mt-8 grid gap-5 md:grid-cols-2">
+
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="text-xl font-black">Order Summary</h2>
+
+            <h2 className="text-xl font-black">
+              Order Summary
+            </h2>
 
             <div className="mt-5 space-y-3">
+
               <div className="flex justify-between">
-                <span className="text-zinc-400">Pending</span>
+                <span className="text-zinc-400">
+                  Pending
+                </span>
+
                 <span className="font-bold text-yellow-400">
                   {pendingOrders}
                 </span>
               </div>
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">Delivered</span>
+                <span className="text-zinc-400">
+                  Delivered
+                </span>
+
                 <span className="font-bold text-green-400">
                   {deliveredOrders}
                 </span>
               </div>
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">Cancelled</span>
+                <span className="text-zinc-400">
+                  Cancelled
+                </span>
+
                 <span className="font-bold text-red-400">
                   {cancelledOrders}
                 </span>
               </div>
+
             </div>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="text-xl font-black">Inventory</h2>
+
+            <h2 className="text-xl font-black">
+              Inventory
+            </h2>
 
             <div className="mt-5 space-y-3">
+
               <div className="flex justify-between">
-                <span className="text-zinc-400">Total Products</span>
-                <span className="font-bold">{products.length}</span>
+                <span className="text-zinc-400">
+                  Total Products
+                </span>
+
+                <span className="font-bold">
+                  {products.length}
+                </span>
               </div>
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">Low Stock</span>
+                <span className="text-zinc-400">
+                  Low Stock
+                </span>
+
                 <span className="font-bold text-red-400">
                   {lowStock}
                 </span>
               </div>
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">Categories</span>
+                <span className="text-zinc-400">
+                  Categories
+                </span>
+
                 <span className="font-bold">
                   {categories.length}
                 </span>
               </div>
+
             </div>
           </div>
+
         </section>
 
-        {/* SECURITY NOTE */}
+        {/* SECURITY */}
         <div className="mt-8 rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-4 text-xs font-semibold text-zinc-400">
           🔐 Admin access is restricted to the configured administrator
           account. Keep this authentication check enabled in production.
         </div>
+
       </div>
     </main>
   );

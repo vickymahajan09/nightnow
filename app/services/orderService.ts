@@ -153,12 +153,16 @@ const createOrderNotification =
         {
           userId,
 
+          audience:
+            "customer",
+
           orderId:
             order?.orderId ||
             order?.id ||
             "",
 
-          type: "order",
+          type:
+            "order",
 
           title,
 
@@ -166,15 +170,98 @@ const createOrderNotification =
 
           status,
 
-          read: false,
+          read:
+            false,
 
           createdAt:
+            new Date(),
+
+          updatedAt:
             new Date(),
         }
       );
     } catch (error) {
       console.error(
-        "Notification creation failed:",
+        "Customer notification creation failed:",
+        error
+      );
+    }
+  };
+
+// =====================================================
+// SECURE ADMIN NOTIFICATION HELPER
+// =====================================================
+
+const createAdminNotification =
+  async (
+    currentUser: any,
+    type: string,
+    orderId: string,
+    extraData: Record<
+      string,
+      any
+    > = {}
+  ) => {
+    try {
+      if (
+        !currentUser ||
+        !orderId
+      ) {
+        return;
+      }
+
+      const idToken =
+        await currentUser.getIdToken();
+
+      const response =
+        await fetch(
+          "/api/notifications/admin",
+          {
+            method:
+              "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${idToken}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                type,
+                orderId,
+                ...extraData,
+              }),
+          }
+        );
+
+      let data:
+        | any
+        | null = null;
+
+      try {
+        data =
+          await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        console.error(
+          "Admin notification API failed:",
+          data?.error ||
+            `HTTP ${response.status}`
+        );
+
+        return;
+      }
+
+      return data;
+    } catch (error) {
+      console.error(
+        "Admin notification request failed:",
         error
       );
     }
@@ -258,57 +345,16 @@ export const addOrder =
     };
 
     // ===================================================
-    // ADMIN NEW ORDER NOTIFICATION
+    // SECURE ADMIN NEW ORDER NOTIFICATION
     // ===================================================
 
-    try {
-      await addDoc(
-        collection(
-          db,
-          "notifications"
-        ),
-        {
-          audience:
-            "admin",
+    await createAdminNotification(
+      currentUser,
 
-          type:
-            "new-order",
+      "new-order",
 
-          title:
-            "New Order Received 🔔",
-
-          message:
-            `New order #${orderRef.id.slice(
-              0,
-              8
-            )} received from ${
-              customer?.name ||
-              "Customer"
-            } for ₹${Number(
-              orderData?.total ||
-                0
-            )}.`,
-
-          orderId:
-            orderRef.id,
-
-          userId,
-
-          customer,
-
-          read:
-            false,
-
-          createdAt:
-            new Date(),
-        }
-      );
-    } catch (error) {
-      console.error(
-        "Admin notification creation failed:",
-        error
-      );
-    }
+      orderRef.id
+    );
 
     // ===================================================
     // CUSTOMER CONFIRMATION
@@ -474,10 +520,6 @@ export const subscribeToOrders =
       }
 
       try {
-        /*
-         * Firebase authentication ko completely ready
-         * hone do.
-         */
         await auth.authStateReady();
 
         if (!active) {
@@ -487,9 +529,6 @@ export const subscribeToOrders =
         const currentUser =
           auth.currentUser;
 
-        /*
-         * User login nahi hai.
-         */
         if (!currentUser) {
           callback([]);
           return;
@@ -504,9 +543,6 @@ export const subscribeToOrders =
 
         let ordersQuery;
 
-        /*
-         * ADMIN
-         */
         if (isAdminUser()) {
           ordersQuery =
             query(
@@ -519,12 +555,7 @@ export const subscribeToOrders =
                 "desc"
               )
             );
-        }
-
-        /*
-         * CUSTOMER
-         */
-        else {
+        } else {
           ordersQuery =
             query(
               collection(
@@ -539,9 +570,6 @@ export const subscribeToOrders =
             );
         }
 
-        /*
-         * FIRESTORE REALTIME LISTENER
-         */
         unsubscribeSnapshot =
           onSnapshot(
             ordersQuery,
@@ -570,9 +598,6 @@ export const subscribeToOrders =
                   }
                 );
 
-              /*
-               * Newest first.
-               */
               orders.sort(
                 (
                   a: any,
@@ -627,11 +652,6 @@ export const subscribeToOrders =
                 orders.length
               );
 
-              /*
-               * VERY IMPORTANT:
-               * Empty array bhi valid Firestore
-               * response hai.
-               */
               callback(
                 orders
               );
@@ -647,15 +667,8 @@ export const subscribeToOrders =
                 return;
               }
 
-              /*
-               * Error par bhi page ko loading mein
-               * permanently mat rakho.
-               */
               callback([]);
 
-              /*
-               * Listener fail ho gaya to cleanup.
-               */
               if (
                 unsubscribeSnapshot
               ) {
@@ -668,7 +681,6 @@ export const subscribeToOrders =
               started = false;
             }
           );
-
       } catch (error) {
         console.error(
           "❌ Orders subscription start failed:",
@@ -681,27 +693,13 @@ export const subscribeToOrders =
 
         started = false;
 
-        /*
-         * Error ke case mein bhi Orders page ko
-         * infinite loading mein nahi rehne dena.
-         */
         callback([]);
       }
     };
 
-    /*
-     * Firebase auth already ready hai to directly
-     * start karo.
-     */
     if (auth.currentUser) {
       start();
-    }
-
-    /*
-     * Agar auth abhi initialize ho raha hai,
-     * login state ka wait karo.
-     */
-    else {
+    } else {
       unsubscribeAuth =
         onAuthStateChanged(
           auth,
@@ -740,9 +738,6 @@ export const subscribeToOrders =
         );
     }
 
-    /*
-     * CLEANUP
-     */
     return () => {
       active = false;
 
@@ -767,6 +762,7 @@ export const subscribeToOrders =
       started = false;
     };
   };
+
 // =====================================================
 // REAL-TIME SINGLE ORDER
 // =====================================================
@@ -990,61 +986,21 @@ export const cancelOrderByCustomer =
     );
 
     // =================================================
-    // ADMIN NOTIFICATION
+    // SECURE ADMIN CANCELLATION NOTIFICATION
     // =================================================
 
-    try {
-      await addDoc(
-        collection(
-          db,
-          "notifications"
-        ),
-        {
-          audience:
-            "admin",
+    await createAdminNotification(
+      currentUser,
 
-          type:
-            "order-cancelled",
+      "order-cancelled",
 
-          title:
-            "Order Cancelled by Customer ❌",
+      id,
 
-          message:
-            `Order #${id.slice(
-              0,
-              8
-            )} has been cancelled by ${
-              existingOrder
-                ?.customer
-                ?.name ||
-              "Customer"
-            }. Reason: ${cleanReason}`,
-
-          orderId:
-            id,
-
-          userId,
-
-          customer:
-            existingOrder?.customer ||
-            {},
-
-          cancellationReason:
-            cleanReason,
-
-          read:
-            false,
-
-          createdAt:
-            new Date(),
-        }
-      );
-    } catch (error) {
-      console.error(
-        "Admin cancellation notification failed:",
-        error
-      );
-    }
+      {
+        reason:
+          cleanReason,
+      }
+    );
 
     // =================================================
     // CUSTOMER NOTIFICATION
@@ -1081,6 +1037,57 @@ export const updateOrderStatus =
     id: string,
     status: string
   ) => {
+    if (!id?.trim()) {
+      throw new Error(
+        "Order ID is required."
+      );
+    }
+
+    const cleanStatus =
+      status?.trim();
+
+    if (!cleanStatus) {
+      throw new Error(
+        "Order status is required."
+      );
+    }
+
+    const currentUser =
+      await waitForAuthUser();
+
+    if (!currentUser) {
+      throw new Error(
+        "Please login again."
+      );
+    }
+
+    if (!isAdminUser()) {
+      throw new Error(
+        "Only admin can update order status."
+      );
+    }
+
+    const allowedStatuses =
+      [
+        "Pending",
+        "Confirmed",
+        "Preparing",
+        "Packed",
+        "Out for Delivery",
+        "Delivered",
+        "Cancelled",
+      ];
+
+    if (
+      !allowedStatuses.includes(
+        cleanStatus
+      )
+    ) {
+      throw new Error(
+        "Invalid order status."
+      );
+    }
+
     const orderRef =
       doc(
         db,
@@ -1107,99 +1114,189 @@ export const updateOrderStatus =
           orderSnapshot.id,
 
         ...orderSnapshot.data(),
-      };
+      } as any;
+
+    const previousStatus =
+      existingOrder.status ||
+      "Pending";
+
+    if (
+      previousStatus ===
+      cleanStatus
+    ) {
+      return true;
+    }
 
     await updateDoc(
       orderRef,
       {
-        status,
+        status:
+          cleanStatus,
+
+        previousStatus,
+
+        statusUpdatedBy:
+          currentUser.uid,
+
+        statusUpdatedAt:
+          new Date(),
 
         updatedAt:
           new Date(),
       }
     );
 
-    if (
-      status ===
-        "Packed" ||
-      status ===
-        "Confirmed"
+    let title =
+      "Order Updated 📦";
+
+    let message =
+      `Your order #${id.slice(
+        0,
+        8
+      )} status is now ${cleanStatus}.`;
+
+    switch (
+      cleanStatus
     ) {
-      await createOrderNotification(
-        existingOrder,
+      case "Confirmed":
+        title =
+          "Order Confirmed ✅";
 
-        "Order Confirmed 📦",
+        message =
+          `Your order #${id.slice(
+            0,
+            8
+          )} has been confirmed successfully.`;
 
-        `Your order #${id.slice(
-          0,
-          8
-        )} has been accepted and packed. It will be dispatched soon.`,
+        break;
 
-        status
+      case "Preparing":
+        title =
+          "Order Preparing 👨‍🍳";
+
+        message =
+          `Your order #${id.slice(
+            0,
+            8
+          )} is now being prepared.`;
+
+        break;
+
+      case "Packed":
+        title =
+          "Order Packed 📦";
+
+        message =
+          `Your order #${id.slice(
+            0,
+            8
+          )} has been packed and is ready for dispatch.`;
+
+        break;
+
+      case "Out for Delivery":
+        title =
+          "Out for Delivery 🛵";
+
+        message =
+          `Your order #${id.slice(
+            0,
+            8
+          )} is out for delivery.`;
+
+        break;
+
+      case "Delivered":
+        title =
+          "Order Delivered 🎉";
+
+        message =
+          `Your order #${id.slice(
+            0,
+            8
+          )} has been delivered successfully.`;
+
+        break;
+
+      case "Cancelled":
+        title =
+          "Order Cancelled ❌";
+
+        message =
+          `Your order #${id.slice(
+            0,
+            8
+          )} has been cancelled.`;
+
+        break;
+    }
+
+    // =================================================
+    // CUSTOMER STATUS NOTIFICATION
+    // =================================================
+
+    await createOrderNotification(
+      existingOrder,
+
+      title,
+
+      message,
+
+      cleanStatus
+    );
+
+    // =================================================
+    // ADMIN STATUS NOTIFICATION
+    // =================================================
+
+    try {
+      await addDoc(
+        collection(
+          db,
+          "notifications"
+        ),
+        {
+          audience:
+            "admin",
+
+          type:
+            "order-status-updated",
+
+          title:
+            "Order Status Updated",
+
+          message:
+            `Order #${id.slice(
+              0,
+              8
+            )}: ${previousStatus} → ${cleanStatus}`,
+
+          orderId:
+            id,
+
+          userId:
+            existingOrder.userId ||
+            "",
+
+          previousStatus,
+
+          status:
+            cleanStatus,
+
+          updatedBy:
+            currentUser.uid,
+
+          read:
+            false,
+
+          createdAt:
+            new Date(),
+        }
       );
-    } else if (
-      status ===
-      "Preparing"
-    ) {
-      await createOrderNotification(
-        existingOrder,
-
-        "Order Preparing 👨‍🍳",
-
-        `Your order #${id.slice(
-          0,
-          8
-        )} is now being prepared.`,
-
-        "Preparing"
-      );
-    } else if (
-      status ===
-      "Out for Delivery"
-    ) {
-      await createOrderNotification(
-        existingOrder,
-
-        "Out for Delivery 🚚",
-
-        `Your order #${id.slice(
-          0,
-          8
-        )} is out for delivery. It will reach you soon.`,
-
-        "Out for Delivery"
-      );
-    } else if (
-      status ===
-      "Delivered"
-    ) {
-      await createOrderNotification(
-        existingOrder,
-
-        "Order Delivered ✅",
-
-        `Your order #${id.slice(
-          0,
-          8
-        )} has been delivered successfully. Thank you for shopping with Night Now!`,
-
-        "Delivered"
-      );
-    } else if (
-      status ===
-      "Cancelled"
-    ) {
-      await createOrderNotification(
-        existingOrder,
-
-        "Order Cancelled ❌",
-
-        `Your order #${id.slice(
-          0,
-          8
-        )} has been cancelled.`,
-
-        "Cancelled"
+    } catch (error) {
+      console.error(
+        "Admin status notification failed:",
+        error
       );
     }
 
@@ -1246,6 +1343,10 @@ export const requestProductReturn =
         "Return reason is required."
       );
     }
+
+    const cleanDescription =
+      description?.trim() ||
+      "";
 
     const orderRef =
       doc(
@@ -1351,8 +1452,7 @@ export const requestProductReturn =
         cleanReason,
 
       returnDescription:
-        description?.trim() ||
-        "",
+        cleanDescription,
 
       returnRequestedAt:
         new Date(),
@@ -1378,62 +1478,26 @@ export const requestProductReturn =
     );
 
     // =================================================
-    // ADMIN RETURN NOTIFICATION
+    // SECURE ADMIN RETURN NOTIFICATION
     // =================================================
 
-    try {
-      await addDoc(
-        collection(
-          db,
-          "notifications"
-        ),
-        {
-          audience:
-            "admin",
+    await createAdminNotification(
+      currentUser,
 
-          type:
-            "product-return",
+      "product-return",
 
-          title:
-            "Product Return Requested ↩️",
+      orderId,
 
-          message:
-            `${order?.customer?.name || "Customer"} requested a return for "${selectedItem?.name || "Product"}" in order #${orderId.slice(
-              0,
-              8
-            )}. Reason: ${cleanReason}`,
+      {
+        productId,
 
-          orderId,
+        reason:
+          cleanReason,
 
-          userId:
-            currentUser.uid,
-
-          productId,
-
-          productName:
-            selectedItem?.name ||
-            "Product",
-
-          returnReason:
-            cleanReason,
-
-          returnDescription:
-            description?.trim() ||
-            "",
-
-          read:
-            false,
-
-          createdAt:
-            new Date(),
-        }
-      );
-    } catch (error) {
-      console.error(
-        "Admin return notification failed:",
-        error
-      );
-    }
+        description:
+          cleanDescription,
+      }
+    );
 
     // =================================================
     // CUSTOMER RETURN NOTIFICATION
@@ -1500,6 +1564,10 @@ export const requestProductExchange =
         "Exchange reason is required."
       );
     }
+
+    const cleanDescription =
+      description?.trim() ||
+      "";
 
     const orderRef =
       doc(
@@ -1605,8 +1673,7 @@ export const requestProductExchange =
         cleanReason,
 
       exchangeDescription:
-        description?.trim() ||
-        "",
+        cleanDescription,
 
       exchangeRequestedAt:
         new Date(),
@@ -1629,62 +1696,26 @@ export const requestProductExchange =
     );
 
     // =================================================
-    // ADMIN EXCHANGE NOTIFICATION
+    // SECURE ADMIN EXCHANGE NOTIFICATION
     // =================================================
 
-    try {
-      await addDoc(
-        collection(
-          db,
-          "notifications"
-        ),
-        {
-          audience:
-            "admin",
+    await createAdminNotification(
+      currentUser,
 
-          type:
-            "product-exchange",
+      "product-exchange",
 
-          title:
-            "Product Exchange Requested 🔄",
+      orderId,
 
-          message:
-            `${order?.customer?.name || "Customer"} requested an exchange for "${selectedItem?.name || "Product"}" in order #${orderId.slice(
-              0,
-              8
-            )}. Reason: ${cleanReason}`,
+      {
+        productId,
 
-          orderId,
+        reason:
+          cleanReason,
 
-          userId:
-            currentUser.uid,
-
-          productId,
-
-          productName:
-            selectedItem?.name ||
-            "Product",
-
-          exchangeReason:
-            cleanReason,
-
-          exchangeDescription:
-            description?.trim() ||
-            "",
-
-          read:
-            false,
-
-          createdAt:
-            new Date(),
-        }
-      );
-    } catch (error) {
-      console.error(
-        "Admin exchange notification failed:",
-        error
-      );
-    }
+        description:
+          cleanDescription,
+      }
+    );
 
     // =================================================
     // CUSTOMER EXCHANGE NOTIFICATION
@@ -1719,18 +1750,49 @@ export const deleteOrder =
   async (
     id: string
   ) => {
-    if (!id) {
+    if (!id?.trim()) {
       throw new Error(
         "Order ID is required."
       );
     }
 
-    await deleteDoc(
+    const currentUser =
+      await waitForAuthUser();
+
+    if (!currentUser) {
+      throw new Error(
+        "Please login again."
+      );
+    }
+
+    if (!isAdminUser()) {
+      throw new Error(
+        "Only admin can delete orders."
+      );
+    }
+
+    const orderRef =
       doc(
         db,
         "orders",
         id
-      )
+      );
+
+    const orderSnapshot =
+      await getDoc(
+        orderRef
+      );
+
+    if (
+      !orderSnapshot.exists()
+    ) {
+      throw new Error(
+        "Order not found"
+      );
+    }
+
+    await deleteDoc(
+      orderRef
     );
 
     return true;
