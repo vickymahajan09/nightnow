@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import AdminPushNotification from "../components/AdminPushNotification";
+
 export const metadata: Metadata = {
   title: "Night Now Admin",
   description: "Night Now Admin Panel",
@@ -10,6 +12,11 @@ export default function AdminLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return <>{children}</>;
+  return (
+    <>
+      <AdminPushNotification />
+      {children}
+    </>
+  );
 }
 

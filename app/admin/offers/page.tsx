@@ -58,7 +58,7 @@ export default function OffersPage() {
       setOffers([]);
 
       setError(
-        "Offers load nahi ho pa rahe."
+        "Failed to load offers."
       );
     } finally {
       setLoading(false);
@@ -161,7 +161,7 @@ export default function OffersPage() {
 
       setError(
         err?.message ||
-          "Offer update nahi ho pa raha."
+          "Failed to update the offer."
       );
     } finally {
       setSaving(false);
@@ -203,7 +203,7 @@ export default function OffersPage() {
 
       setError(
         err?.message ||
-          "Offer delete nahi ho pa raha."
+          "Failed to delete the offer."
       );
     } finally {
       setDeleting(false);

@@ -96,7 +96,7 @@ export default function CreateOfferPage() {
         );
 
         setError(
-          "Products/Brands load nahi ho pa rahe."
+          "Failed to load Products/Brands."
         );
       } finally {
         setLoading(false);
@@ -152,7 +152,7 @@ export default function CreateOfferPage() {
 
     if (!title.trim()) {
       setError(
-        "Offer title enter karo."
+        "Please enter an offer title."
       );
       return;
     }
@@ -166,7 +166,7 @@ export default function CreateOfferPage() {
       selectedBrands.length === 0
     ) {
       setError(
-        "Kam se kam 1 Product ya Brand select karo."
+        "Select at least 1 Product or Brand."
       );
       return;
     }
@@ -178,7 +178,7 @@ export default function CreateOfferPage() {
         freeQuantity < 1)
     ) {
       setError(
-        "Buy aur Free quantity 1 ya usse zyada honi chahiye."
+        "Buy and Free quantity must be 1 or more."
       );
       return;
     }
@@ -238,7 +238,7 @@ export default function CreateOfferPage() {
       );
 
       setError(
-        "Offer save nahi ho paya."
+        "Failed to save the offer."
       );
     } finally {
       setSaving(false);

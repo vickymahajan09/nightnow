@@ -10,7 +10,7 @@ export default function QuickDeliveryVisual(){
         <div className="flex items-end justify-between gap-4 text-white">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-300">Fast delivery</p>
-            <p className="mt-1 text-2xl font-black md:text-3xl">15 min ke andar*</p>
+            <p className="mt-1 text-2xl font-black md:text-3xl">Within 15 minutes*</p>
           </div>
           <span className="rounded-full bg-yellow-400 px-3 py-1 text-[10px] font-black text-black">24×7*</span>
         </div>

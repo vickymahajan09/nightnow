@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 
 import { auth, db } from "../lib/firebase";
+import { useWishlist } from "../context/WishlistContext";
 
 type WishlistProduct = {
   id: string;
@@ -25,6 +26,7 @@ type WishlistProduct = {
 };
 
 export default function WishlistPage() {
+  const { removeLocally } = useWishlist();
   const [products, setProducts] = useState<WishlistProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
@@ -153,6 +155,8 @@ export default function WishlistPage() {
 
       setProducts(updated);
 
+      removeLocally(productId);
+
       try {
         localStorage.setItem(
           "nightnow_wishlist_products",
@@ -178,7 +182,7 @@ export default function WishlistPage() {
       );
 
       alert(
-        "Wishlist se product remove nahi hua."
+        "Failed to remove the product from your wishlist."
       );
     } finally {
       setRemovingId(null);

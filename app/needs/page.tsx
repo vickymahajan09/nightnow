@@ -90,7 +90,7 @@ export default function NeedsPage() {
             </div>
 
             {selected.keywords.length === 0 && selected.productIds.length === 0 && selected.brandIds.length === 0 && (
-              <p className="mt-4 text-sm text-slate-500">Is need ke liye abhi products/keywords linked nahi hain.</p>
+              <p className="mt-4 text-sm text-slate-500">No products or keywords linked to this need yet.</p>
             )}
 
             <Link href="/cart" className="mt-5 block rounded-2xl bg-slate-900 py-4 text-center font-black text-white">

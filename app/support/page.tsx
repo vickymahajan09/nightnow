@@ -4,24 +4,24 @@ import { useState } from "react";
 
 const faqs = [
   {
-    q: "Night Now delivery kitne time me hogi?",
-    a: "Available area aur product availability ke according delivery time show hoga.",
+    q: "How long will Night Now delivery take?",
+    a: "Delivery time is shown based on your area and product availability.",
   },
   {
-    q: "Order cancel kaise kare?",
-    a: "My Orders me jaakar available cancellation option use karein.",
+    q: "How do I cancel an order?",
+    a: "Go to My Orders and use the available cancellation option.",
   },
   {
-    q: "Payment kaise kar sakte hain?",
-    a: "Checkout par available payment methods me se payment karein.",
+    q: "How can I pay?",
+    a: "Pay using any of the payment methods available at checkout.",
   },
   {
-    q: "Delivery address change kar sakte hain?",
-    a: "Checkout se pehle saved address select ya update kar sakte hain.",
+    q: "Can I change my delivery address?",
+    a: "You can select or update a saved address before checkout.",
   },
   {
-    q: "Product available nahi hai to kya karein?",
-    a: "Support se contact karein ya similar product search karein.",
+    q: "What if a product isn't available?",
+    a: "Contact support or search for a similar product.",
   },
 ];
 

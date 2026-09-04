@@ -12,6 +12,12 @@ service cloud.firestore {
         && request.auth.token.email == "mahajanvicky04@gmail.com";
     }
 
+    function isDeliveryPartner() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/deliveryPartners/$(request.auth.uid))
+        && get(/databases/$(database)/documents/deliveryPartners/$(request.auth.uid)).data.active == true;
+    }
+
     // ==========================================
     // PUBLIC CATALOG
     // ==========================================
@@ -63,6 +69,18 @@ match /homeSections/{id} {
     // ==========================================
 
     match /homeSections/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // SITE SETTINGS  (store info, hero banner,
+    // categories-page heading, etc.)
+    // Public read so the storefront can render;
+    // only admin can change them.
+    // ==========================================
+
+    match /settings/{id} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
@@ -124,13 +142,108 @@ match /homeSections/{id} {
     match /orders/{id} {
       allow create: if signedIn();
 
+      // Delivery partners can read the order queue. Firestore
+      // evaluates list queries against the whole result set, so
+      // scoping this any tighter would make the rider dashboard
+      // query fail outright rather than just filter.
       allow read: if isAdmin()
         || (
           signedIn()
           && resource.data.userId == request.auth.uid
+        )
+        || isDeliveryPartner();
+
+      // A rider may update an order that is already theirs, or claim
+      // one that nobody has taken yet (any status - they no longer
+      // wait for "Packed"). Completing a delivery and crediting the
+      // payout happens server-side via the Admin SDK.
+      allow update: if isAdmin()
+        || (
+          isDeliveryPartner()
+          && (
+            resource.data.assignedPartnerId == request.auth.uid
+            || (
+              resource.data.assignedPartnerId == null
+              && request.resource.data.assignedPartnerId == request.auth.uid
+            )
+          )
         );
 
-      allow update, delete: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // DELIVERY PARTNERS
+    // ==========================================
+
+    match /deliveryPartners/{partnerId} {
+      allow read: if isAdmin()
+        || (signedIn() && request.auth.uid == partnerId);
+
+      allow create: if signedIn()
+        && request.auth.uid == partnerId;
+
+      allow update: if isAdmin()
+        || (signedIn() && request.auth.uid == partnerId);
+
+      allow delete: if isAdmin();
+
+      // Earnings ledger. A rider can READ their own entries but can
+      // never write them - the payout is calculated and written by
+      // the server (Admin SDK), so nobody can inflate their pay from
+      // the browser console. Admin writes here only to settle
+      // payments ("paid" flag).
+      match /earnings/{entryId} {
+        allow read: if isAdmin()
+          || (signedIn() && request.auth.uid == partnerId);
+
+        allow write: if isAdmin();
+      }
+    }
+
+    // ==========================================
+    // DELIVERY TRACKING
+    // (token-based — knowing the doc id is what authorizes access,
+    // same model used by the admin-assigned WhatsApp-link partners)
+    // ==========================================
+
+    match /deliveryTracking/{token} {
+      allow get: if signedIn();
+      allow list: if isAdmin();
+      allow create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // PUSH TOKENS  (FCM device registrations)
+    //
+    // This collection had NO rule at all, so every token write was
+    // silently blocked by the default-deny at the bottom - which is
+    // why browser push notifications never arrived.
+    //
+    // `get` is open to any signed-in user because the doc id IS a
+    // long random FCM token (you can only read one you already
+    // have). Listing stays admin-only.
+    // ==========================================
+
+    match /pushTokens/{token} {
+      allow get: if signedIn();
+      allow list: if isAdmin();
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && request.resource.data.userId == request.auth.uid
+        );
+
+      allow delete: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
     }
 
     // ==========================================
@@ -190,6 +303,14 @@ match /homeSections/{id} {
           );
 
         allow write: if isAdmin();
+      }
+
+      match /wishlist/{wishlistId} {
+        allow read, write: if isAdmin()
+          || (
+            signedIn()
+            && request.auth.uid == userId
+          );
       }
     }
 

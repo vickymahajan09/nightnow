@@ -89,10 +89,10 @@ export default function DeliverPartnerPage() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-zinc-950 px-6 text-center text-white">
         <p className="text-3xl">🚫</p>
         <p className="text-lg font-black">
-          Link invalid ya expired hai
+          This link is invalid or has expired
         </p>
         <p className="text-sm text-zinc-400">
-          Please dobara link admin se maango.
+          Please ask the admin for a new link.
         </p>
       </div>
     );
@@ -132,9 +132,8 @@ export default function DeliverPartnerPage() {
           {!sharing ? (
             <>
               <p className="text-sm text-zinc-300">
-                Jab aap delivery ke liye nikle, neeche button
-                dabao — customer ko aapka live location dikhna
-                shuru ho jayega.
+                When you head out for delivery, tap the button below — the
+                customer will start seeing your live location.
               </p>
 
               <button
@@ -152,7 +151,7 @@ export default function DeliverPartnerPage() {
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
                 </span>
                 <p className="text-sm font-black text-green-400">
-                  Location live share ho rahi hai
+                  Sharing your location live
                 </p>
               </div>
 
@@ -164,8 +163,8 @@ export default function DeliverPartnerPage() {
               )}
 
               <p className="mt-3 text-xs text-zinc-400">
-                Delivery ho jaane ke baad "Stop" dabao. Order
-                status admin panel se update hoga.
+                Once delivered, tap "Stop". Order
+                status will update from the admin panel.
               </p>
 
               <button
@@ -185,8 +184,8 @@ export default function DeliverPartnerPage() {
         </div>
 
         <p className="mt-6 text-center text-[10px] text-zinc-600">
-          Yeh link sirf isi delivery ke liye kaam karta hai. Kisi
-          aur ke saath share mat karo.
+          This link only works for this delivery. Do not
+          share it with anyone else.
         </p>
       </div>
     </div>

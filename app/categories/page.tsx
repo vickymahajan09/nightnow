@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-import { getCategories, type Category } from "../services/categoryService";
+import { getCategories, getCategoriesPageHeading, type Category } from "../services/categoryService";
 import { getProducts, type Product } from "../services/productService";
 import { useCart } from "../context/CartContext";
 import { Search } from "lucide-react";
@@ -27,7 +27,6 @@ function ProductCard({ product }: { product: Product }) {
   const mrp = Number(product.mrp || 0);
   const stock = Number(product.stock || 0);
   const discount = mrp > price && mrp > 0 ? Math.round(((mrp - price) / mrp) * 100) : 0;
-  const packInfo = product.weight || (product as any).packSize || product.unit || "";
 
   const variantId = (product as any).variantId || undefined;
   const quantity = getItemQuantity(product.id, variantId);
@@ -52,26 +51,31 @@ function ProductCard({ product }: { product: Product }) {
   };
 
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_24px_rgba(0,0,0,0.18),0_2px_6px_rgba(0,0,0,0.12)] ring-1 ring-black/5 transition hover:-translate-y-1">
-      {discount > 0 && (
-        <div className="bg-gradient-to-r from-rose-600 to-orange-500 py-1 text-center text-[9px] font-black tracking-wide text-white">
-          {discount}% OFF
-        </div>
-      )}
-      <Link href={`/product/${product.id}`} className="block">
-        <div className="relative aspect-square bg-zinc-50 p-3">
+    <div className="flex aspect-square flex-col overflow-hidden rounded-xl bg-white shadow-[0_8px_24px_rgba(0,0,0,0.18),0_2px_6px_rgba(0,0,0,0.12)] ring-1 ring-black/5 transition hover:-translate-y-1">
+      <Link href={`/product/${product.id}`} className="flex h-full flex-col">
+        <div className="relative min-h-0 flex-[3] bg-zinc-50">
           <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-zinc-900 px-1.5 py-0.5 text-[7px] font-black text-yellow-300">
             🌙 15 MIN
           </span>
-          <div className="flex h-full w-full items-center justify-center">
+          {discount > 0 && (
+            <span className="absolute right-1.5 top-1.5 z-10 rounded-full bg-gradient-to-r from-rose-600 to-orange-500 px-1.5 py-0.5 text-[7px] font-black text-white">
+              {discount}% OFF
+            </span>
+          )}
+          <div className="absolute inset-0 flex items-center justify-center p-2">
             {image ? (
-              <img src={image} alt={product.name || "Product"} className="h-full w-full object-contain" loading="lazy" />
+              <img
+                src={image}
+                alt={product.name || "Product"}
+                className="max-h-full max-w-full object-contain"
+                loading="lazy"
+              />
             ) : (
               <span className="text-3xl">📦</span>
             )}
           </div>
 
-          <div className="absolute -bottom-3 right-2">
+          <div className="absolute -bottom-2 right-1.5">
             {quantity > 0 ? (
               <div className="flex h-8 items-center gap-1.5 rounded-xl bg-yellow-400 px-1.5 shadow-lg">
                 <button onClick={handleDecrease} className="h-5 w-5 rounded-md bg-black text-[12px] font-black text-white">
@@ -98,14 +102,13 @@ function ProductCard({ product }: { product: Product }) {
           </div>
         </div>
 
-        <div className="px-2.5 pb-3 pt-4">
-          <p className="line-clamp-2 min-h-[26px] text-[10px] font-bold leading-3 text-zinc-900">
+        <div className="shrink-0 px-1.5 pb-1.5 pt-1">
+          <p className="line-clamp-1 text-[9px] font-bold leading-tight text-zinc-900">
             {product.name || "Product"}
           </p>
-          {packInfo && <p className="mt-0.5 truncate text-[8px] font-semibold text-zinc-400">{packInfo}</p>}
-          <div className="mt-1.5 flex items-center gap-1">
-            <span className="text-[12px] font-black text-zinc-900">₹{price}</span>
-            {mrp > price && <span className="truncate text-[8px] text-zinc-400 line-through">₹{mrp}</span>}
+          <div className="mt-0.5 flex items-center gap-1 whitespace-nowrap">
+            <span className="text-[11px] font-black text-zinc-900">₹{price}</span>
+            {mrp > price && <span className="truncate text-[7px] text-zinc-400 line-through">₹{mrp}</span>}
           </div>
         </div>
       </Link>
@@ -121,6 +124,7 @@ export default function CategoriesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [pageHeading, setPageHeading] = useState("All Categories");
 
   useEffect(() => {
     let alive = true;
@@ -128,11 +132,19 @@ export default function CategoriesPage() {
     (async () => {
       try {
         setLoading(true);
-        const [categoryList, productList] = await Promise.all([getCategories(), getProducts()]);
+        const [categoryList, productList, heading] = await Promise.all([
+          getCategories(),
+          getProducts(),
+          // Heading lives in the `settings` doc — if it is ever
+          // unreadable we must NOT let it kill the whole page,
+          // otherwise the category list silently disappears.
+          getCategoriesPageHeading().catch(() => "All Categories"),
+        ]);
         if (!alive) return;
 
         setCategories(categoryList.filter((c) => c.active !== false));
         setProducts(productList.filter((p) => p.active !== false));
+        setPageHeading(heading);
       } catch (error) {
         console.error("Categories page load error:", error);
       } finally {
@@ -159,6 +171,28 @@ export default function CategoriesPage() {
   }, [categories, products, search]);
 
   const [sort, setSort] = useState<"new" | "low" | "high" | "discount">("new");
+
+  // Group categories by their admin-assigned "section" (e.g. "Snacks &
+  // Drinks") — matches the reference design: a heading per group, then
+  // a 2-column grid of that group's category tiles underneath.
+  const groupedCategories = useMemo(() => {
+    const groups: { section: string; items: typeof categoriesWithCounts }[] = [];
+    const indexBySection = new Map<string, number>();
+
+    categoriesWithCounts.forEach((entry) => {
+      const section = (entry.category.section || "").trim();
+      const key = section || "\u0000ungrouped";
+
+      if (!indexBySection.has(key)) {
+        indexBySection.set(key, groups.length);
+        groups.push({ section, items: [] });
+      }
+
+      groups[indexBySection.get(key)!].items.push(entry);
+    });
+
+    return groups;
+  }, [categoriesWithCounts]);
 
   const activeCategoryProducts = useMemo(() => {
     if (!activeCategoryName) return [];
@@ -190,6 +224,11 @@ export default function CategoriesPage() {
     return list;
   }, [products, activeCategoryName, sort]);
 
+  useEffect(() => {
+    const title = activeCategoryName || pageHeading;
+    document.title = `${title} | NightNow`;
+  }, [activeCategoryName, pageHeading]);
+
   return (
     <main className="min-h-screen bg-[#FFF8ED] pb-24 text-zinc-900">
       <header className="sticky top-0 z-40 border-b border-zinc-200 bg-[#FFF8ED]/95 px-4 py-3 backdrop-blur">
@@ -199,7 +238,7 @@ export default function CategoriesPage() {
               ←
             </Link>
           ) : null}
-          <h1 className="text-lg font-black">{activeCategoryName || "All Categories"}</h1>
+          <h1 className="text-lg font-black">{activeCategoryName || pageHeading}</h1>
         </div>
 
         {!activeCategoryName && (
@@ -248,8 +287,9 @@ export default function CategoriesPage() {
 
             {activeCategoryProducts.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center">
-                <p className="text-2xl">📦</p>
-                <p className="mt-2 text-sm font-black">Is category mein abhi koi product nahi hai</p>
+                <p className="text-2xl">🌙✨</p>
+                <p className="mt-2 text-sm font-black">Fresh stock landing soon in this category!</p>
+                <p className="mt-1 text-xs text-zinc-400">Check back shortly — we're restocking.</p>
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-3 md:grid-cols-5">
@@ -262,27 +302,40 @@ export default function CategoriesPage() {
         ) : categoriesWithCounts.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center">
             <p className="text-2xl">🗂️</p>
-            <p className="mt-2 text-sm font-black">Abhi koi category admin mein add nahi hui</p>
-            <p className="mt-1 text-xs text-zinc-400">Admin &gt; Categories se add karo</p>
+            <p className="mt-2 text-sm font-black">No categories added yet</p>
+            <p className="mt-1 text-xs text-zinc-400">Add one from Admin &gt; Categories</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
-            {categoriesWithCounts.map(({ category, count }) => (
-              <Link
-                key={category.id}
-                href={`/categories?category=${encodeURIComponent(category.name)}`}
-                className="flex flex-col items-center rounded-2xl bg-white p-3 text-center shadow-sm active:scale-95"
-              >
-                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-zinc-50">
-                  {category.image ? (
-                    <img src={category.image} alt={category.name} className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <span className="text-2xl">{category.icon || "🛍️"}</span>
-                  )}
+          <div className="space-y-7">
+            {groupedCategories.map((group, groupIndex) => (
+              <div key={group.section || `ungrouped-${groupIndex}`}>
+                {group.section && (
+                  <h2 className="mb-3 text-xl font-black text-zinc-900">{group.section}</h2>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  {group.items.map(({ category }) => (
+                    <Link
+                      key={category.id}
+                      href={`/categories?category=${encodeURIComponent(category.name)}`}
+                      className="flex flex-col items-center text-center active:scale-95"
+                    >
+                      <div className="flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-2xl bg-zinc-100 p-3">
+                        {category.image ? (
+                          <img
+                            src={category.image}
+                            alt={category.name}
+                            className="h-full w-full object-contain"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-4xl">{category.icon || "🛍️"}</span>
+                        )}
+                      </div>
+                      <p className="mt-2 text-sm font-bold leading-tight text-zinc-900">{category.name}</p>
+                    </Link>
+                  ))}
                 </div>
-                <p className="mt-2 line-clamp-2 text-[10px] font-black leading-tight">{category.name}</p>
-                <p className="mt-0.5 text-[8px] font-semibold text-zinc-400">{count} items</p>
-              </Link>
+              </div>
             ))}
           </div>
         )}

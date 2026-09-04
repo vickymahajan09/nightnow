@@ -290,15 +290,15 @@ export default function OffersPage() {
 
                       {/* OFFER HEADER */}
 
-                      <div className="bg-gradient-to-br from-yellow-300 via-yellow-400 to-orange-400 p-5">
+                      <div className="bg-gradient-to-br from-yellow-300 via-yellow-400 to-orange-400 p-3">
 
                         <div className="flex items-start justify-between gap-3">
 
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/90 text-2xl shadow-sm">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 text-lg shadow-sm">
                             🎁
                           </div>
 
-                          <span className="rounded-full bg-black px-3 py-1.5 text-[9px] font-black text-white">
+                          <span className="rounded-full bg-black px-2.5 py-1 text-[8px] font-black text-white">
                             {offerLabel}
                           </span>
 
@@ -309,15 +309,15 @@ export default function OffersPage() {
 
                       {/* CONTENT */}
 
-                      <div className="p-5">
+                      <div className="p-3">
 
-                        <h2 className="line-clamp-2 text-lg font-black">
+                        <h2 className="line-clamp-2 text-sm font-black">
                           {offer.title}
                         </h2>
 
                         {offer.description && (
 
-                          <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">
+                          <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-zinc-500">
                             {
                               offer.description
                             }
@@ -331,7 +331,7 @@ export default function OffersPage() {
                         {previewProducts.length >
                         0 ? (
 
-                          <div className="mt-5 flex items-center">
+                          <div className="mt-3 flex items-center">
 
                             {previewProducts.map(
                               (
@@ -356,7 +356,7 @@ export default function OffersPage() {
                                       product?.id ||
                                         index
                                     )}
-                                    className={`relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-white bg-zinc-50 shadow-sm ${
+                                    className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-white bg-zinc-50 shadow-sm ${
                                       index > 0
                                         ? "-ml-2"
                                         : ""
@@ -369,13 +369,13 @@ export default function OffersPage() {
                                       <img
                                         src={image}
                                         alt={name}
-                                        className="h-full w-full object-contain p-1"
+                                        className="h-full w-full object-contain p-0.5"
                                         loading="lazy"
                                       />
 
                                     ) : (
 
-                                      <span className="text-xl">
+                                      <span className="text-base">
                                         📦
                                       </span>
 
@@ -390,7 +390,7 @@ export default function OffersPage() {
 
                             {remaining > 0 && (
 
-                              <div className="-ml-2 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border-2 border-white bg-zinc-900 text-xs font-black text-white shadow-sm">
+                              <div className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-white bg-zinc-900 text-[10px] font-black text-white shadow-sm">
                                 +{remaining}
                               </div>
 
@@ -400,7 +400,7 @@ export default function OffersPage() {
 
                         ) : (
 
-                          <div className="mt-5 flex h-14 items-center rounded-xl bg-zinc-50 px-4 text-xs font-bold text-zinc-400">
+                          <div className="mt-3 flex h-10 items-center rounded-lg bg-zinc-50 px-3 text-[10px] font-bold text-zinc-400">
                             Products inside offer
                           </div>
 
@@ -409,15 +409,15 @@ export default function OffersPage() {
 
                         {/* INFO */}
 
-                        <div className="mt-5 flex items-center justify-between border-t border-zinc-100 pt-4">
+                        <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-3">
 
                           <div>
 
-                            <p className="text-[9px] font-black uppercase tracking-wider text-zinc-400">
+                            <p className="text-[8px] font-black uppercase tracking-wider text-zinc-400">
                               Offer Group
                             </p>
 
-                            <p className="mt-0.5 text-xs font-black">
+                            <p className="mt-0.5 text-[11px] font-black">
                               {offerProducts.length >
                               0
                                 ? `${offerProducts.length} ${
@@ -431,7 +431,7 @@ export default function OffersPage() {
 
                           </div>
 
-                          <span className="rounded-xl bg-black px-4 py-2.5 text-[10px] font-black text-white transition group-hover:translate-x-1">
+                          <span className="rounded-lg bg-black px-3 py-2 text-[9px] font-black text-white transition group-hover:translate-x-1">
                             View Offer →
                           </span>
 

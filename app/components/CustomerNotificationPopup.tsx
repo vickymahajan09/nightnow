@@ -8,10 +8,15 @@ import {
 
 import Link from "next/link";
 
+import { onAuthStateChanged } from "firebase/auth";
+
 import {
   AppNotification,
   subscribeToMyNotifications,
 } from "../services/notificationService";
+
+import { auth } from "../lib/firebase";
+import { registerPushToken } from "../services/pushNotificationService";
 
 export default function CustomerNotificationPopup() {
   const [
@@ -41,6 +46,21 @@ export default function CustomerNotificationPopup() {
         typeof setTimeout
       > | null
     >(null);
+
+  useEffect(() => {
+    // Register this device for real browser push notifications (order
+    // confirmed / packed / out for delivery / delivered) — this is what
+    // makes notifications arrive even when the site/tab is closed.
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        registerPushToken(user.uid, "customer").catch((error) => {
+          console.error("Customer push registration failed:", error);
+        });
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
 
   useEffect(() => {
     let active = true;

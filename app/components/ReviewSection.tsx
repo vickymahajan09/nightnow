@@ -98,7 +98,7 @@ export default function ReviewSection({
     async () => {
       if (!user) {
         alert(
-          "Review dene ke liye login karein."
+          "Please log in to leave a review."
         );
 
         return;
@@ -109,7 +109,7 @@ export default function ReviewSection({
 
       if (!cleanText) {
         alert(
-          "Review likhiye."
+          "Please write a review."
         );
 
         return;

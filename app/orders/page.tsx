@@ -6,6 +6,7 @@ import {
 } from "react";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   onAuthStateChanged,
@@ -16,6 +17,8 @@ import { auth } from "../lib/firebase";
 import {
   subscribeToOrders,
 } from "../services/orderService";
+
+import { useCart } from "../context/CartContext";
 
 /* =====================================================
    TYPES
@@ -187,6 +190,9 @@ function getStatusClass(
 ===================================================== */
 
 export default function CustomerOrdersPage() {
+  const router = useRouter();
+  const { addToCart } = useCart();
+
   const [
     orders,
     setOrders,
@@ -464,6 +470,38 @@ export default function CustomerOrdersPage() {
       </main>
     );
   }
+
+  /* ===================================================
+     REORDER — re-add all items from a past order to cart
+  =================================================== */
+
+  const handleReorder = (
+    order: Order,
+    e: React.MouseEvent
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const items = Array.isArray(order.items) ? order.items : [];
+
+    items.forEach((item) => {
+      if (!item.id) return;
+
+      const qty = Math.max(1, Number(item.quantity) || 1);
+
+      for (let i = 0; i < qty; i++) {
+        addToCart({
+          id: item.id,
+          name: item.name,
+          image: item.image,
+          price: item.price,
+          quantity: 1,
+        } as any);
+      }
+    });
+
+    router.push("/cart");
+  };
 
   /* ===================================================
      MAIN
@@ -768,9 +806,19 @@ export default function CustomerOrdersPage() {
 
                       </div>
 
-                      <span className="text-xs font-black text-yellow-600">
-                        View Order →
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => handleReorder(order, e)}
+                          className="rounded-full bg-yellow-400 px-3 py-1.5 text-[11px] font-black text-black active:scale-95"
+                        >
+                          🔁 Reorder
+                        </button>
+
+                        <span className="text-xs font-black text-yellow-600">
+                          View Order →
+                        </span>
+                      </div>
 
                     </div>
 

@@ -10,7 +10,10 @@ import {
   browserLocalPersistence,
 } from "firebase/auth";
 
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 import {
@@ -76,8 +79,32 @@ if (
    FIRESTORE
 ========================================== */
 
-export const db =
-  getFirestore(app);
+/*
+ * Firestore's default transport is a long-lived streaming
+ * connection. Some ISPs, office/college wifi, VPNs and Windows
+ * antivirus tools with HTTPS scanning break that stream, which
+ * shows up as "Could not reach Cloud Firestore backend
+ * (code=unavailable)" and drops the app into offline mode.
+ *
+ * experimentalAutoDetectLongPolling makes the SDK notice this and
+ * fall back to ordinary HTTP polling on its own. On a healthy
+ * network it changes nothing.
+ *
+ * initializeFirestore throws if Firestore was already started
+ * (which happens on hot reload in dev), so we fall back to the
+ * existing instance in that case.
+ */
+const createDb = () => {
+  try {
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+    });
+  } catch {
+    return getFirestore(app);
+  }
+};
+
+export const db = createDb();
 
 /* ==========================================
    STORAGE

@@ -16,7 +16,43 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
-import { db } from "../lib/firebase";
+import { db, auth } from "../lib/firebase";
+
+const LOW_STOCK_THRESHOLD = 5;
+
+/**
+ * Fire-and-forget admin push alert when a product's stock drops to/below
+ * the low-stock threshold. Never blocks or throws — a failed alert should
+ * never break saving the product.
+ */
+const notifyAdminLowStock = async (
+  productName: string,
+  stock: number
+) => {
+  try {
+    if (stock > LOW_STOCK_THRESHOLD) return;
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    const idToken = await currentUser.getIdToken();
+
+    await fetch("/api/notifications/admin", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        type: "low-stock",
+        productName,
+        stock,
+      }),
+    });
+  } catch (error) {
+    console.error("Low stock alert failed:", error);
+  }
+};
 
 export interface Product {
   id: string;
@@ -68,6 +104,17 @@ export interface Product {
   ingredients?: string;
 
   variants?: any[];
+
+  manufacturer?: string;
+  countryOfOrigin?: string;
+  shelfLife?: string;
+  packagingType?: string;
+  storage?: string;
+  returnPolicy?: string;
+  mfgDate?: string;
+  expDate?: string;
+  keyFeatures?: string;
+  usageInstructions?: string;
 
   tags?: string[];
   keywords?: string[];
@@ -783,6 +830,12 @@ export const updateProduct =
     );
 
     clearProductsCache();
+
+    // Low-stock alert — never blocks the save if it fails.
+    void notifyAdminLowStock(
+      merged.name || existing?.name || "A product",
+      Number(merged.stock ?? existing?.stock ?? 0)
+    );
   };
 
 // ======================================================

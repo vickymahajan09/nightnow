@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import Link from "next/link";
+import { useParams } from "next/navigation";
 
 import {
   getOffers,
@@ -20,15 +21,9 @@ import {
 
 import { useCart } from "../../context/CartContext";
 
-type OfferDetailsPageProps = {
-  params: Promise<{
-    offerId: string;
-  }>;
-};
+export default function OfferDetailsPage() {
+  const params = useParams<{ offerId: string }>();
 
-export default function OfferDetailsPage({
-  params,
-}: OfferDetailsPageProps) {
   const {
     addToCart,
     removeFromCart,
@@ -59,8 +54,7 @@ export default function OfferDetailsPage({
         setLoading(true);
         setError("");
 
-        const { offerId } =
-          await params;
+        const offerId = params?.offerId || "";
 
         console.log(
           "🔥 OFFER PAGE ID:",
@@ -100,7 +94,7 @@ export default function OfferDetailsPage({
           setOffer(null);
           setProducts([]);
           setError(
-            "Offer nahi mila."
+            "Offer not found."
           );
           return;
         }
@@ -236,7 +230,7 @@ export default function OfferDetailsPage({
           setOffer(null);
           setProducts([]);
           setError(
-            "Offer load nahi ho paaya."
+            "Failed to load the offer."
           );
         }
       } finally {
@@ -438,7 +432,7 @@ export default function OfferDetailsPage({
 
           <h1 className="mt-4 text-xl font-black">
             {error ||
-              "Offer nahi mila"}
+              "Offer not found"}
           </h1>
 
           <p className="mt-2 text-xs text-zinc-500">
@@ -670,22 +664,24 @@ export default function OfferDetailsPage({
 
                       {qty <= 0 ? (
 
-                        <button
-                          type="button"
-                          disabled={
-                            stock <= 0
-                          }
-                          onClick={() =>
-                            increase(
-                              product
-                            )
-                          }
-                          className="mt-2 w-full rounded-xl bg-yellow-400 py-2.5 text-[10px] font-black text-black disabled:opacity-40"
-                        >
-                          {stock > 0
-                            ? "Add to Cart"
-                            : "Out of Stock"}
-                        </button>
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            disabled={
+                              stock <= 0
+                            }
+                            onClick={() =>
+                              increase(
+                                product
+                              )
+                            }
+                            className="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-400 text-xl font-black text-black shadow-lg disabled:bg-zinc-300"
+                          >
+                            {stock > 0
+                              ? "+"
+                              : "✕"}
+                          </button>
+                        </div>
 
                       ) : (
 

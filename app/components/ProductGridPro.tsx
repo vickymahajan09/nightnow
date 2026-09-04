@@ -19,7 +19,7 @@ export default function ProductGridPro({ search = "", category = "" }: { search?
       setProducts((Array.isArray(data) ? data : []).filter((p:any) => p?.active !== false));
     }).catch((err) => {
       console.error(err);
-      if (mounted) setError("Products load nahi ho pa rahe.");
+      if (mounted) setError("Couldn't load products.");
     }).finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, []);

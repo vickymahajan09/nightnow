@@ -1,5 +1,6 @@
 import {
   doc,
+  getDoc,
   setDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -20,7 +21,7 @@ const VAPID_KEY =
 export const registerPushToken =
   async (
     userId: string,
-    role: "admin" | "customer" = "customer"
+    role: "admin" | "customer" | "partner" = "customer"
   ) => {
     try {
       if (
@@ -105,16 +106,37 @@ export const registerPushToken =
         return null;
       }
 
+      // A delivery partner who also browses the storefront would
+      // otherwise have their token downgraded to "customer" and stop
+      // receiving new-order alerts. Partner role always wins.
+      const tokenRef = doc(
+        db,
+        "pushTokens",
+        token
+      );
+
+      let finalRole = role;
+
+      try {
+        const existing = await getDoc(tokenRef);
+
+        if (
+          existing.exists() &&
+          existing.data()?.role === "partner" &&
+          role === "customer"
+        ) {
+          finalRole = "partner";
+        }
+      } catch {
+        // Non-fatal - fall back to the requested role.
+      }
+
       await setDoc(
-        doc(
-          db,
-          "pushTokens",
-          token
-        ),
+        tokenRef,
         {
           token,
           userId,
-          role,
+          role: finalRole,
           platform:
             "web",
           updatedAt:

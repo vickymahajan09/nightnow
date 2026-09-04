@@ -7,6 +7,11 @@ import {
   updateDoc,
   onSnapshot,
   serverTimestamp,
+  addDoc,
+  collection,
+  getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 
 import {
@@ -100,7 +105,111 @@ export const createTrackingLink = async (
   };
 };
 
-// PARTNER SIDE — fetch once to validate the link and show order info.
+// ======================================================
+// DELIVERY PARTNERS — saved once, reused forever.
+//
+// Instead of generating a brand-new link for every single order,
+// admin adds each partner ONE TIME (name + phone). That partner gets
+// a permanent link they bookmark. Assigning a new order to them is
+// then just picking their name from a dropdown — no new link to
+// generate, copy, or re-send via WhatsApp.
+// ======================================================
+
+export type DeliveryPartner = {
+  id: string;
+  name: string;
+  phone: string;
+  active?: boolean;
+  currentOrderId?: string | null;
+  currentOrderToken?: string | null;
+};
+
+const PARTNERS_COLLECTION = "deliveryPartners";
+
+// ADMIN ONLY — one-time setup for a new delivery partner. Returns the
+// permanent link to send them via WhatsApp (only once, ever).
+export const addDeliveryPartner = async (
+  name: string,
+  phone: string
+): Promise<{ partnerId: string; url: string }> => {
+  const cleanName = name.trim();
+  const cleanPhone = phone.trim();
+
+  if (!cleanName || !cleanPhone) {
+    throw new Error("Partner name and phone are required.");
+  }
+
+  const docRef = await addDoc(collection(db, PARTNERS_COLLECTION), {
+    name: cleanName,
+    phone: cleanPhone,
+    active: true,
+    currentOrderId: null,
+    currentOrderToken: null,
+    createdAt: serverTimestamp(),
+  });
+
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+
+  return {
+    partnerId: docRef.id,
+    url: `${origin}/deliver/partner/${docRef.id}`,
+  };
+};
+
+// ADMIN ONLY — list of saved partners, for the assignment dropdown.
+export const getDeliveryPartners = async (): Promise<DeliveryPartner[]> => {
+  const snap = await getDocs(
+    query(collection(db, PARTNERS_COLLECTION), where("active", "==", true))
+  );
+
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+};
+
+// ADMIN ONLY — assigns an order to an already-saved partner. Generates
+// a fresh tracking token behind the scenes (reusing the existing
+// per-order tracking mechanism) but the ADMIN never sees or handles
+// it — the partner's permanent link picks it up automatically.
+export const assignOrderToPartner = async (
+  orderId: string,
+  partner: DeliveryPartner,
+  dropAddress?: string
+) => {
+  const { token } = await createTrackingLink(orderId, {
+    partnerName: partner.name,
+    partnerPhone: partner.phone,
+    dropAddress,
+  });
+
+  await updateDoc(doc(db, PARTNERS_COLLECTION, partner.id), {
+    currentOrderId: orderId,
+    currentOrderToken: token,
+  });
+
+  return { token };
+};
+
+// PARTNER SIDE — their permanent link resolves to whatever order
+// they're currently assigned to (or null if nothing active right now).
+export const getPartnerCurrentJob = async (
+  partnerId: string
+): Promise<{ token: string; orderId: string; partnerName: string } | null> => {
+  if (!partnerId?.trim()) return null;
+
+  const snap = await getDoc(doc(db, PARTNERS_COLLECTION, partnerId));
+  if (!snap.exists()) return null;
+
+  const data = snap.data() as DeliveryPartner;
+  if (!data.currentOrderToken || !data.currentOrderId) return null;
+
+  return {
+    token: data.currentOrderToken,
+    orderId: data.currentOrderId,
+    partnerName: data.name,
+  };
+};
+
+
 export const getTrackingDoc = async (
   token: string
 ): Promise<TrackingDoc | null> => {

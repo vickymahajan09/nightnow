@@ -3,10 +3,12 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   limit,
   orderBy,
   query,
+  setDoc,
   startAfter,
   updateDoc,
   where,
@@ -264,7 +266,8 @@ export const addCategory =
   async (
     name: string,
     icon = "",
-    image = ""
+    image = "",
+    section = ""
   ) => {
     const cleanName =
       clean(name);
@@ -326,6 +329,9 @@ export const addCategory =
         image:
           clean(image),
 
+        section:
+          clean(section),
+
         active:
           true,
 
@@ -362,7 +368,8 @@ export const updateCategory =
     id: string,
     name: string,
     icon = "",
-    image = ""
+    image = "",
+    section = ""
   ) => {
     const cleanName =
       clean(name);
@@ -429,6 +436,9 @@ export const updateCategory =
         image:
           clean(image),
 
+        section:
+          clean(section),
+
         updatedAt:
           new Date(),
       }
@@ -486,5 +496,30 @@ export const deleteCategory =
         COLLECTION,
         id
       )
+    );
+  };
+
+// ======================================================
+// ALL-CATEGORIES PAGE HEADING (admin-editable)
+// ======================================================
+
+const CATEGORIES_PAGE_SETTINGS_DOC = "categoriesPage";
+
+export const getCategoriesPageHeading =
+  async (): Promise<string> => {
+    const snap = await getDoc(doc(db, "settings", CATEGORIES_PAGE_SETTINGS_DOC));
+    if (snap.exists()) {
+      const heading = clean(snap.data()?.heading);
+      if (heading) return heading;
+    }
+    return "All Categories";
+  };
+
+export const setCategoriesPageHeading =
+  async (heading: string) => {
+    await setDoc(
+      doc(db, "settings", CATEGORIES_PAGE_SETTINGS_DOC),
+      { heading: clean(heading) || "All Categories", updatedAt: new Date() },
+      { merge: true }
     );
   };

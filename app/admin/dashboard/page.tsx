@@ -77,16 +77,16 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-900">
         Loading Dashboard...
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 p-8 text-white">
+    <main className="min-h-screen bg-slate-50 p-8 text-slate-900">
 
-      <h1 className="mb-10 text-4xl font-bold text-yellow-400">
+      <h1 className="mb-10 text-4xl font-bold text-amber-600">
         Admin Dashboard
       </h1>
 
@@ -96,7 +96,7 @@ export default function DashboardPage() {
           <Link
             key={card.title}
             href={card.link}
-            className={`${card.color} rounded-xl p-6 transition hover:scale-105`}
+            className={`${card.color} rounded-xl p-6 text-white transition hover:scale-105`}
           >
             <p className="text-sm opacity-80">
               {card.title}
@@ -110,7 +110,7 @@ export default function DashboardPage() {
 
       </div>
 
-      <div className="mt-10 rounded-xl bg-zinc-900 p-6">
+      <div className="mt-10 rounded-xl bg-white p-6">
 
         <h2 className="mb-6 text-2xl font-bold">
           Recent Orders
@@ -119,24 +119,24 @@ export default function DashboardPage() {
         {orders.slice(0, 10).map((order: any) => (
           <div
             key={order.id}
-            className="mb-3 flex items-center justify-between rounded-lg border border-zinc-800 p-4"
+            className="mb-3 flex items-center justify-between rounded-lg border border-slate-200 p-4"
           >
             <div>
               <h3 className="font-bold">
                 {order.name}
               </h3>
 
-              <p className="text-sm text-zinc-400">
+              <p className="text-sm text-slate-600">
                 {order.phone}
               </p>
             </div>
 
             <div className="text-right">
-              <p className="font-bold text-yellow-400">
+              <p className="font-bold text-amber-600">
                 ₹{order.total}
               </p>
 
-              <span className="rounded bg-green-600 px-3 py-1 text-sm">
+              <span className="rounded bg-green-600 px-3 py-1 text-sm text-white">
                 {order.status}
               </span>
             </div>
@@ -144,7 +144,7 @@ export default function DashboardPage() {
         ))}
 
         {orders.length === 0 && (
-          <div className="py-8 text-center text-zinc-400">
+          <div className="py-8 text-center text-slate-600">
             No Orders Yet
           </div>
         )}

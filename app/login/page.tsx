@@ -127,7 +127,7 @@ export default function LoginPage() {
           "auth/popup-blocked"
         ) {
           alert(
-            "Google popup blocked hai. Browser mein popup allow karein."
+            "Google popup was blocked. Please allow popups in your browser."
           );
 
           return;

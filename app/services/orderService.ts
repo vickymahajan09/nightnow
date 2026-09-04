@@ -21,6 +21,8 @@ import {
   auth,
 } from "../lib/firebase";
 
+import { notifyRidersOfNewOrder } from "./deliveryPartnerService";
+
 // =====================================================
 // ADMIN CHECK
 // =====================================================
@@ -122,6 +124,37 @@ const waitForAuthUser = async (
 // =====================================================
 // CUSTOMER NOTIFICATION
 // =====================================================
+
+// =====================================================
+// CUSTOMER BROWSER PUSH (real notification — works even
+// when the site/tab is closed, unlike the in-app popup)
+// =====================================================
+
+const sendCustomerPush = async (
+  userId: string,
+  title: string,
+  body: string,
+  orderId: string
+) => {
+  try {
+    if (!userId) return;
+
+    const currentUser = auth.currentUser;
+    const idToken = currentUser ? await currentUser.getIdToken() : "";
+
+    await fetch("/api/admin/send-push", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
+      body: JSON.stringify({ userId, title, body, orderId }),
+    });
+  } catch (error) {
+    // Never let a push failure block the order-status update itself.
+    console.error("Customer push notification failed:", error);
+  }
+};
 
 const createOrderNotification =
   async (
@@ -320,6 +353,9 @@ export const addOrder =
       status:
         "Pending",
 
+      assignedPartnerId:
+        null,
+
       createdAt:
         order?.createdAt ||
         new Date(),
@@ -343,6 +379,16 @@ export const addOrder =
       id:
         orderRef.id,
     };
+
+    // ===================================================
+    // ALERT ALL DELIVERY PARTNERS IMMEDIATELY
+    //
+    // Riders no longer wait for the order to be packed - they are
+    // pinged the second it is placed, so they can start heading to
+    // the shop while it is still being packed.
+    // ===================================================
+
+    notifyRidersOfNewOrder(orderRef.id);
 
     // ===================================================
     // SECURE ADMIN NEW ORDER NOTIFICATION
@@ -1243,6 +1289,18 @@ export const updateOrderStatus =
       message,
 
       cleanStatus
+    );
+
+    // Real browser push — arrives even if the customer's
+    // site/tab is closed.
+    await sendCustomerPush(
+      existingOrder.userId ||
+        existingOrder.customer?.uid ||
+        existingOrder.customer?.userId ||
+        "",
+      title,
+      message,
+      id
     );
 
     // =================================================

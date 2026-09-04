@@ -1,0 +1,19 @@
+{
+  "name": "NightNow Partner",
+  "short_name": "NN Partner",
+  "description": "Delivery partner app for NightNow",
+  "start_url": "/deliver/dashboard",
+  "scope": "/deliver",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#facc15",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

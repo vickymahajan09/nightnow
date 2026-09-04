@@ -70,7 +70,7 @@ export default function AdminLoginPage() {
           adminEmail
         ) {
           alert(
-            "Ye Google account Admin account nahi hai."
+            "This Google account is not an admin account."
           );
 
           return;
@@ -97,7 +97,7 @@ export default function AdminLoginPage() {
           "auth/popup-blocked"
         ) {
           alert(
-            "Browser ne Google popup block kiya hai. Please popup allow karein."
+            "Your browser blocked the Google popup. Please allow popups and try again."
           );
 
           return;

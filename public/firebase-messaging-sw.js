@@ -1,11 +1,17 @@
-importScripts(
-  "https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"
-);
+// firebase-messaging-sw.js
+// This file MUST live at the root of your deployed site, i.e. at
+// public/firebase-messaging-sw.js in this Next.js project, so it is
+// served at https://nightnow.in/firebase-messaging-sw.js
+//
+// Without this exact file at this exact path, Chrome (and other
+// browsers) can never register for push notifications — every call
+// to navigator.serviceWorker.register("/firebase-messaging-sw.js")
+// in the app will fail, and no FCM token will ever be saved.
 
-importScripts(
-  "https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"
-);
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
 
+// Same config as app/lib/firebase.ts — must match exactly.
 firebase.initializeApp({
   apiKey: "AIzaSyDqF5SmjpswS5LRlwufjhXTceecSQVkS5A",
   authDomain: "night-now-c5617.firebaseapp.com",
@@ -15,87 +21,38 @@ firebase.initializeApp({
   appId: "1:875117617997:web:c28795cb5ce11c975b4d04",
 });
 
-const messaging =
-  firebase.messaging();
+const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(
-  (payload) => {
-    console.log(
-      "[firebase-messaging-sw.js] Background message:",
-      payload
-    );
+// Shows the OS-level notification when a push arrives while the
+// site/tab is closed or in the background.
+messaging.onBackgroundMessage((payload) => {
+  const title = payload.notification?.title || "Night Now";
+  const options = {
+    body: payload.notification?.body || "You have a new notification.",
+    icon: "/favicon.ico",
+    badge: "/favicon.ico",
+    data: payload.data || {},
+  };
 
-    const notificationTitle =
-      payload?.notification?.title ||
-      payload?.data?.title ||
-      "Night Now";
+  self.registration.showNotification(title, options);
+});
 
-    const notificationOptions = {
-      body:
-        payload?.notification?.body ||
-        payload?.data?.body ||
-        "You have a new notification.",
-      icon:
-        payload?.notification?.icon ||
-        "/icon-192.png",
-      badge:
-        "/icon-192.png",
-      data:
-        payload?.data || {},
-    };
+// Clicking the notification opens (or focuses) the relevant page.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
 
-    self.registration.showNotification(
-      notificationTitle,
-      notificationOptions
-    );
-  }
-);
+  const url = event.notification.data?.url || "/";
 
-self.addEventListener(
-  "notificationclick",
-  (event) => {
-    event.notification.close();
-
-    const data =
-      event.notification?.data || {};
-
-    const orderId =
-      data.orderId || "";
-
-    const targetUrl =
-      orderId
-        ? `/admin/orders/${orderId}`
-        : "/admin/notifications";
-
-    event.waitUntil(
-      clients
-        .matchAll({
-          type: "window",
-          includeUncontrolled: true,
-        })
-        .then((clientList) => {
-          for (const client of clientList) {
-            if (
-              "focus" in client
-            ) {
-              client.navigate(
-                targetUrl
-              );
-
-              return client.focus();
-            }
-          }
-
-          if (
-            clients.openWindow
-          ) {
-            return clients.openWindow(
-              targetUrl
-            );
-          }
-
-          return null;
-        })
-    );
-  }
-);
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes(url) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(url);
+      }
+    })
+  );
+});

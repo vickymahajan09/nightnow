@@ -55,31 +55,31 @@ export default function OrderStatusTimeline({
       : 0;
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <h3 className="text-lg font-black">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
+      <h3 className="text-sm font-black">
         Order Status
       </h3>
 
       {isCancelled ? (
-        <div className="mt-4 rounded-xl bg-red-50 p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white">
+        <div className="mt-3 rounded-xl bg-red-50 p-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-sm text-white">
               ❌
             </div>
 
             <div>
-              <p className="font-black text-red-600">
+              <p className="text-sm font-black text-red-600">
                 Order Cancelled
               </p>
 
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="text-[10px] text-zinc-500">
                 This order is no longer active.
               </p>
             </div>
           </div>
         </div>
       ) : (
-        <div className="mt-5">
+        <div className="mt-2">
           {statuses.map(
             (
               item,
@@ -98,11 +98,11 @@ export default function OrderStatusTimeline({
                   key={
                     item.key
                   }
-                  className="flex gap-3"
+                  className="flex gap-2"
                 >
                   <div className="flex flex-col items-center">
                     <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg ${
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ${
                         completed
                           ? "bg-yellow-400"
                           : "bg-zinc-100"
@@ -113,7 +113,7 @@ export default function OrderStatusTimeline({
 
                     {!last && (
                       <div
-                        className={`my-1 h-8 w-1 rounded-full ${
+                        className={`h-4 w-0.5 rounded-full ${
                           index <
                           activeIndex
                             ? "bg-yellow-400"
@@ -123,23 +123,15 @@ export default function OrderStatusTimeline({
                     )}
                   </div>
 
-                  <div className="pt-2">
-                    <p
-                      className={`text-sm font-black ${
-                        completed
-                          ? "text-black"
-                          : "text-zinc-400"
-                      }`}
-                    >
-                      {item.label}
-                    </p>
-
-                    <p className="mt-1 text-[10px] text-zinc-400">
-                      {completed
-                        ? "Completed"
-                        : "Pending"}
-                    </p>
-                  </div>
+                  <p
+                    className={`pb-1 pt-1 text-xs font-black ${
+                      completed
+                        ? "text-black"
+                        : "text-zinc-400"
+                    }`}
+                  >
+                    {item.label}
+                  </p>
                 </div>
               );
             }

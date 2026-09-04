@@ -7,6 +7,14 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://www.nightnow.in/',
     cleartext: false
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: '#0F0F1E',
+      showSpinner: false,
+      androidScaleType: 'CENTER_CROP'
+    }
   }
 };
 

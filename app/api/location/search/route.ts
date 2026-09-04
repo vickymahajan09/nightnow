@@ -37,13 +37,6 @@ const GENERIC_WORDS = new Set([
   "city",
   "town",
   "village",
-  "india",
-  "gujarat",
-  "maharashtra",
-  "rajasthan",
-  "delhi",
-  "mumbai",
-  "surat",
 
   // Building / society generic words
   "height",

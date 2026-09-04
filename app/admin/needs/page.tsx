@@ -38,7 +38,7 @@ export default function AdminNeedsPage() {
       setProducts(productData.filter((p) => p.active !== false));
     } catch (error) {
       console.error(error);
-      alert("Aapki Zarurat data load nahi hua.");
+      alert("Failed to load Smart Needs data.");
     } finally {
       setLoading(false);
     }
@@ -63,8 +63,8 @@ export default function AdminNeedsPage() {
   };
 
   const save = async () => {
-    if (!title.trim()) return alert("Need title enter karein.");
-    if (brandIds.length === 0 && productIds.length === 0) return alert("Kam se kam 1 brand ya product select karein.");
+    if (!title.trim()) return alert("Please enter a need title.");
+    if (brandIds.length === 0 && productIds.length === 0) return alert("Select at least 1 brand or product.");
 
     const keywords = keywordsText.split(",").map((item) => item.trim()).filter(Boolean);
     setSaving(true);
@@ -81,7 +81,7 @@ export default function AdminNeedsPage() {
       await loadAll();
     } catch (error: any) {
       console.error(error);
-      alert(error?.message || "Need save nahi hua.");
+      alert(error?.message || "Failed to save the need.");
     } finally {
       setSaving(false);
     }

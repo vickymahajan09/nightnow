@@ -10,6 +10,7 @@ import {
 } from "../../services/productService";
 import { getCategories } from "../../services/categoryService";
 import { getBrands, type Brand } from "../../services/brandService";
+import { RETURN_POLICY_OPTIONS } from "../../lib/returnPolicy";
 
 type Variant = {
   id: string;
@@ -104,6 +105,8 @@ export default function AddProductPage() {
   const [packagingType, setPackagingType] = useState("");
   const [storage, setStorage] = useState("");
   const [returnPolicy, setReturnPolicy] = useState("");
+  const [mfgDate, setMfgDate] = useState("");
+  const [expDate, setExpDate] = useState("");
 
   const [keyFeatures, setKeyFeatures] = useState("");
   const [ingredients, setIngredients] = useState("");
@@ -651,6 +654,8 @@ export default function AddProductPage() {
     setPackagingType("");
     setStorage("");
     setReturnPolicy("");
+    setMfgDate("");
+    setExpDate("");
 
     setKeyFeatures("");
     setIngredients("");
@@ -917,6 +922,12 @@ export default function AddProductPage() {
         returnPolicy:
           returnPolicy.trim(),
 
+        mfgDate:
+          mfgDate.trim(),
+
+        expDate:
+          expDate.trim(),
+
         keyFeatures:
           keyFeatures.trim(),
 
@@ -1163,6 +1174,14 @@ export default function AddProductPage() {
     setReturnPolicy(
       item.returnPolicy ||
         ""
+    );
+
+    setMfgDate(
+      item.mfgDate || ""
+    );
+
+    setExpDate(
+      item.expDate || ""
     );
 
     setKeyFeatures(
@@ -2035,7 +2054,7 @@ export default function AddProductPage() {
                 placeholder="Storage Instructions"
               />
 
-              <input
+              <select
                 className={inputClass}
                 value={
                   returnPolicy
@@ -2046,8 +2065,60 @@ export default function AddProductPage() {
                       .value
                   )
                 }
-                placeholder="Return / Replacement Policy"
-              />
+              >
+                <option value="">
+                  Return / Replacement Policy
+                </option>
+                {RETURN_POLICY_OPTIONS.map(
+                  (option) => (
+                    <option
+                      key={option.value}
+                      value={option.label}
+                    >
+                      {option.icon}{" "}
+                      {option.label}
+                    </option>
+                  )
+                )}
+              </select>
+
+              <div>
+                <label className="mb-1 block text-xs font-bold text-zinc-500">
+                  Manufacturing (MFG) Date
+                </label>
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={
+                    mfgDate
+                  }
+                  onChange={(e) =>
+                    setMfgDate(
+                      e.target
+                        .value
+                    )
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-bold text-zinc-500">
+                  Expiry (EXP) Date
+                </label>
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={
+                    expDate
+                  }
+                  onChange={(e) =>
+                    setExpDate(
+                      e.target
+                        .value
+                    )
+                  }
+                />
+              </div>
 
               <textarea
                 className={`${inputClass} md:col-span-2`}

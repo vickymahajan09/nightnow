@@ -94,7 +94,7 @@ export default function AccountPrivacyPage() {
         <div className="mx-auto max-w-md rounded-3xl bg-white p-6 text-center shadow dark:bg-zinc-900">
           <div className="text-5xl">🔐</div>
           <h1 className="mt-4 text-2xl font-black">Login Required</h1>
-          <p className="mt-2 text-sm text-zinc-500">Account privacy settings ke liye login karein.</p>
+          <p className="mt-2 text-sm text-zinc-500">Please log in to access your account privacy settings.</p>
           <Link href="/login" className="mt-6 block rounded-2xl bg-yellow-400 py-3 font-black text-black">
             Login
           </Link>

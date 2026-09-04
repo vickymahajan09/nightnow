@@ -6,6 +6,7 @@ import {
 } from "react";
 
 import Link from "next/link";
+import { useParams } from "next/navigation";
 
 import {
   getOrderById,
@@ -47,13 +48,9 @@ const STATUSES = [
   "Cancelled",
 ];
 
-export default function AdminOrderDetailPage({
-  params,
-}: {
-  params: Promise<{
-    id: string;
-  }>;
-}) {
+export default function AdminOrderDetailPage() {
+  const params = useParams<{ id: string }>();
+
   const [order, setOrder] =
     useState<Order | null>(null);
 
@@ -71,20 +68,17 @@ export default function AdminOrderDetailPage({
 
     const loadOrder = async () => {
       try {
-        const resolvedParams =
-          await params;
+        const id = params?.id || "";
 
         if (!active) {
           return;
         }
 
-        setOrderId(
-          resolvedParams.id
-        );
+        setOrderId(id);
 
         const data =
           await getOrderById(
-            resolvedParams.id
+            id
           );
 
         if (active) {

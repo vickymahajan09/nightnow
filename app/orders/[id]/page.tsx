@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 import OrderStatusTimeline from "../../components/OrderStatusTimeline";
 
@@ -17,11 +17,18 @@ import { subscribeToPartnerLocation } from "../../services/deliveryTrackingServi
 
 import { onAuthStateChanged } from "firebase/auth";
 
-import {
-  GoogleMap,
-  Marker,
-  useJsApiLoader,
-} from "@react-google-maps/api";
+import { useCart } from "../../context/CartContext";
+
+import { getDistanceKm } from "../../lib/distance";
+
+import dynamic from "next/dynamic";
+
+// Leaflet touches the browser `window`/`document` at load time, so it
+// must never be rendered on the server — ssr:false handles that.
+const LiveTrackingMap = dynamic(
+  () => import("../../components/LiveTrackingMap"),
+  { ssr: false }
+);
 
 type OrderItem = {
   id?: string;
@@ -44,6 +51,7 @@ type Order = {
     address?: string;
     city?: string;
     pincode?: string;
+    location?: { lat: number; lng: number } | null;
   };
 
   items?: OrderItem[];
@@ -71,6 +79,8 @@ type Order = {
 
 export default function CustomerOrderDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { addToCart } = useCart();
 
   const orderId = String(params?.id || "");
 
@@ -86,6 +96,37 @@ export default function CustomerOrderDetailPage() {
   const [showCancelModal, setShowCancelModal] =
     useState(false);
 
+  const [reordering, setReordering] =
+    useState(false);
+
+  const handleReorder = () => {
+    if (!order?.items?.length || reordering) return;
+
+    setReordering(true);
+
+    try {
+      order.items.forEach((item) => {
+        if (!item.id) return;
+
+        const qty = Math.max(1, Number(item.quantity) || 1);
+
+        for (let i = 0; i < qty; i++) {
+          addToCart({
+            id: item.id,
+            name: item.name,
+            image: item.image,
+            price: item.price,
+            quantity: 1,
+          } as any);
+        }
+      });
+
+      router.push("/cart");
+    } finally {
+      setReordering(false);
+    }
+  };
+
   const [cancelReason, setCancelReason] =
     useState("");
 
@@ -98,10 +139,25 @@ export default function CustomerOrderDetailPage() {
   const [partnerLocation, setPartnerLocation] =
     useState<{ lat: number; lng: number } | null>(null);
 
-  const { isLoaded: mapLoaded } = useJsApiLoader({
-    googleMapsApiKey:
-      process.env.NEXT_PUBLIC_GOOGLE_MAP_KEY || "",
-  });
+  const customerLocation = order?.customer?.location || null;
+
+  // Straight-line distance + a simple ETA estimate (average ~20 km/h for
+  // a two-wheeler in city traffic) — recalculates live as the partner moves.
+  const liveEta = useMemo(() => {
+    if (!partnerLocation || !customerLocation) return null;
+
+    const distanceKm = getDistanceKm(
+      partnerLocation.lat,
+      partnerLocation.lng,
+      customerLocation.lat,
+      customerLocation.lng
+    );
+
+    const AVERAGE_SPEED_KMPH = 20;
+    const minutes = Math.max(1, Math.round((distanceKm / AVERAGE_SPEED_KMPH) * 60));
+
+    return { distanceKm, minutes };
+  }, [partnerLocation, customerLocation]);
 
   // =====================================================
   // LIVE PARTNER LOCATION (while Out for Delivery)
@@ -384,6 +440,119 @@ export default function CustomerOrderDetailPage() {
       "Preparing",
     ].includes(status);
 
+  // =====================================================
+  // INVOICE DOWNLOAD (Delivered orders only)
+  // =====================================================
+
+  const handleDownloadInvoice = () => {
+    const rows = (order.items || [])
+      .map((item) => {
+        const quantity = Number(item.quantity || 1);
+        const price = Number(item.price || 0);
+        return `
+          <tr>
+            <td>${item.name || "Product"}</td>
+            <td style="text-align:center;">${quantity}</td>
+            <td style="text-align:right;">₹${price}</td>
+            <td style="text-align:right;">₹${price * quantity}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Invoice - ${order.id}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, Helvetica, sans-serif; color: #18181b; padding: 32px; }
+            .brand { font-size: 22px; font-weight: 900; }
+            .brand span { color: #eab308; }
+            .muted { color: #71717a; font-size: 12px; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #18181b; padding-bottom: 16px; margin-bottom: 20px; }
+            .section-title { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; color: #71717a; margin-bottom: 4px; }
+            .two-col { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th { text-align: left; font-size: 11px; text-transform: uppercase; color: #71717a; border-bottom: 1px solid #d4d4d8; padding: 8px 4px; }
+            td { font-size: 13px; padding: 10px 4px; border-bottom: 1px solid #f4f4f5; }
+            .totals { width: 260px; margin-left: auto; margin-top: 16px; }
+            .totals div { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+            .totals .grand { font-size: 16px; font-weight: 900; border-top: 2px solid #18181b; margin-top: 6px; padding-top: 8px; }
+            .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #a1a1aa; }
+            @media print {
+              @page { margin: 20mm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="brand">🌙 Night<span>Now</span></div>
+              <p class="muted">15 minute delivery</p>
+            </div>
+            <div style="text-align:right;">
+              <p class="section-title">Tax Invoice</p>
+              <p class="muted">Order #${order.id}</p>
+              <p class="muted">${formatDate(order.createdAt)}</p>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div>
+              <p class="section-title">Billed To</p>
+              <p style="font-weight:700; margin:2px 0;">${customer.name || "Customer"}</p>
+              <p class="muted" style="margin:2px 0;">${customer.address || ""}</p>
+              <p class="muted" style="margin:2px 0;">${[customer.city, customer.pincode].filter(Boolean).join(" - ")}</p>
+              <p class="muted" style="margin:2px 0;">${customer.phone || ""}</p>
+            </div>
+            <div style="text-align:right;">
+              <p class="section-title">Payment Method</p>
+              <p style="font-weight:700; margin:2px 0;">${order.paymentMethod || order.payment || "COD"}</p>
+              <p class="section-title" style="margin-top:10px;">Status</p>
+              <p style="font-weight:700; margin:2px 0;">${status}</p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th style="text-align:center;">Qty</th>
+                <th style="text-align:right;">Price</th>
+                <th style="text-align:right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || `<tr><td colspan="4" style="text-align:center; color:#a1a1aa;">No items</td></tr>`}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div><span>Subtotal</span><span>₹${Number(order.subtotal ?? total)}</span></div>
+            <div><span>Delivery</span><span>${delivery === 0 ? "FREE" : `₹${delivery}`}</span></div>
+            <div class="grand"><span>Total</span><span>₹${total}</span></div>
+          </div>
+
+          <p class="footer">This is a computer-generated invoice from NightNow. Thank you for shopping with us!</p>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow pop-ups to download the invoice.");
+      return;
+    }
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 300);
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-5 pb-24 text-slate-900">
       <div className="mx-auto max-w-3xl">
@@ -583,22 +752,28 @@ export default function CustomerOrderDetailPage() {
                 </p>
               )}
 
-              {partnerLocation && mapLoaded ? (
+              {liveEta && (
+                <div className="mt-2 flex items-center gap-2 rounded-xl bg-orange-600 px-3 py-2">
+                  <span className="text-lg">⏱️</span>
+                  <div>
+                    <p className="text-sm font-black text-white">
+                      Arriving in {liveEta.minutes} min
+                    </p>
+                    <p className="text-[10px] text-orange-100">
+                      {liveEta.distanceKm.toFixed(1)} km away
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {partnerLocation ? (
                 <div className="mt-3 overflow-hidden rounded-xl">
-                  <GoogleMap
-                    mapContainerStyle={{
-                      width: "100%",
-                      height: "220px",
-                    }}
-                    center={partnerLocation}
-                    zoom={15}
-                    options={{
-                      disableDefaultUI: true,
-                      zoomControl: true,
-                    }}
-                  >
-                    <Marker position={partnerLocation} />
-                  </GoogleMap>
+                  <LiveTrackingMap
+                    partnerLat={partnerLocation.lat}
+                    partnerLng={partnerLocation.lng}
+                    customerLat={customerLocation?.lat}
+                    customerLng={customerLocation?.lng}
+                  />
                 </div>
               ) : (
                 <p className="mt-1 text-xs text-orange-600">
@@ -667,12 +842,23 @@ export default function CustomerOrderDetailPage() {
               Order Items
             </h2>
 
-            <span className="text-xs font-bold text-slate-400">
-              {itemCount}{" "}
-              {itemCount === 1
-                ? "item"
-                : "items"}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-slate-400">
+                {itemCount}{" "}
+                {itemCount === 1
+                  ? "item"
+                  : "items"}
+              </span>
+
+              <button
+                type="button"
+                onClick={handleReorder}
+                disabled={reordering}
+                className="rounded-full bg-yellow-400 px-3 py-1.5 text-[11px] font-black text-black disabled:opacity-50"
+              >
+                🔁 Reorder
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 space-y-3">
@@ -800,6 +986,33 @@ export default function CustomerOrderDetailPage() {
             </div>
           </div>
         </section>
+
+        {/* =====================================================
+            INVOICE DOWNLOAD (Delivered orders only)
+        ===================================================== */}
+
+        {status === "Delivered" && (
+          <section className="mt-4 rounded-3xl bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-green-600">
+                  ORDER DELIVERED
+                </p>
+                <h2 className="mt-1 text-sm font-black">
+                  Download your invoice for this order
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDownloadInvoice}
+                className="shrink-0 rounded-2xl bg-black px-4 py-3 text-xs font-black text-white transition hover:bg-zinc-800"
+              >
+                🧾 Download Invoice
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* =====================================================
             CANCELLATION INFORMATION

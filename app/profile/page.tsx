@@ -1844,7 +1844,7 @@ export default function ProfilePage() {
           {/* PRIVACY POLICY */}
 
           <Link
-            href="/privacy"
+            href="/privacy-policy"
             className="flex items-center gap-3 border-b border-zinc-200 p-4 dark:border-zinc-800"
           >
             <span className="text-xl">
@@ -1853,6 +1853,25 @@ export default function ProfilePage() {
 
             <span className="text-sm font-black">
               Privacy Policy
+            </span>
+
+            <span className="ml-auto">
+              →
+            </span>
+          </Link>
+
+          {/* PRIVACY & DATA SETTINGS */}
+
+          <Link
+            href="/privacy"
+            className="flex items-center gap-3 border-b border-zinc-200 p-4 dark:border-zinc-800"
+          >
+            <span className="text-xl">
+              🔒
+            </span>
+
+            <span className="text-sm font-black">
+              Privacy & Data Settings
             </span>
 
             <span className="ml-auto">

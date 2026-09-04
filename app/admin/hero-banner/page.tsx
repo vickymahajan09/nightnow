@@ -12,10 +12,10 @@ type Slide = {
 const EMPTY_SLIDE: Slide = { title: "", sub: "" };
 
 const DEFAULT_SLIDES: Slide[] = [
-  { title: "15 min mein\nghar tak delivery", sub: "Fast • Reliable • Night Delivery" },
-  { title: "Pehla order\nFREE delivery", sub: "Naye customers ke liye khaas offer" },
-  { title: "Har din\nnaye deals", sub: "Grocery, snacks & daily essentials par bachat" },
-  { title: "Din ho ya raat\nhum hai tayyar", sub: "24x7 fresh groceries, right to your door" },
+  { title: "Delivery in\n15 minutes flat", sub: "Fast • Reliable • Night Delivery" },
+  { title: "First order\nFREE delivery", sub: "Special offer for new customers" },
+  { title: "New deals\nevery day", sub: "Savings on grocery, snacks & daily essentials" },
+  { title: "Day or night\nwe've got you", sub: "24x7 fresh groceries, right to your door" },
 ];
 
 export default function AdminHeroBannerPage() {
@@ -48,7 +48,7 @@ export default function AdminHeroBannerPage() {
 
   const addSlide = () => {
     if (slides.length >= 4) {
-      alert("Zyada se zyada 4 slides ho sakti hain.");
+      alert("You can have a maximum of 4 slides.");
       return;
     }
     setSlides((current) => [...current, { ...EMPTY_SLIDE }]);
@@ -64,7 +64,7 @@ export default function AdminHeroBannerPage() {
       .filter((s) => s.title);
 
     if (cleanSlides.length === 0) {
-      alert("Kam se kam ek slide ka title likho.");
+      alert("Please enter a title for at least one slide.");
       return;
     }
 
@@ -75,7 +75,7 @@ export default function AdminHeroBannerPage() {
       setTimeout(() => setSaved(false), 2000);
     } catch (error) {
       console.error("Save hero banner error:", error);
-      alert("Save nahi ho paya.");
+      alert("Save failed. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -94,8 +94,8 @@ export default function AdminHeroBannerPage() {
       <div className="mx-auto max-w-3xl">
         <h1 className="text-2xl font-black">🎯 Homepage Banner</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Yeh homepage ke sabse upar wale rotating banner ke slides hain (max 4). Save karte hi live website pe
-          turant reflect hoga.
+          These are the slides for the rotating banner at the top of the homepage (max 4). Changes reflect on
+          the live website as soon as you save.
         </p>
 
         <div className="mt-6 space-y-4">
@@ -114,7 +114,7 @@ export default function AdminHeroBannerPage() {
               <textarea
                 value={slide.title}
                 onChange={(e) => updateSlide(index, "title", e.target.value)}
-                placeholder="Title (naya line ke liye Enter dabao)"
+                placeholder="Title (press Enter for a new line)"
                 rows={2}
                 className="w-full resize-none rounded-xl border border-zinc-200 p-3 text-sm outline-none"
               />

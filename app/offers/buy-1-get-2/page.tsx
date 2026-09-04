@@ -76,7 +76,7 @@ export default function BuyOneGetTwoOffersPage() {
         setProducts([]);
 
         setError(
-          "Offers load nahi ho paaye."
+          "Failed to load offers."
         );
       } finally {
         setLoading(false);

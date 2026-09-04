@@ -12,6 +12,8 @@ export default function AdminSettingsPage() {
   const [lng, setLng] = useState("");
   const [delivery1to3, setDelivery1to3] = useState("30");
   const [delivery3to5, setDelivery3to5] = useState("50");
+  const [freeAbove, setFreeAbove] = useState("299");
+  const [maxDistanceKm, setMaxDistanceKm] = useState("5");
   const [timeNear, setTimeNear] = useState("10");
   const [timeNormal, setTimeNormal] = useState("15");
   const [saving, setSaving] = useState(false);
@@ -29,6 +31,8 @@ export default function AdminSettingsPage() {
         setLng(d.location?.lng != null ? String(d.location.lng) : "");
         setDelivery1to3(String(d.deliveryRules?.oneToThreeKm ?? 30));
         setDelivery3to5(String(d.deliveryRules?.threeToFiveKm ?? 50));
+        setFreeAbove(String(d.deliveryRules?.freeAbove ?? 299));
+        setMaxDistanceKm(String(d.deliveryRules?.maxDistanceKm ?? 5));
         setTimeNear(String(d.deliveryTimes?.near ?? 10));
         setTimeNormal(String(d.deliveryTimes?.normal ?? 15));
       } catch (error) { console.error(error); }
@@ -46,7 +50,12 @@ export default function AdminSettingsPage() {
         phone: phone.replace(/\D/g, ""),
         address: address.trim(),
         location: { lat: Number(lat || 0), lng: Number(lng || 0) },
-        deliveryRules: { oneToThreeKm: Number(delivery1to3 || 30), threeToFiveKm: Number(delivery3to5 || 50) },
+        deliveryRules: {
+          oneToThreeKm: Number(delivery1to3 || 30),
+          threeToFiveKm: Number(delivery3to5 || 50),
+          freeAbove: Number(freeAbove || 299),
+          maxDistanceKm: Number(maxDistanceKm || 5),
+        },
         deliveryTimes: { near: Number(timeNear || 10), normal: Number(timeNormal || 15) },
         updatedAt: new Date(),
       }, { merge: true });
@@ -61,7 +70,7 @@ export default function AdminSettingsPage() {
     <main className="min-h-screen bg-zinc-950 p-4 text-white sm:p-6 md:p-8">
       <div className="mx-auto max-w-3xl">
         <h1 className="text-3xl font-black text-yellow-400 sm:text-4xl">Store Settings</h1>
-        <p className="mt-2 text-sm text-zinc-400">Shop location, delivery charges aur ETA yahan set karein.</p>
+        <p className="mt-2 text-sm text-zinc-400">Set your shop location, delivery charges, and ETA here.</p>
         <div className="mt-6 space-y-6 rounded-2xl bg-zinc-900 p-4 sm:p-6">
           <section>
             <h2 className="mb-4 text-lg font-black">Shop Details</h2>
@@ -73,7 +82,7 @@ export default function AdminSettingsPage() {
           </section>
           <section>
             <h2 className="mb-2 text-lg font-black">Shop Location</h2>
-            <p className="mb-3 text-xs text-zinc-500">Google Maps se shop ke exact latitude/longitude yahan set karein.</p>
+            <p className="mb-3 text-xs text-zinc-500">Set your shop's exact latitude/longitude from Google Maps here.</p>
             <div className="grid grid-cols-2 gap-3">
               <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" inputMode="decimal" className="w-full rounded-xl bg-zinc-800 p-4 outline-none" />
               <input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Longitude" inputMode="decimal" className="w-full rounded-xl bg-zinc-800 p-4 outline-none" />
@@ -84,8 +93,10 @@ export default function AdminSettingsPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="rounded-xl bg-zinc-800 p-4 text-sm">1–3 km (₹)<input value={delivery1to3} onChange={(e) => setDelivery1to3(e.target.value.replace(/\D/g, ""))} className="mt-2 w-full rounded-lg bg-zinc-700 p-3 outline-none" /></label>
               <label className="rounded-xl bg-zinc-800 p-4 text-sm">3–5 km (₹)<input value={delivery3to5} onChange={(e) => setDelivery3to5(e.target.value.replace(/\D/g, ""))} className="mt-2 w-full rounded-lg bg-zinc-700 p-3 outline-none" /></label>
+              <label className="rounded-xl bg-zinc-800 p-4 text-sm">Free delivery above (₹)<input value={freeAbove} onChange={(e) => setFreeAbove(e.target.value.replace(/\D/g, ""))} className="mt-2 w-full rounded-lg bg-zinc-700 p-3 outline-none" /></label>
+              <label className="rounded-xl bg-zinc-800 p-4 text-sm">Max delivery distance (km)<input value={maxDistanceKm} onChange={(e) => setMaxDistanceKm(e.target.value.replace(/\D/g, ""))} className="mt-2 w-full rounded-lg bg-zinc-700 p-3 outline-none" /></label>
             </div>
-            <p className="mt-3 text-xs text-zinc-500">5 km se upar ka rule next delivery engine batch me add hoga.</p>
+            <p className="mt-3 text-xs text-zinc-500">Checkout automatically calculates this using the customer's selected location and your shop's location above. Orders beyond the max distance show as out of delivery range.</p>
           </section>
           <section>
             <h2 className="mb-4 text-lg font-black">Delivery Time</h2>

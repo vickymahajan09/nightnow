@@ -22,6 +22,12 @@ import { getCoupons } from "../services/couponService";
 
 import { getAddresses } from "../services/addressService";
 
+import {
+  getStoreSettings,
+  calculateDeliveryCharge,
+  type DeliveryChargeResult,
+} from "../services/settingsService";
+
 declare global {
   interface Window {
     Razorpay: any;
@@ -89,6 +95,62 @@ export default function CheckoutPage() {
     useState(false);
 
   /* =====================================================
+     AUTO DELIVERY CHARGE (distance + order value based)
+  ===================================================== */
+
+  const [deliveryResult, setDeliveryResult] =
+    useState<DeliveryChargeResult>({
+      charge: 30,
+      distanceKm: null,
+      reason: "unknown-distance",
+    });
+
+  const [customerCoords, setCustomerCoords] =
+    useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      try {
+        const settings = await getStoreSettings();
+
+        let customerLat: number | null = null;
+        let customerLng: number | null = null;
+
+        try {
+          const saved = localStorage.getItem("nightnow_selected_location");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            customerLat = Number.isFinite(Number(parsed?.lat)) ? Number(parsed.lat) : null;
+            customerLng = Number.isFinite(Number(parsed?.lon)) ? Number(parsed.lon) : null;
+          }
+        } catch {
+          // ignore malformed localStorage value
+        }
+
+        if (!active) return;
+
+        setCustomerCoords(
+          customerLat != null && customerLng != null
+            ? { lat: customerLat, lng: customerLng }
+            : null
+        );
+
+        setDeliveryResult(
+          calculateDeliveryCharge(cartTotal, customerLat, customerLng, settings)
+        );
+      } catch (error) {
+        console.error("Delivery charge calculation error:", error);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [cartTotal]);
+
+  /* =====================================================
      COUPON
   ===================================================== */
 
@@ -127,7 +189,10 @@ export default function CheckoutPage() {
   ===================================================== */
 
   const delivery =
-    cartTotal >= 299 ? 0 : 30;
+    deliveryResult.charge ?? 0;
+
+  const isOutOfDeliveryRange =
+    deliveryResult.reason === "out-of-range";
 
   const subtotalAfterCoupon =
     Math.max(
@@ -723,6 +788,11 @@ export default function CheckoutPage() {
             /\D/g,
             ""
           ),
+
+        // Customer's delivery coordinates — used to show the customer's
+        // pin (and live distance/ETA) on the delivery-tracking map.
+        location:
+          customerCoords || null,
       },
 
       userId:
@@ -1135,7 +1205,7 @@ export default function CheckoutPage() {
   ===================================================== */
 
   return (
-    <main className="min-h-screen bg-black px-3 py-5 pb-10 text-white">
+    <main className="min-h-screen bg-zinc-50 px-3 py-5 pb-10 text-zinc-900">
 
       <div className="mx-auto max-w-5xl">
 
@@ -1178,7 +1248,7 @@ export default function CheckoutPage() {
               DELIVERY
           ================================================= */}
 
-          <section className="rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
+          <section className="rounded-3xl border border-zinc-200 bg-white p-5">
 
             <div className="flex items-center justify-between gap-3">
 
@@ -1229,7 +1299,7 @@ export default function CheckoutPage() {
                           item
                         )
                       }
-                      className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-left transition hover:border-yellow-400"
+                      className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-left transition hover:border-yellow-400"
                     >
 
                       <p className="text-xs font-black">
@@ -1237,7 +1307,7 @@ export default function CheckoutPage() {
                           "Saved Address"}
                       </p>
 
-                      <p className="mt-1 text-xs text-zinc-400">
+                      <p className="mt-1 text-xs text-zinc-500">
                         {item.address}
 
                         {item.city
@@ -1268,7 +1338,7 @@ export default function CheckoutPage() {
                   )
                 }
                 placeholder="Full Name"
-                className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-yellow-400"
               />
 
               <input
@@ -1288,7 +1358,7 @@ export default function CheckoutPage() {
                 }
                 placeholder="10 Digit Mobile Number"
                 inputMode="numeric"
-                className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-yellow-400"
               />
 
               <textarea
@@ -1300,7 +1370,7 @@ export default function CheckoutPage() {
                   )
                 }
                 placeholder="House / Flat / Building / Street"
-                className="w-full resize-none rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                className="w-full resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-yellow-400"
               />
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -1313,7 +1383,7 @@ export default function CheckoutPage() {
                     )
                   }
                   placeholder="City"
-                  className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                  className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-yellow-400"
                 />
 
                 <input
@@ -1333,7 +1403,7 @@ export default function CheckoutPage() {
                   }
                   placeholder="Pincode"
                   inputMode="numeric"
-                  className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                  className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-yellow-400"
                 />
 
               </div>
@@ -1346,7 +1416,7 @@ export default function CheckoutPage() {
               ORDER SUMMARY
           ================================================= */}
 
-          <section className="h-fit rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
+          <section className="h-fit rounded-3xl border border-zinc-200 bg-white p-5">
 
             <h2 className="text-lg font-black">
               Order Summary
@@ -1394,7 +1464,7 @@ export default function CheckoutPage() {
                   return (
                     <div
                       key={`${item.id}-${item.variantId || "default"}-${item.offerId || "normal"}-${index}`}
-                      className="rounded-2xl bg-zinc-900 p-3"
+                      className="rounded-2xl bg-zinc-50 p-3"
                     >
 
                       <div className="flex items-center justify-between gap-3">
@@ -1424,15 +1494,15 @@ export default function CheckoutPage() {
                       {/* OFFER */}
 
                       {isOffer && (
-                        <div className="mt-2 rounded-xl border border-yellow-800/50 bg-yellow-950/30 p-2">
+                        <div className="mt-2 rounded-xl border border-yellow-200 bg-yellow-50 p-2">
 
-                          <p className="text-[10px] font-black text-yellow-400">
+                          <p className="text-[10px] font-black text-yellow-700">
                             🎁{" "}
                             {item.offerLabel ||
                               "SPECIAL OFFER"}
                           </p>
 
-                          <p className="mt-1 text-[9px] text-yellow-500">
+                          <p className="mt-1 text-[9px] text-yellow-700">
                             Paid:{" "}
                             {paidQuantity}
                             {" • "}
@@ -1457,7 +1527,7 @@ export default function CheckoutPage() {
                 COUPON
             ================================================= */}
 
-            <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+            <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
 
               <div className="flex items-center gap-2">
 
@@ -1509,7 +1579,7 @@ export default function CheckoutPage() {
                         }
                       }}
                       placeholder="Enter coupon code"
-                      className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-black px-3 py-3 text-xs font-black uppercase outline-none focus:border-yellow-400"
+                      className="min-w-0 flex-1 rounded-xl border border-zinc-300 bg-white px-3 py-3 text-xs font-black uppercase text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-yellow-400"
                     />
 
                     <button
@@ -1530,31 +1600,31 @@ export default function CheckoutPage() {
                   </div>
 
                   {couponError && (
-                    <p className="mt-2 text-[10px] font-bold text-red-400">
+                    <p className="mt-2 text-[10px] font-bold text-red-500">
                       ❌{" "}
                       {couponError}
                     </p>
                   )}
 
                   {couponMessage && (
-                    <p className="mt-2 text-[10px] font-bold text-green-400">
+                    <p className="mt-2 text-[10px] font-bold text-green-600">
                       ✅{" "}
                       {couponMessage}
                     </p>
                   )}
                 </>
               ) : (
-                <div className="mt-3 flex items-center justify-between rounded-xl border border-green-700/50 bg-green-950/30 p-3">
+                <div className="mt-3 flex items-center justify-between rounded-xl border border-green-200 bg-green-50 p-3">
 
                   <div>
 
-                    <p className="text-xs font-black text-green-400">
+                    <p className="text-xs font-black text-green-600">
                       {
                         appliedCoupon.code
                       }
                     </p>
 
-                    <p className="mt-1 text-[10px] text-green-500">
+                    <p className="mt-1 text-[10px] text-green-600">
                       {
                         appliedCoupon.discount
                       }
@@ -1571,7 +1641,7 @@ export default function CheckoutPage() {
                     onClick={
                       removeCoupon
                     }
-                    className="rounded-lg bg-red-500/10 px-3 py-2 text-[10px] font-black text-red-400"
+                    className="rounded-lg bg-red-50 px-3 py-2 text-[10px] font-black text-red-500"
                   >
                     Remove
                   </button>
@@ -1581,7 +1651,7 @@ export default function CheckoutPage() {
 
             </div>
 
-            <div className="my-5 h-px bg-zinc-800" />
+            <div className="my-5 h-px bg-zinc-200" />
 
             {/* PRICE */}
 
@@ -1602,11 +1672,11 @@ export default function CheckoutPage() {
               {couponDiscount > 0 && (
                 <div className="flex justify-between">
 
-                  <span className="text-green-400">
+                  <span className="text-green-600">
                     Coupon Discount
                   </span>
 
-                  <span className="font-black text-green-400">
+                  <span className="font-black text-green-600">
                     -₹
                     {couponDiscount}
                   </span>
@@ -1618,23 +1688,36 @@ export default function CheckoutPage() {
 
                 <span className="text-zinc-500">
                   Delivery
+                  {deliveryResult.distanceKm != null && (
+                    <span className="ml-1 text-[10px] text-zinc-600">
+                      ({deliveryResult.distanceKm.toFixed(1)} km)
+                    </span>
+                  )}
                 </span>
 
-                <span className="font-bold text-green-400">
-                  {delivery === 0
+                <span className={`font-bold ${isOutOfDeliveryRange ? "text-red-500" : "text-green-600"}`}>
+                  {isOutOfDeliveryRange
+                    ? "Not available"
+                    : delivery === 0
                     ? "FREE"
                     : `₹${delivery}`}
                 </span>
 
               </div>
 
-              <div className="flex justify-between border-t border-zinc-800 pt-3 text-lg">
+              {isOutOfDeliveryRange && (
+                <p className="-mt-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-600">
+                  ⚠️ Sorry, this location is outside our delivery range right now. Please pick a closer delivery location.
+                </p>
+              )}
+
+              <div className="flex justify-between border-t border-zinc-200 pt-3 text-lg">
 
                 <span className="font-black">
                   Total
                 </span>
 
-                <span className="font-black text-yellow-400">
+                <span className="font-black text-yellow-600">
                   ₹{grandTotal}
                 </span>
 
@@ -1652,7 +1735,7 @@ export default function CheckoutPage() {
 
               <button
                 type="button"
-                disabled={loading}
+                disabled={loading || isOutOfDeliveryRange}
                 onClick={() =>
                   void payOnline()
                 }
@@ -1665,11 +1748,11 @@ export default function CheckoutPage() {
 
               <button
                 type="button"
-                disabled={loading}
+                disabled={loading || isOutOfDeliveryRange}
                 onClick={() =>
                   void placeCOD()
                 }
-                className="mt-3 w-full rounded-2xl border border-zinc-700 bg-zinc-900 py-4 text-sm font-black disabled:opacity-50"
+                className="mt-3 w-full rounded-2xl border border-zinc-900 bg-zinc-900 py-4 text-sm font-black text-white disabled:opacity-50"
               >
                 {loading
                   ? "Processing..."

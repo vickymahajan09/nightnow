@@ -8,6 +8,8 @@ import {
   updateCategory,
   updateCategorySettings,
   deleteCategory,
+  getCategoriesPageHeading,
+  setCategoriesPageHeading,
   type Category,
 } from "../../services/categoryService";
 
@@ -25,10 +27,16 @@ export default function AdminCategoriesPage() {
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
   const [image, setImage] = useState("");
+  const [section, setSection] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // "All Categories" page heading
+  const [pageHeading, setPageHeading] = useState("All Categories");
+  const [headingSaving, setHeadingSaving] = useState(false);
+  const [headingSaved, setHeadingSaved] = useState(false);
 
   // Product-assignment panel
   const [managingCategory, setManagingCategory] = useState<Category | null>(null);
@@ -38,13 +46,32 @@ export default function AdminCategoriesPage() {
   const load = async () => {
     try {
       setLoading(true);
-      const [categoryData, productData] = await Promise.all([getCategories(), getProducts()]);
+      const [categoryData, productData, heading] = await Promise.all([
+        getCategories(),
+        getProducts(),
+        getCategoriesPageHeading(),
+      ]);
       setCategories(categoryData);
       setProducts(productData.filter((p) => p.active !== false));
+      setPageHeading(heading);
     } catch (err) {
       console.error("Load categories error:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveHeading = async () => {
+    try {
+      setHeadingSaving(true);
+      await setCategoriesPageHeading(pageHeading);
+      setHeadingSaved(true);
+      setTimeout(() => setHeadingSaved(false), 2000);
+    } catch (err) {
+      console.error("Save heading error:", err);
+      alert("Could not save the heading.");
+    } finally {
+      setHeadingSaving(false);
     }
   };
 
@@ -56,6 +83,7 @@ export default function AdminCategoriesPage() {
     setName("");
     setIcon("");
     setImage("");
+    setSection("");
     setEditingId(null);
     setError("");
   };
@@ -65,6 +93,7 @@ export default function AdminCategoriesPage() {
     setName(category.name || "");
     setIcon(category.icon || "");
     setImage(category.image || "");
+    setSection(category.section || "");
     setError("");
   };
 
@@ -75,7 +104,7 @@ export default function AdminCategoriesPage() {
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      alert("Image 2 MB se choti rakho.");
+      alert("Please keep the image under 2 MB.");
       return;
     }
     const reader = new FileReader();
@@ -85,7 +114,7 @@ export default function AdminCategoriesPage() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      setError("Category ka naam likho.");
+      setError("Please enter a category name.");
       return;
     }
 
@@ -94,15 +123,15 @@ export default function AdminCategoriesPage() {
       setError("");
 
       if (editingId) {
-        await updateCategory(editingId, name.trim(), icon.trim(), image.trim());
+        await updateCategory(editingId, name.trim(), icon.trim(), image.trim(), section.trim());
       } else {
-        await addCategory(name.trim(), icon.trim(), image.trim());
+        await addCategory(name.trim(), icon.trim(), image.trim(), section.trim());
       }
 
       resetForm();
       await load();
     } catch (err: any) {
-      setError(err?.message || "Save nahi ho paya.");
+      setError(err?.message || "Save failed. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -114,12 +143,12 @@ export default function AdminCategoriesPage() {
       await load();
     } catch (err) {
       console.error("Toggle active error:", err);
-      alert("Active/Off toggle nahi ho paya.");
+      alert("Could not toggle Active/Off.");
     }
   };
 
   const handleDelete = async (category: Category) => {
-    if (!confirm(`"${category.name}" ko delete karna hai? Yeh live website se turant hat jayegi.`)) {
+    if (!confirm(`Delete "${category.name}"? It will be removed from the live website immediately.`)) {
       return;
     }
 
@@ -129,7 +158,7 @@ export default function AdminCategoriesPage() {
       await load();
     } catch (err) {
       console.error("Delete category error:", err);
-      alert("Delete nahi ho paya.");
+      alert("Delete failed. Please try again.");
     }
   };
 
@@ -149,11 +178,20 @@ export default function AdminCategoriesPage() {
       await load();
     } catch (err) {
       console.error("Toggle product category error:", err);
-      alert("Product category update nahi ho payi.");
+      alert("Could not update the product's category.");
     } finally {
       setTogglingProductId(null);
     }
   };
+
+  const existingSections = useMemo(() => {
+    const seen = new Set<string>();
+    categories.forEach((c) => {
+      const s = (c.section || "").trim();
+      if (s) seen.add(s);
+    });
+    return Array.from(seen).sort();
+  }, [categories]);
 
   const filteredProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
@@ -168,34 +206,58 @@ export default function AdminCategoriesPage() {
       <div className="mx-auto max-w-4xl">
         <h1 className="text-2xl font-black">🗂️ Category Management</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Yeh seedha Firestore se connected hai — yahan se add/edit/delete karte hi live website turant update
-          ho jayegi.
+          This is directly connected to Firestore — any add, edit, or delete here updates the live website
+          instantly.
         </p>
+
+        {/* ALL CATEGORIES PAGE HEADING */}
+        <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-5">
+          <h2 className="text-sm font-black">🏷️ "All Categories" Page Heading</h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            This text appears at the top of the Categories page on the storefront.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <input
+              value={pageHeading}
+              onChange={(e) => setPageHeading(e.target.value)}
+              placeholder="All Categories"
+              className="flex-1 rounded-xl border border-zinc-200 p-3 text-sm outline-none"
+            />
+            <button
+              type="button"
+              onClick={handleSaveHeading}
+              disabled={headingSaving}
+              className="shrink-0 rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-black text-black disabled:opacity-60"
+            >
+              {headingSaving ? "Saving..." : headingSaved ? "Saved ✓" : "Save"}
+            </button>
+          </div>
+        </div>
 
         {/* FORM */}
         <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-5">
           <h2 className="text-sm font-black">
-            {editingId ? "Category Edit Karo" : "+ Naya Category Add Karo"}
+            {editingId ? "Edit Category" : "+ Add New Category"}
           </h2>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Category Name (jaise Grocery)"
+              placeholder="Category Name (e.g. Grocery)"
               className="rounded-xl border border-zinc-200 p-3 text-sm outline-none"
             />
             <input
               value={icon}
               onChange={(e) => setIcon(e.target.value)}
-              placeholder="Emoji icon (jaise 🛒) — optional"
+              placeholder="Emoji icon (e.g. 🛒) — optional"
               className="rounded-xl border border-zinc-200 p-3 text-sm outline-none"
             />
 
             <div className="flex items-center gap-2">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
                 {image ? (
-                  <img src={image} alt="preview" className="h-full w-full object-cover" />
+                  <img src={image} alt="preview" className="h-full w-full object-contain" />
                 ) : (
                   <span className="text-lg">🖼️</span>
                 )}
@@ -221,6 +283,21 @@ export default function AdminCategoriesPage() {
             </div>
           </div>
 
+          <div className="mt-3">
+            <input
+              value={section}
+              onChange={(e) => setSection(e.target.value)}
+              placeholder='Group / Section (e.g. "Snacks & Drinks") — categories with the same group show together'
+              list="category-sections"
+              className="w-full rounded-xl border border-zinc-200 p-3 text-sm outline-none"
+            />
+            <datalist id="category-sections">
+              {existingSections.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </div>
+
           {error && <p className="mt-2 text-xs font-bold text-red-600">{error}</p>}
 
           <div className="mt-4 flex gap-2">
@@ -230,7 +307,7 @@ export default function AdminCategoriesPage() {
               disabled={saving}
               className="rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-black text-black disabled:opacity-60"
             >
-              {saving ? "Saving..." : editingId ? "Update Karo" : "Add Karo"}
+              {saving ? "Saving..." : editingId ? "Update" : "Add"}
             </button>
 
             {editingId && (
@@ -250,7 +327,7 @@ export default function AdminCategoriesPage() {
           {loading ? (
             <p className="mt-4 text-xs text-zinc-400">Loading...</p>
           ) : categories.length === 0 ? (
-            <p className="mt-4 text-xs text-zinc-400">Abhi koi category nahi hai. Upar se add karo.</p>
+            <p className="mt-4 text-xs text-zinc-400">No categories yet. Add one above.</p>
           ) : (
             <div className="mt-4 space-y-2">
               {categories.map((category) => {
@@ -262,7 +339,7 @@ export default function AdminCategoriesPage() {
                     <div className="flex items-center gap-3 p-3">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-zinc-50">
                         {category.image ? (
-                          <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
+                          <img src={category.image} alt={category.name} className="h-full w-full object-contain" />
                         ) : (
                           <span className="text-xl">{category.icon || "🛍️"}</span>
                         )}
@@ -272,6 +349,7 @@ export default function AdminCategoriesPage() {
                         <p className="truncate text-sm font-black">{category.name}</p>
                         <p className="text-[10px] text-zinc-400">
                           {category.active !== false ? "Active" : "Off"} • {productCount} products
+                          {category.section ? ` • 🏷️ ${category.section}` : ""}
                         </p>
                       </div>
 
@@ -325,7 +403,7 @@ export default function AdminCategoriesPage() {
 
                         <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto">
                           {filteredProducts.length === 0 ? (
-                            <p className="text-xs text-zinc-400">Koi product nahi mila.</p>
+                            <p className="text-xs text-zinc-400">No products found.</p>
                           ) : (
                             filteredProducts.map((product) => {
                               const checked = isInCategory(product, category);

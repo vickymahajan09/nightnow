@@ -4,6 +4,10 @@ import {
   useEffect,
 } from "react";
 
+import { onAuthStateChanged } from "firebase/auth";
+
+import { auth } from "../lib/firebase";
+
 import {
   registerAdminPushNotifications,
   listenForForegroundMessages,
@@ -11,7 +15,7 @@ import {
 
 export default function AdminPushNotification() {
   useEffect(() => {
-    let unsubscribe:
+    let unsubscribeMessages:
       | (() => void)
       | undefined;
 
@@ -32,7 +36,7 @@ export default function AdminPushNotification() {
           await registerAdminPushNotifications();
 
           // Foreground messages
-          unsubscribe =
+          unsubscribeMessages =
             await listenForForegroundMessages(
               (payload) => {
                 const title =
@@ -69,11 +73,16 @@ export default function AdminPushNotification() {
         }
       };
 
-    setup();
+    // Retry setup whenever the admin logs in (not just on first mount) —
+    // otherwise the token never registers if this mounts before login.
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) setup();
+    });
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
+      unsubscribeAuth();
+      if (unsubscribeMessages) {
+        unsubscribeMessages();
       }
     };
   }, []);

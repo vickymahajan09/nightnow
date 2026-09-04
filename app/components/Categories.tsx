@@ -102,7 +102,7 @@ export default function Categories({
             </h2>
 
             <p className="mt-1 text-xs text-zinc-500">
-              Apni category choose karein
+              Choose your category
             </p>
           </div>
 

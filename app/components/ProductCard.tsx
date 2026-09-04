@@ -101,7 +101,7 @@ export default function ProductCard({
         );
         if (mounted) {
           setError(
-            "Products load nahi ho pa rahe. Please check your connection and try again."
+            "Couldn't load products. Please check your connection and try again."
           );
         }
       } finally {

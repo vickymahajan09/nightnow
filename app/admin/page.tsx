@@ -66,8 +66,8 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
-        <p className="font-bold text-yellow-400">
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-900">
+        <p className="font-bold text-amber-600">
           Loading Admin...
         </p>
       </main>
@@ -76,15 +76,15 @@ export default function AdminPage() {
 
   if (!authorized) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-5 text-white">
-        <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-8 text-center shadow-2xl">
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-5 text-slate-900">
+        <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-2xl">
           <div className="text-6xl">🔒</div>
 
           <h1 className="mt-5 text-3xl font-black">
             Access Denied
           </h1>
 
-          <p className="mt-3 text-zinc-400">
+          <p className="mt-3 text-slate-600">
             Admin access required.
           </p>
 
@@ -165,6 +165,14 @@ export default function AdminPage() {
         "bg-orange-600 hover:bg-orange-500",
     },
     {
+      href: "/admin/hero-banner",
+      icon: "🎯",
+      title: "Homepage Banner",
+      description: "Edit rotating banner slides",
+      className:
+        "bg-yellow-600 hover:bg-yellow-500",
+    },
+    {
       href: "/admin/offers",
       icon: "🎁",
       title: "Live Offers",
@@ -191,28 +199,55 @@ export default function AdminPage() {
       className:
         "bg-cyan-600 hover:bg-cyan-500",
     },
+    {
+      href: "/admin/settings",
+      icon: "⚙️",
+      title: "Store Settings",
+      description:
+        "Shop location, delivery charges & ETA",
+      className:
+        "bg-teal-600 hover:bg-teal-500",
+    },
+    {
+      href: "/admin/broadcast",
+      icon: "📣",
+      title: "Broadcast Notification",
+      description:
+        "Send a push notification to all customers",
+      className:
+        "bg-rose-600 hover:bg-rose-500",
+    },
+    {
+      href: "/admin/delivery-partners",
+      icon: "🛵",
+      title: "Delivery Partners",
+      description:
+        "Riders, earnings & payout rules",
+      className:
+        "bg-amber-600 hover:bg-amber-500",
+    },
   ];
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-4 py-6 text-white md:px-8 md:py-8">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 md:px-8 md:py-8">
       <div className="mx-auto max-w-7xl">
 
         {/* HEADER */}
-        <header className="flex flex-col gap-4 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 shadow-xl md:flex-row md:items-center md:justify-between md:p-7">
+        <header className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-xl md:flex-row md:items-center md:justify-between md:p-7">
           <div>
-            <p className="text-sm font-bold text-zinc-500">
+            <p className="text-sm font-bold text-slate-500">
               Night Now
             </p>
 
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-yellow-400 md:text-4xl">
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-amber-600 md:text-4xl">
               Admin Dashboard
             </h1>
 
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-slate-500">
               {ADMIN_EMAIL}
             </p>
 
-            <p className="mt-3 text-xs font-semibold text-zinc-400">
+            <p className="mt-3 text-xs font-semibold text-slate-600">
               All Night Now management tools in one place.
             </p>
           </div>
@@ -220,7 +255,7 @@ export default function AdminPage() {
           <Link href="/">
             <button
               type="button"
-              className="rounded-xl bg-zinc-800 px-5 py-3 font-black transition hover:bg-zinc-700"
+              className="rounded-xl bg-slate-200 px-5 py-3 font-black transition hover:bg-slate-300"
             >
               ← Store
             </button>
@@ -230,8 +265,8 @@ export default function AdminPage() {
         {/* STATS */}
         <section className="mt-6 grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-5">
-            <p className="text-sm text-zinc-400">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <p className="text-sm text-slate-600">
               Total Orders
             </p>
 
@@ -240,18 +275,18 @@ export default function AdminPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-5">
-            <p className="text-sm text-zinc-400">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <p className="text-sm text-slate-600">
               Pending
             </p>
 
-            <p className="mt-2 text-3xl font-black text-yellow-400">
+            <p className="mt-2 text-3xl font-black text-amber-600">
               {pendingOrders}
             </p>
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-5">
-            <p className="text-sm text-zinc-400">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <p className="text-sm text-slate-600">
               Products
             </p>
 
@@ -260,8 +295,8 @@ export default function AdminPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-5">
-            <p className="text-sm text-zinc-400">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <p className="text-sm text-slate-600">
               Sales
             </p>
 
@@ -276,7 +311,7 @@ export default function AdminPage() {
         <section className="mt-8">
 
           <div className="mb-4">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-yellow-400">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-600">
               Control Center
             </p>
 
@@ -284,7 +319,7 @@ export default function AdminPage() {
               Manage Night Now
             </h2>
 
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-slate-500">
               Open any admin module directly from this dashboard.
             </p>
           </div>
@@ -296,7 +331,7 @@ export default function AdminPage() {
                 href={card.href}
               >
                 <div
-                  className={`min-h-[165px] rounded-2xl p-5 shadow-lg transition duration-200 hover:-translate-y-1 ${card.className}`}
+                  className={`min-h-[165px] rounded-2xl p-5 text-white shadow-lg transition duration-200 hover:-translate-y-1 ${card.className}`}
                 >
                   <div className="text-4xl">
                     {card.icon}
@@ -320,7 +355,7 @@ export default function AdminPage() {
         <section className="mt-8 grid gap-4 md:grid-cols-2">
 
           <Link href="/orders">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition hover:bg-zinc-800">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:bg-slate-100">
               <div className="text-3xl">
                 👤
               </div>
@@ -329,14 +364,14 @@ export default function AdminPage() {
                 Customer View
               </h2>
 
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-sm text-slate-500">
                 Open the customer-facing order view.
               </p>
             </div>
           </Link>
 
           <Link href="/">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition hover:bg-zinc-800">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:bg-slate-100">
               <div className="text-3xl">
                 🛒
               </div>
@@ -345,7 +380,7 @@ export default function AdminPage() {
                 Open Store
               </h2>
 
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-sm text-slate-500">
                 Go directly to the Night Now storefront.
               </p>
             </div>
@@ -356,7 +391,7 @@ export default function AdminPage() {
         {/* SUMMARIES */}
         <section className="mt-8 grid gap-5 md:grid-cols-2">
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
             <h2 className="text-xl font-black">
               Order Summary
@@ -365,17 +400,17 @@ export default function AdminPage() {
             <div className="mt-5 space-y-3">
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">
+                <span className="text-slate-600">
                   Pending
                 </span>
 
-                <span className="font-bold text-yellow-400">
+                <span className="font-bold text-amber-600">
                   {pendingOrders}
                 </span>
               </div>
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">
+                <span className="text-slate-600">
                   Delivered
                 </span>
 
@@ -385,7 +420,7 @@ export default function AdminPage() {
               </div>
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">
+                <span className="text-slate-600">
                   Cancelled
                 </span>
 
@@ -397,7 +432,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
             <h2 className="text-xl font-black">
               Inventory
@@ -406,7 +441,7 @@ export default function AdminPage() {
             <div className="mt-5 space-y-3">
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">
+                <span className="text-slate-600">
                   Total Products
                 </span>
 
@@ -416,7 +451,7 @@ export default function AdminPage() {
               </div>
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">
+                <span className="text-slate-600">
                   Low Stock
                 </span>
 
@@ -426,7 +461,7 @@ export default function AdminPage() {
               </div>
 
               <div className="flex justify-between">
-                <span className="text-zinc-400">
+                <span className="text-slate-600">
                   Categories
                 </span>
 
@@ -441,7 +476,7 @@ export default function AdminPage() {
         </section>
 
         {/* SECURITY */}
-        <div className="mt-8 rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-4 text-xs font-semibold text-zinc-400">
+        <div className="mt-8 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs font-semibold text-slate-600">
           🔐 Admin access is restricted to the configured administrator
           account. Keep this authentication check enabled in production.
         </div>

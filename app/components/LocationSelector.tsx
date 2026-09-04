@@ -187,7 +187,7 @@ export default function LocationSelector({
               0
             ) {
               setError(
-                "Exact location nahi mili. Building/society + area/city ke saath try karein."
+                "Couldn't find the exact location. Try again with your building/society plus area/city."
               );
             }
           } catch (err: any) {
@@ -205,7 +205,7 @@ export default function LocationSelector({
 
             setResults([]);
             setError(
-              "Location search nahi ho payi. Dobara try karein."
+              "Location search failed. Please try again."
             );
           } finally {
             if (
@@ -240,7 +240,7 @@ export default function LocationSelector({
         !navigator.geolocation
       ) {
         setError(
-          "Aapke browser me location support nahi hai."
+          "Location isn't supported on your browser."
         );
         return;
       }
@@ -327,18 +327,18 @@ export default function LocationSelector({
             geoError.PERMISSION_DENIED
           ) {
             setError(
-              "Location permission allow karein, phir dobara try karein."
+              "Please allow location permission, then try again."
             );
           } else if (
             geoError.code ===
             geoError.TIMEOUT
           ) {
             setError(
-              "Location detect hone me time lag raha hai. Dobara try karein."
+              "Location detection is taking too long. Please try again."
             );
           } else {
             setError(
-              "Current location detect nahi ho payi."
+              "Couldn't detect your current location."
             );
           }
         },
@@ -493,7 +493,7 @@ export default function LocationSelector({
                   <div className="p-4 text-center">
                     <p className="text-xs font-semibold text-zinc-600">
                       {error ||
-                        "Building ya society ka naam type karein."}
+                        "Type your building or society name."}
                     </p>
 
                     <p className="mt-2 text-[10px] leading-4 text-zinc-400">

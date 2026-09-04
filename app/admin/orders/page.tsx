@@ -17,7 +17,12 @@ import {
   deleteOrder,
 } from "../../services/orderService";
 
-import { createTrackingLink } from "../../services/deliveryTrackingService";
+import {
+  getDeliveryPartners,
+  addDeliveryPartner,
+  assignOrderToPartner,
+  type DeliveryPartner,
+} from "../../services/deliveryTrackingService";
 
 import { db, auth } from "../../lib/firebase";
 
@@ -130,49 +135,96 @@ export default function AdminOrdersPage() {
   const [trackingModalOrderId, setTrackingModalOrderId] =
     useState<string | null>(null);
 
+  const [savedPartners, setSavedPartners] =
+    useState<DeliveryPartner[]>([]);
+
+  // "" = nothing picked yet, "new" = show the one-time add-partner form,
+  // otherwise a saved partner's id.
+  const [selectedPartnerId, setSelectedPartnerId] =
+    useState("");
+
   const [partnerNameInput, setPartnerNameInput] =
     useState("");
 
   const [partnerPhoneInput, setPartnerPhoneInput] =
     useState("");
 
-  const [generatingLink, setGeneratingLink] =
+  const [assigning, setAssigning] =
     useState(false);
 
-  const [generatedLink, setGeneratedLink] =
-    useState("");
+  // Result shown after a successful assign. `url` is only present the
+  // FIRST time a brand-new partner is added — after that, assigning
+  // them to future orders needs no link at all.
+  const [assignResult, setAssignResult] = useState<{
+    partnerName: string;
+    url?: string;
+  } | null>(null);
 
-  const openTrackingModal = (orderId: string) => {
+  const openTrackingModal = async (orderId: string) => {
     setTrackingModalOrderId(orderId);
+    setSelectedPartnerId("");
     setPartnerNameInput("");
     setPartnerPhoneInput("");
-    setGeneratedLink("");
+    setAssignResult(null);
+
+    try {
+      const partners = await getDeliveryPartners();
+      setSavedPartners(partners);
+      // Only one partner saved so far? Pre-select them — most small
+      // operations have just 1-2 regular riders.
+      if (partners.length === 1) {
+        setSelectedPartnerId(partners[0].id);
+      }
+    } catch (error) {
+      console.error("Load delivery partners error:", error);
+    }
   };
 
   const closeTrackingModal = () => {
     setTrackingModalOrderId(null);
-    setGeneratedLink("");
+    setAssignResult(null);
   };
 
-  const handleGenerateLink = async (
-    orderId: string,
-    dropAddress?: string
-  ) => {
+  const handleAssign = async () => {
+    if (!trackingModalOrderId) return;
+
     try {
-      setGeneratingLink(true);
+      setAssigning(true);
 
-      const { url } = await createTrackingLink(orderId, {
-        partnerName: partnerNameInput,
-        partnerPhone: partnerPhoneInput,
-        dropAddress,
-      });
+      if (selectedPartnerId === "new") {
+        // One-time setup for a brand-new partner.
+        const { partnerId, url } = await addDeliveryPartner(
+          partnerNameInput,
+          partnerPhoneInput
+        );
 
-      setGeneratedLink(url);
-    } catch (error) {
-      console.error("Tracking link error:", error);
-      alert("Tracking link generate nahi ho paya.");
+        await assignOrderToPartner(
+          trackingModalOrderId,
+          { id: partnerId, name: partnerNameInput.trim(), phone: partnerPhoneInput.trim() }
+        );
+
+        try {
+          await navigator.clipboard?.writeText(url);
+        } catch {
+          // Copy Link button below still works.
+        }
+
+        setAssignResult({ partnerName: partnerNameInput.trim(), url });
+      } else {
+        const partner = savedPartners.find((p) => p.id === selectedPartnerId);
+        if (!partner) {
+          alert("Please select a delivery partner.");
+          return;
+        }
+
+        await assignOrderToPartner(trackingModalOrderId, partner);
+        setAssignResult({ partnerName: partner.name });
+      }
+    } catch (error: any) {
+      console.error("Assign delivery partner error:", error);
+      alert(error?.message || "Failed to assign the delivery partner.");
     } finally {
-      setGeneratingLink(false);
+      setAssigning(false);
     }
   };
 
@@ -1221,76 +1273,110 @@ export default function AdminOrdersPage() {
               Order #{trackingModalOrderId}
             </p>
 
-            {!generatedLink ? (
+            {!assignResult ? (
               <>
-                <input
-                  value={partnerNameInput}
-                  onChange={(e) =>
-                    setPartnerNameInput(e.target.value)
-                  }
-                  placeholder="Partner Name"
+                <select
+                  value={selectedPartnerId}
+                  onChange={(e) => setSelectedPartnerId(e.target.value)}
                   className="mt-4 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none"
-                />
+                >
+                  <option value="">Select delivery partner...</option>
+                  {savedPartners.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — {p.phone}
+                    </option>
+                  ))}
+                  <option value="new">+ Add New Partner</option>
+                </select>
 
-                <input
-                  value={partnerPhoneInput}
-                  onChange={(e) =>
-                    setPartnerPhoneInput(
-                      e.target.value.replace(/\D/g, "")
-                    )
-                  }
-                  placeholder="Partner Phone"
-                  inputMode="numeric"
-                  className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none"
-                />
+                {selectedPartnerId === "new" && (
+                  <>
+                    <p className="mt-3 text-[11px] text-slate-500">
+                      One-time setup — after this, just pick their name from
+                      the list above for every future order.
+                    </p>
+
+                    <input
+                      value={partnerNameInput}
+                      onChange={(e) =>
+                        setPartnerNameInput(e.target.value)
+                      }
+                      placeholder="Partner Name"
+                      className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none"
+                    />
+
+                    <input
+                      value={partnerPhoneInput}
+                      onChange={(e) =>
+                        setPartnerPhoneInput(
+                          e.target.value.replace(/\D/g, "")
+                        )
+                      }
+                      placeholder="Partner Phone"
+                      inputMode="numeric"
+                      className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none"
+                    />
+                  </>
+                )}
 
                 <button
                   type="button"
-                  disabled={generatingLink}
-                  onClick={() =>
-                    handleGenerateLink(trackingModalOrderId)
-                  }
+                  disabled={assigning || !selectedPartnerId}
+                  onClick={handleAssign}
                   className="mt-4 w-full rounded-xl bg-yellow-400 py-3 text-sm font-black text-black disabled:opacity-60"
                 >
-                  {generatingLink
-                    ? "Generating..."
-                    : "Generate Tracking Link"}
+                  {assigning ? "Assigning..." : "⚡ Assign"}
                 </button>
               </>
             ) : (
               <>
-                <p className="mt-4 text-xs font-bold text-slate-500">
-                  Yeh link partner ko bhejo (WhatsApp/SMS):
+                <p className="mt-4 text-xs font-bold text-green-600">
+                  ✅ Assigned to {assignResult.partnerName}
+                  {!assignResult.url ? " — they'll see it on their app." : ""}
                 </p>
 
-                <div className="mt-2 break-all rounded-xl bg-slate-50 p-3 text-xs">
-                  {generatedLink}
-                </div>
+                {assignResult.url && (
+                  <>
+                    <p className="mt-2 text-[11px] text-slate-500">
+                      This is their PERMANENT link — send it once. Every
+                      future order you assign them will show up on this
+                      same link automatically.
+                    </p>
 
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigator.clipboard?.writeText(
-                        generatedLink
-                      )
-                    }
-                    className="flex-1 rounded-xl bg-slate-900 py-2.5 text-xs font-black text-white"
-                  >
-                    📋 Copy Link
-                  </button>
+                    <div className="mt-2 break-all rounded-xl bg-slate-50 p-3 text-xs">
+                      {assignResult.url}
+                    </div>
 
-                  <a
-                    href={`https://wa.me/?text=${encodeURIComponent(
-                      `NightNow delivery link: ${generatedLink}`
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 rounded-xl bg-green-500 py-2.5 text-center text-xs font-black text-white"
-                  >
-                    💬 WhatsApp
-                  </a>
-                </div>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigator.clipboard?.writeText(
+                            assignResult.url!
+                          )
+                        }
+                        className="flex-1 rounded-xl bg-slate-900 py-2.5 text-xs font-black text-white"
+                      >
+                        📋 Copy Link
+                      </button>
+
+                      <a
+                        href={`https://wa.me/${
+                          partnerPhoneInput
+                            ? `91${partnerPhoneInput}`
+                            : ""
+                        }?text=${encodeURIComponent(
+                          `Welcome to NightNow delivery! Bookmark this link — it always shows your current delivery: ${assignResult.url}`
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 rounded-xl bg-green-500 py-2.5 text-center text-xs font-black text-white"
+                      >
+                        💬 Send Once on WhatsApp
+                      </a>
+                    </div>
+                  </>
+                )}
               </>
             )}
 

@@ -143,7 +143,7 @@ export default function QuickCommerceProductCard({
 
     if (!user) {
       alert(
-        "Wishlist use karne ke liye login karein."
+        "Please log in to use the wishlist."
       );
       return;
     }
