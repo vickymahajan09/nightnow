@@ -1,18 +1,16 @@
 {
   "name": "nightnow",
   "version": "0.1.0",
-    "private": true,
-    
+  "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-        "lint": "eslint"
+    "lint": "eslint"
   },
   "overrides": {
     "jose": "^5.9.6"
   },
-  
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/app": "^8.1.1",
